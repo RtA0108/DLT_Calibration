@@ -109,13 +109,13 @@ public class DLT_solve : MonoBehaviour
 
     }
     
-    private void MSE(Matrix4x4 P, double[] wolrdCoord, double[] imageCoord)
+    private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
     {
         //double[] mseResult = new double[12];
 
         for(int i =0; i<6; i++)
         {
-            Vector4 vertexPosition = new Vector4((float)wolrdCoord[3 * i], (float)wolrdCoord[3 * i + 1], (float)wolrdCoord[3 * i + 2], 1);
+            Vector4 vertexPosition = new Vector4((float)worldCoord[3 * i], (float)worldCoord[3 * i + 1], (float)worldCoord[3 * i + 2], 1);
             Vector4 result = P * vertexPosition;
             //Debug.Log(result);
 
@@ -210,8 +210,8 @@ public class DLT_solve : MonoBehaviour
 
     float CalculateFieldOfView(double f, float imageHeight)
     {
-        float fov = 2.0f * Mathf.Atan(imageHeight / (float)(2.0f * f)) * Mathf.Rad2Deg;
-        
+        //float fov = 2.0f * Mathf.Atan(imageHeight / (float)(2.0f * f)) * Mathf.Rad2Deg;
+        float fov = 60.0f;
 
         return fov;
     }
