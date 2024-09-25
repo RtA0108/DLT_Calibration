@@ -23,34 +23,36 @@ public class DLT_solve : MonoBehaviour
     public CreateSphereAtVertex createSphereAtVertex;
     private int vertexCountDLT;
     private GameObject createdBox;
-    private GameObject somethingMesh;
+    
     private Camera projCam;
-    private MeshFilter meshFilter;
-    private Mesh mesh;
+    
+    //private GameObject somethingMesh;
+    //private MeshFilter meshFilter;
+    //private Mesh mesh;
 
     void Awake()
     {
 
-        vertexCountDLT = createSphereAtVertex.vertexCount;
+        vertexCountDLT = createSphereAtVertex.vertexCount; //생성된 vertex 개수
         Debug.Log(vertexCountDLT);
         LVManger = GameObject.Find("LevelManager");
         projCam = GameObject.FindGameObjectWithTag("Project Camera").gameObject.GetComponent<Camera>();
-        somethingMesh = GameObject.FindGameObjectWithTag("Project Mesh");
-        meshFilter = somethingMesh.GetComponent<MeshFilter>();
-        mesh = meshFilter.mesh; 
+        //somethingMesh = GameObject.FindGameObjectWithTag("Project Mesh"); //프로젝션 타겟 메시?
+        //meshFilter = somethingMesh.GetComponent<MeshFilter>(); //왜 something 이라고 해놓고 project mesh를 사용했지?
+        //mesh = meshFilter.mesh;
         
-        if (somethingMesh == null)
-        {
-            Debug.LogError("MeshFilter not found on the GameObject");
-        }
-        Debug.Log("vertices" + string.Join(", ", mesh.vertices));
+        //if (somethingMesh == null)
+        //{
+        //    Debug.LogError("MeshFilter not found on the GameObject");
+        //}
+        //Debug.Log("vertices" + string.Join(", ", mesh.vertices));
     }
 
 
     void Update()
     {
         int index = System.Array.IndexOf(vertexClickTest.clickedObjects, null);
-        index = Math.Min(index, 6);
+        index = Math.Min(index, 6); //최대 6개를 유지하기 위함 (6개 이상인 경우 뭐가 우선으로 들어가는지 파악할 필요 O -> 어차피 수정하여 6개 초과해도 가능하게 만들 예정)
         float camPosY = projCam.pixelHeight;
         if (Input.GetKeyDown(KeyCode.F))
         {
