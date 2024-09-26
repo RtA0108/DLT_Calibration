@@ -53,14 +53,12 @@ public class DLT_solve : MonoBehaviour
     {
         int index = System.Array.IndexOf(vertexClickTest.clickedObjects, null);
         index = Math.Min(index, 6); //최대 6개를 유지하기 위함 (6개 이상인 경우 뭐가 우선으로 들어가는지 파악할 필요 O -> 어차피 수정하여 6개 초과해도 가능하게 만들 예정)
-        float camPosY = projCam.pixelHeight;
+        //float camPosY = projCam.pixelHeight;
         if (Input.GetKeyDown(KeyCode.F))
         {
-
-            
             if (index > 5)
             {
-                
+                //3D point, 2D point 저장 및 변환?
                 double[] worldPoints = new double[18];
                 double[] imagePoints = new double[12];
                 for (int i = 0; i < index; i++)
@@ -70,10 +68,10 @@ public class DLT_solve : MonoBehaviour
                     worldPoints[i * 3 + 1] = -(double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].worldCoordinate.y;
                     worldPoints[i * 3 + 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].worldCoordinate.z;
 
-
                     imagePoints[i * 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.x;
                     imagePoints[i * 2 + 1] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.y;
                 }
+                //확인 절차?
                 Debug.Log("3D Matrix: " + string.Join(", ", worldPoints));
                 Debug.Log("2D Matrix: " + string.Join(", ", imagePoints));
 
