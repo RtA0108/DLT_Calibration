@@ -71,7 +71,7 @@ public class DLT_solve : MonoBehaviour
                     imagePoints[i * 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.x;
                     imagePoints[i * 2 + 1] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.y;
                 }
-                //확인 절차?
+                //확인 절차
                 Debug.Log("3D Matrix: " + string.Join(", ", worldPoints));
                 Debug.Log("2D Matrix: " + string.Join(", ", imagePoints));
 
@@ -79,9 +79,8 @@ public class DLT_solve : MonoBehaviour
                 int numPoints = index;
                 //worldPoints.Length / 3; // Assuming each 3D point has X, Y, Z coordinates
 
-                // Allocate memory for the projection matrix
+                // DLT 식에 사용되는 행렬 (3x4 행렬, (2,3)은 1로 고정? 아니면 12 배열로 만들어서 마지막 값으로 나누는걸로 변경?)
                 double[] projectionMatrix = new double[11];
-
                 DLT(worldPoints, imagePoints, numPoints, projectionMatrix);
 
                 Debug.Log("Projection Matrix: " + string.Join(", ", projectionMatrix));
@@ -91,12 +90,15 @@ public class DLT_solve : MonoBehaviour
                 PMat.SetRow(1, new Vector4((float)projectionMatrix[4], (float)projectionMatrix[5], (float)projectionMatrix[6], (float)projectionMatrix[7]));
                 PMat.SetRow(2, new Vector4((float)projectionMatrix[8], (float)projectionMatrix[9], (float)projectionMatrix[10], 1));
                 PMat.SetRow(3, new Vector4(0, 0, 0, 1));
+                Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
+
 
                 MSE(PMat, worldPoints, imagePoints);
                 cameraCalibrationWithDLT(projectionMatrix, projCam);
 
             }
         }
+        // 지속적인 위치 업데이트를 위한 부분인데... 지금은 미사용
         //for (int i = 0; i < index; i++)
         //{
         //    Vector3 worldPos = vertexClickTest.clickedObjects[i].transform.position;
@@ -112,7 +114,7 @@ public class DLT_solve : MonoBehaviour
     private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
     {
         //double[] mseResult = new double[12];
-
+        // 지금 이 MSE 방식이 정상적인 것인지 잘 모르겠음
         for(int i =0; i<6; i++)
         {
             Vector4 vertexPosition = new Vector4((float)worldCoord[3 * i], (float)worldCoord[3 * i + 1], (float)worldCoord[3 * i + 2], 1);
