@@ -60,44 +60,44 @@ extern "C" __declspec(dllexport) void DLT(double* worldPoints, double* imagePoin
 
     cv::Mat gt;
     //DECOMP_NORMAL이 안되면 다른 DECOMP flag 사용. ex) DECOMP_SVD, DECOMP_LU, DECOMP_QR
-    cv::solve(A, k, gt, cv::DECOMP_NORMAL);
+    cv::solve(A, k, gt, cv::DECOMP_SVD);
     //gt가 가지는 값은 결국 x. 즉, x는 11 parameter
     
     memcpy(projectionMatrix, gt.data, sizeof(double) * 11);
 }
 
-extern "C" __declspec(dllexport) void projectPoints(double* worldPoints, double* projectionMatrix, double* rtMatrix, double* resultPoints, float camPos)
-{
-    // Convert input arrays to cv::Mat
-    cv::Mat worldPointsMat(6, 3, CV_64F, worldPoints);
-    cv::Mat rtMatrixMat(3, 4, CV_64F, rtMatrix);
-    cv::Mat projectionMatrixMat(3, 4, CV_64F, projectionMatrix);
-    int numPoints = worldPointsMat.rows;
-
-    cv::Mat projectedPointsMat(numPoints, 2, CV_64F);
-
-    for (int i = 0; i < numPoints; ++i) {
-        cv::Mat worldPoint = worldPointsMat.row(i).t();
-        cv::Mat homogeneousWorldPoint;
-        cv::vconcat(worldPoint, cv::Mat::ones(1, 1, CV_64F), homogeneousWorldPoint);
-
-        cv::Mat projectedPoint = projectionMatrixMat * homogeneousWorldPoint;
-        projectedPoint /= projectedPoint.at<double>(2); // Normalize by dividing by the third component (homogeneous coordinate)
-
-        double u = projectedPoint.at<double>(0);
-        double v = projectedPoint.at<double>(1);
-
-        // Convert OpenCV coordinates to Unity coordinates
-        double unity_u = u; // X coordinates remain the same
-        double unity_v = v;//camPos - v; // Flip Y coordinates // 
-        
-        projectedPointsMat.at<double>(i, 0) = unity_u;
-        projectedPointsMat.at<double>(i, 1) = unity_v;
-    }
-
-    // Copy the result to the output array using memcpy
-    memcpy(resultPoints, projectedPointsMat.data, sizeof(double) * numPoints * 2);
-}
+//extern "C" __declspec(dllexport) void projectPoints(double* worldPoints, double* projectionMatrix, double* rtMatrix, double* resultPoints, float camPos)
+//{
+//    // Convert input arrays to cv::Mat
+//    cv::Mat worldPointsMat(6, 3, CV_64F, worldPoints);
+//    cv::Mat rtMatrixMat(3, 4, CV_64F, rtMatrix);
+//    cv::Mat projectionMatrixMat(3, 4, CV_64F, projectionMatrix);
+//    int numPoints = worldPointsMat.rows;
+//
+//    cv::Mat projectedPointsMat(numPoints, 2, CV_64F);
+//
+//    for (int i = 0; i < numPoints; ++i) {
+//        cv::Mat worldPoint = worldPointsMat.row(i).t();
+//        cv::Mat homogeneousWorldPoint;
+//        cv::vconcat(worldPoint, cv::Mat::ones(1, 1, CV_64F), homogeneousWorldPoint);
+//
+//        cv::Mat projectedPoint = projectionMatrixMat * homogeneousWorldPoint;
+//        projectedPoint /= projectedPoint.at<double>(2); // Normalize by dividing by the third component (homogeneous coordinate)
+//
+//        double u = projectedPoint.at<double>(0);
+//        double v = projectedPoint.at<double>(1);
+//
+//        // Convert OpenCV coordinates to Unity coordinates
+//        double unity_u = u; // X coordinates remain the same
+//        double unity_v = v;//camPos - v; // Flip Y coordinates // 
+//        
+//        projectedPointsMat.at<double>(i, 0) = unity_u;
+//        projectedPointsMat.at<double>(i, 1) = unity_v;
+//    }
+//
+//    // Copy the result to the output array using memcpy
+//    memcpy(resultPoints, projectedPointsMat.data, sizeof(double) * numPoints * 2);
+//}
 
 //#include <opencv2/opencv.hpp>
 //#include <opencv2/core/core.hpp>

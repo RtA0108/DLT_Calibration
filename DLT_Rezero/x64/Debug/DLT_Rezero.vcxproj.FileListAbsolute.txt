@@ -1,1 +1,2 @@
 C:\SSU\GitPractice\DLT_Rezero\x64\Debug\DLT_Rezero.dll
+C:\SSU\DLT_Calibration_2409\DLT_Calibration_Real\DLT_Rezero\x64\Debug\DLT_Rezero.dll
