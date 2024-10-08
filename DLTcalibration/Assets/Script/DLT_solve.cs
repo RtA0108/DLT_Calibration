@@ -347,15 +347,61 @@ public class DLT_solve : MonoBehaviour
                 R[i, j] *= scale;
             }
         }
+
+        Quaternion cameraRotation = projCam.transform.rotation;
+        Matrix4x4 rotationMatrix = MatrixFromQuaternion(cameraRotation);
+
         // Output the calculated intrinsic and extrinsic parameters
         //Debug.Log($"Principal Point: x0 = {x0}, y0 = {y0}");
         //Debug.Log($"Skew: d = {d}");
         //Debug.Log($"Rotation Matrix: \n{R}");
         //Debug.Log($"Translation Vector: T = {T}");
-
+        Debug.Log("Translate result: " + translate);
+        Debug.Log("Rotation Matrix: " + R);
+        Debug.Log("Rotation Camera Matrix" + rotationMatrix);
         ApplyIntrinsicsAndExtrinsics(focalLength, d, x0, y0, R, translate, projCam);
 
     }
+
+    private Matrix4x4 MatrixFromQuaternion(Quaternion q)
+    {
+        Matrix4x4 m = new Matrix4x4();
+
+        float qx2 = q.x * q.x;
+        float qy2 = q.y * q.y;
+        float qz2 = q.z * q.z;
+        float qw2 = q.w * q.w;
+
+        float xy = q.x * q.y;
+        float xz = q.x * q.z;
+        float yz = q.y * q.z;
+        float wx = q.w * q.x;
+        float wy = q.w * q.y;
+        float wz = q.w * q.z;
+
+        m.m00 = 1 - 2 * (qy2 + qz2);
+        m.m01 = 2 * (xy - wz);
+        m.m02 = 2 * (xz + wy);
+        m.m03 = 0;
+
+        m.m10 = 2 * (xy + wz);
+        m.m11 = 1 - 2 * (qx2 + qz2);
+        m.m12 = 2 * (yz - wx);
+        m.m13 = 0;
+
+        m.m20 = 2 * (xz - wy);
+        m.m21 = 2 * (yz + wx);
+        m.m22 = 1 - 2 * (qx2 + qy2);
+        m.m23 = 0;
+
+        m.m30 = 0;
+        m.m31 = 0;
+        m.m32 = 0;
+        m.m33 = 1;
+
+        return m;
+    }
+
     public void ApplyIntrinsicsAndExtrinsics(double focalLength, double skew, double principalX, double principalY, Matrix4x4 rotationMatrix, Vector3 translation, Camera projCam)
     {
         // Step 1: Apply intrinsics to the Unity camera's projection matrix
