@@ -194,7 +194,7 @@ public class DLT_solve : MonoBehaviour
         R = ScaleMatrix(R, (float)(1.0f / (p * m * c1)));
         
         R.m33 = 1.0f;
-
+        
         //eq 9, 여기서 구하는게 공간좌표
         Vector4 spatialPosition = new Vector4();
         Vector4 ab1 = new Vector4(-(float)cameraParameter[3], -(float)cameraParameter[7], -1, 1);
@@ -277,6 +277,7 @@ public class DLT_solve : MonoBehaviour
     private void CalculateParameters(double[] dltMatrix, Camera projCam)
     {
         // Step 1: Define vectors a, b, and c as the rows of the P matrix
+        // 기본적으로 벡터는 열벡터인가...? 열이에야 cTc 같은게 성립.
         Vector4 a = new Vector4((float)dltMatrix[0], (float)dltMatrix[1], (float)dltMatrix[2], (float)dltMatrix[3]);  // First row (a1, a2, a3, a4)
         Vector4 b = new Vector4((float)dltMatrix[4], (float)dltMatrix[5], (float)dltMatrix[6], (float)dltMatrix[7]);  // Second row (b1, b2, b3, b4)
         Vector4 c = new Vector4((float)dltMatrix[8], (float)dltMatrix[9], (float)dltMatrix[10], 1);                   // Third row (c1, c2, c3, c4=1)
@@ -291,6 +292,7 @@ public class DLT_solve : MonoBehaviour
         // Step 4: Equation 7 - Calculate c^2, d (skew), and m
         // c^2 = (a^T a) / (c^T c) - (a^T c / c^T c)^2
         double cSquared = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(a.x, a.y, a.z)) / cTc) - Mathf.Pow((float)Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)) / cTc, 2);
+        // focalLength c
         double focalLength = Mathf.Sqrt((float)cSquared);
         // d = ((a^T b) * (c^T c) - (a^T c) * (b^T c)) / ((a^T a)(c^T c) - (a^T c)^2)
         double numerator_d = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(b.x, b.y, b.z)) * cTc) - (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)) * Vector3.Dot(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));
@@ -299,7 +301,8 @@ public class DLT_solve : MonoBehaviour
 
         // m = -det(abc) / (p^3 * c^2)
         float p = Mathf.Sqrt(cTc);  // p = sqrt(c^T * c)
-        double det_abc = Vector3.Dot(new Vector3(a.x, a.y, a.z), Vector3.Cross(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));  // Determinant of (abc)
+        //double det_abc = Vector3.Dot(new Vector3(a.x, a.y, a.z), Vector3.Cross(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));  // Determinant of (abc) -> abc를 행벡터로 구성한 경우
+        double det_abc = Vector3.Dot(new Vector3(a.x, b.x, c.x), Vector3.Cross(new Vector3(a.y, b.y, c.y), new Vector3(a.z, b.z, c.z)));  // Determinant of (abc) -> abc를 열벡터로 구성한 경우
         double m = -det_abc / (Mathf.Pow(p, 3) * cSquared);
 
         // Step 5: Equation 8 - Build the rotation matrix R
@@ -317,7 +320,7 @@ public class DLT_solve : MonoBehaviour
 
         leftMatrix.m20 = 0;                      // 0
         leftMatrix.m21 = 0;                      // 0
-        leftMatrix.m22 = (float)(-m);            // -m
+        leftMatrix.m22 = -(float)(m * focalLength);            // -m
         leftMatrix.m33 = 1.0f;                   // Homogeneous coordinate
 
         // Calculate R as: (1 / (p * m * f)) * (leftMatrix) * (abc)^T
@@ -328,35 +331,39 @@ public class DLT_solve : MonoBehaviour
         Matrix4x4 abc = new Matrix4x4();
 
         // Fill abc with a, b, c row vectors
-        abc.SetRow(0, new Vector4(a.x, a.y, a.z, 0));  // a1, a2, a3
-        abc.SetRow(1, new Vector4(b.x, b.y, b.z, 0));  // b1, b2, b3
-        abc.SetRow(2, new Vector4(c.x, c.y, c.z, 0));  // c1, c2, c3
+        abc.SetColumn(0, new Vector4(a.x, a.y, a.z, 0));  // a1, a2, a3
+        abc.SetColumn(1, new Vector4(b.x, b.y, b.z, 0));  // b1, b2, b3
+        abc.SetColumn(2, new Vector4(c.x, c.y, c.z, 0));  // c1, c2, c3
         abc.m33 = 1.0f;  // Homogeneous coordinate
 
         // Vector (-a4, -b4, -1)
         Vector4 translationVector = new Vector4(-(float)a.w, -(float)b.w, -1, 1);
 
+
+
         // Compute the translation as T = (abc)^-T * (-a4, -b4, -1)
-        Vector4 T = abc.inverse.transpose.MultiplyVector(translationVector);
+        Vector4 T = abc.inverse.transpose* translationVector;
+
         Vector3 translate = new Vector3(T.x, T.y, T.z);
+        //분명 결과값은 제대로 나오는 것으로 보이나, 적용하는 과정에서 이상하게 적용되는 것 같음. T는 분명 기존 이동값과 동일하게 나오는데 projCam의 translate이 결과적으로 달라짐.(회전땜에 발생하는 현상일지도?)
         R = leftMatrix * abc.transpose;
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 3; i++)
         {
-            for (int j = 0; j < 4; j++)
+            for (int j = 0; j < 3; j++)
             {
                 R[i, j] *= scale;
             }
         }
-
+        //R의 경우 수치가 거의 유사하나 부호가 다름. 이를 변경만 잘 시키면 되지 않을까?
         Quaternion cameraRotation = projCam.transform.rotation;
         Matrix4x4 rotationMatrix = MatrixFromQuaternion(cameraRotation);
-
+        R = R.transpose;
         // Output the calculated intrinsic and extrinsic parameters
         //Debug.Log($"Principal Point: x0 = {x0}, y0 = {y0}");
         //Debug.Log($"Skew: d = {d}");
         //Debug.Log($"Rotation Matrix: \n{R}");
         //Debug.Log($"Translation Vector: T = {T}");
-        Debug.Log("Translate result: " + translate);
+        Debug.Log("Translate result: " + T);
         Debug.Log("Rotation Matrix: " + R);
         Debug.Log("Rotation Camera Matrix" + rotationMatrix);
         ApplyIntrinsicsAndExtrinsics(focalLength, d, x0, y0, R, translate, projCam);
@@ -458,17 +465,42 @@ public class DLT_solve : MonoBehaviour
     // Apply extrinsic parameters (rotation and translation) to Unity's camera
     private void ApplyExtrinsics(Matrix4x4 rotationMatrix, Vector3 translation, Camera projCam)
     {
+
+        Matrix4x4 R = AdjustRotationForUnity(rotationMatrix);
+
         // Convert the rotation matrix into a Quaternion for Unity
-        Quaternion rotation = QuaternionFromMatrix(rotationMatrix);
+        Quaternion rotation = QuaternionFromMatrix(R);
 
         // Adjust for the difference between OpenCV's right-handed system and Unity's left-handed system
         translation = AdjustForCoordinateSystem(translation);
-
+        
         // Apply the translation and rotation to the Unity camera's transform
         projCam.transform.position = translation;
         projCam.transform.rotation = rotation;
 
         Debug.Log("Applied camera extrinsics.");
+    }
+
+    private Matrix4x4 AdjustRotationForUnity(Matrix4x4 openCVRotationMatrix)
+    {
+        Matrix4x4 adjustedMatrix = new Matrix4x4();
+
+        // Invert Y and Z axes for the OpenCV-to-Unity conversion
+        adjustedMatrix.m00 = openCVRotationMatrix.m00;
+        adjustedMatrix.m01 = -openCVRotationMatrix.m01; // Invert Y
+        adjustedMatrix.m02 = openCVRotationMatrix.m02; // Invert Z
+
+        adjustedMatrix.m10 = -openCVRotationMatrix.m10; // Invert Y
+        adjustedMatrix.m11 = openCVRotationMatrix.m11;
+        adjustedMatrix.m12 = openCVRotationMatrix.m12; // Invert Z
+
+        adjustedMatrix.m20 = -openCVRotationMatrix.m20; // Invert Y
+        adjustedMatrix.m21 = openCVRotationMatrix.m21; // Invert Z
+        adjustedMatrix.m22 = openCVRotationMatrix.m22;
+
+        adjustedMatrix.m33 = 1.0f; // Homogeneous coordinate for a 4x4 matrix
+        Debug.Log("New Rotation Matrix: "+ adjustedMatrix);
+        return adjustedMatrix;
     }
 
     // Adjust the translation vector for OpenCV to Unity coordinate system conversion
