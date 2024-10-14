@@ -73,40 +73,7 @@ public class VertexClickTest : MonoBehaviour
                     // Find first empty slot
                     int index = System.Array.IndexOf(clickedObjects, null);
                     Debug.Log("index: "+ index);
-                    //if (index != -1 && clickedObject.tag == "SphereIn2D")
-                    //{
-
-                    //    clickedObjects[index] = clickedObject;
-                    //    //worldCoordinates[index] = clickedObject.transform.position;
-                    //    //screenCoordinates[index] = Input.mousePosition;
-                    //    //screenCoordinates[index] = Camera.
-                    //    // -1을 곱하는게 아닌 해상도의 최댓값에서 y좌표를 빼주어야 함
-                    //    //screenCoordinates[index].y = screenCoordinates[index].y * -1;
-
-                    //    verticesStruct[index].uniqIndex = index;
-                    //    //verticesStruct[index].worldCoordinate = clickedObject.transform.position;
-                    //    verticesStruct[index].screenCoordinate = new Vector2(projectCam.WorldToScreenPoint(clickedObject.transform.position).x, projectCam.pixelHeight - projectCam.WorldToScreenPoint(clickedObject.transform.position).y);
-                    //    arrayIndex++;
-                    //    //worldPoints[index * 3] = worldCoordinates[index].x;
-                    //    //worldPoints[index * 3 + 1] = worldCoordinates[index].y;
-                    //    //worldPoints[index * 3 + 2] = -worldCoordinates[index].z;
-                    //    //imagePoints[index * 2] = screenCoordinates[index].x;
-                    //    //imagePoints[index * 2 + 1] = projectCam.WorldToScreenPoint(clickedObject.transform.position).y;
-
-                    //    //Debug.Log(imagePoints[index * 2 + 1]);
-                    //    //업데이트가 되는건가?
-                    //    //for (int i = 0; i < index; i++)
-                    //    //{
-                    //    //    Vector3 worldPos = clickedObjects[i].transform.position;
-                    //    //    Vector2 screenPos = projectCam.WorldToScreenPoint(worldPos);
-                    //    //    screenPos.y = projectCam.pixelHeight - screenPos.y;
-                    //    //    // Update the struct with the new screen position
-                    //    //    verticesStruct[i].screenCoordinate = screenPos;
-                    //    //}
-                    //    Debug.Log(verticesStruct[index].uniqIndex);
-                    //    Debug.Log(verticesStruct[index].worldCoordinate);
-                    //    Debug.Log(verticesStruct[index].screenCoordinate);
-                    //}
+                   
                     if (index != -1 && clickedObject.tag == "SphereIn2D")
                     {
                        //여기 확인 필요
@@ -120,9 +87,14 @@ public class VertexClickTest : MonoBehaviour
                         Debug.Log(verticesStruct[index].worldCoordinate);
                         Debug.Log(verticesStruct[index].screenCoordinate);
                     }
-                    else
+                    else if (clickedObject.tag == "SphereIn2D")
                     {
                         Debug.LogWarning("Clicked objects array is full. Increase array size if needed.");
+                    }
+                    else
+                    {
+                        //분석 필요 (어떤 기준으로 추가가 되는지 안되는지를 모르겠음)
+                        Debug.LogWarning("WTF");
                     }
 
                     // You can do something with the clicked object here
