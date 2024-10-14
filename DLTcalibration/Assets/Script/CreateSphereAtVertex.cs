@@ -56,7 +56,7 @@ public class CreateSphereAtVertex : MonoBehaviour
 
                         //vertex가 가시적으로 
                         Instantiate(vertexSphere, vertexPosition, Quaternion.identity);
-                        vertexSphere.transform.localScale = new Vector3(0.1f,0.1f,0.1f);
+                        vertexSphere.transform.localScale = new Vector3(5.0f,5.0f,5.0f);
                         vertexSphere.name = "vertex" + indexNumber;
                         
                     }

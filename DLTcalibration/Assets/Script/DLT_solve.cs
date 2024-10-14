@@ -56,6 +56,7 @@ public class DLT_solve : MonoBehaviour
         //float camPosY = projCam.pixelHeight;
         if (Input.GetKeyDown(KeyCode.F))
         {
+            Debug.Log("DO it");
             if (index > 5)
             {
                 //3D point, 2D point 저장 및 변환?
@@ -100,11 +101,13 @@ public class DLT_solve : MonoBehaviour
                 Debug.Log("Projection Matrix Main Camera: " + Camera.main.projectionMatrix);
                 Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
                 //newCalibrationWithPM(PMat, projCam);
+                
                 CalculateParameters(projectionMatrix, projCam);
                 MSE(PMat, worldPoints, imagePoints);
 
                 Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
                 Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
+                Debug.Log("Real Camera Rotation: " + projCam.transform.rotation);
                 //cameraCalibrationWithDLT(projectionMatrix, projCam);
 
             }
@@ -355,7 +358,7 @@ public class DLT_solve : MonoBehaviour
             }
         }
         //R의 경우 수치가 거의 유사하나 부호가 다름. 이를 변경만 잘 시키면 되지 않을까?
-        Quaternion cameraRotation = projCam.transform.rotation;
+        Quaternion cameraRotation = Camera.main.transform.rotation;
         Matrix4x4 rotationMatrix = MatrixFromQuaternion(cameraRotation);
         R = R.transpose;
         // Output the calculated intrinsic and extrinsic parameters
@@ -366,6 +369,7 @@ public class DLT_solve : MonoBehaviour
         Debug.Log("Translate result: " + T);
         Debug.Log("Rotation Matrix: " + R);
         Debug.Log("Rotation Camera Matrix" + rotationMatrix);
+        Debug.Log("rotation" + cameraRotation);
         ApplyIntrinsicsAndExtrinsics(focalLength, d, x0, y0, R, translate, projCam);
 
     }
@@ -478,6 +482,7 @@ public class DLT_solve : MonoBehaviour
         projCam.transform.position = translation;
         projCam.transform.rotation = rotation;
 
+        Debug.Log("Apply rotation: " + projCam.transform.rotation);
         Debug.Log("Applied camera extrinsics.");
     }
 
@@ -488,7 +493,7 @@ public class DLT_solve : MonoBehaviour
         // Invert Y and Z axes for the OpenCV-to-Unity conversion
         adjustedMatrix.m00 = openCVRotationMatrix.m00;
         adjustedMatrix.m01 = -openCVRotationMatrix.m01; // Invert Y
-        adjustedMatrix.m02 = openCVRotationMatrix.m02; // Invert Z
+        adjustedMatrix.m02 = -openCVRotationMatrix.m02; // Invert Z
 
         adjustedMatrix.m10 = -openCVRotationMatrix.m10; // Invert Y
         adjustedMatrix.m11 = openCVRotationMatrix.m11;
@@ -523,6 +528,7 @@ public class DLT_solve : MonoBehaviour
         q.x = (m.m21 - m.m12) / w4;
         q.y = (m.m02 - m.m20) / w4;
         q.z = (m.m10 - m.m01) / w4;
+        Debug.Log("New rotation: " + q);
         return q;
     }
 }
