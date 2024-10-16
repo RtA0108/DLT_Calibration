@@ -60,16 +60,16 @@ public class CreateSphereAtVertex : MonoBehaviour
                         vertexSphere.name = "vertex" + indexNumber;
                         
                     }
-                    foreach (KeyValuePair <int, Vector3 > key in posIndex)
-                    {
-                        Debug.Log("Key (Vertex Position): " + key.Value + "Number: " + key.Key);
-                    }
-                    UnityEngine.Object[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
-                    foreach (GameObject vertexSphere in allObjects){
-                        //Debug.Log(somethingElse + "is an active object" + somethingElse.GetInstanceID());
-                        //vertex 위치 출력
-                        Debug.Log(vertexSphere.transform.position + " Name: " + vertexSphere.name);
-                    }
+                    //foreach (KeyValuePair <int, Vector3 > key in posIndex)
+                    //{
+                    //    Debug.Log("Key (Vertex Position): " + key.Value + "Number: " + key.Key);
+                    //}
+                    //UnityEngine.Object[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
+                    //foreach (GameObject vertexSphere in allObjects){
+                    //    //Debug.Log(somethingElse + "is an active object" + somethingElse.GetInstanceID());
+                    //    //vertex 위치 출력
+                    //    Debug.Log(vertexSphere.transform.position + " Name: " + vertexSphere.name);
+                    //}
                 }
                 // Optional: Attach the sphere to a parent object for organization
                 // sphere.transform.parent = cube.transform;

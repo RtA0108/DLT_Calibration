@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 4759804502979460159}
   - component: {fileID: 4170330441122027276}
   - component: {fileID: 3359327240999226528}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Sphere
   m_TagString: SphereMainCam
   m_Icon: {fileID: 0}

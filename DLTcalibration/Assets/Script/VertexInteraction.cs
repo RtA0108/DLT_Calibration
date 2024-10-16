@@ -47,22 +47,13 @@ public class VertexInteraction : MonoBehaviour
         renderer.material.color = renderer.material.color == originalColor ? Color.red : originalColor;
         Debug.Log(this.transform.position);
         if (!copied){
-            createdMesh = Instantiate(newMeshPrefab, this.transform.position, Quaternion.identity);
-            Vector3 newPos = this.transform.position;
+            
             meshIndex = LVManger.GetComponent<VertexClickTest>().arrayIndex;
-            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].worldCoordinate = newPos;
-            newPos.z += 1000f; // Change this value as needed
-            createdMesh.transform.position = newPos;
-            // GameObject copy = Instantiate(gameObject);
-            // copy.transform.Translate(0f,0f,-10f);
-            // copy.transform.Position()
-            Vector2 screenCoordMarker = new Vector2(mainCam.WorldToScreenPoint(newPos).x, mainCam.WorldToScreenPoint(newPos).y);
+            Vector2 screenCoordMarker = new Vector2(mainCam.WorldToScreenPoint(this.transform.position).x, mainCam.WorldToScreenPoint(this.transform.position).y);
             Debug.Log("interaction"+screenCoordMarker);
             markerManager.GetComponent<MarkerManager>().CreateMarker(screenCoordMarker);
             //마커 2D 추가
             LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinate = screenCoordMarker;
-
-            createdMesh.name = "2D_Vertex_" + meshCounter.ToString();
             meshCounter++;
             copied = true;
         }

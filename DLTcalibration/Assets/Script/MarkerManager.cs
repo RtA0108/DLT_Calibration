@@ -32,5 +32,6 @@ public class MarkerManager : MonoBehaviour
         // 마커 설정
         Marker markerScript = newMarker.GetComponent<Marker>();
         markerScript.SetMarker(++markerCount, screenPosition, canvasRectTransform);
+        Debug.Log("Marker Start Point" + screenPosition);
     }
 }

@@ -57,7 +57,9 @@ public class Marker : MonoBehaviour, IDragHandler
 
 
         Vector2 screenPosition = RectTransformUtility.WorldToScreenPoint(projectCam, rectTransform.position);
-        LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate = new Vector2(screenPosition.x, projectCam.pixelHeight - screenPosition.y);
+        //둘중에 뭐가 맞는지 모르겠음
+        //LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate = new Vector2(screenPosition.x, projectCam.pixelHeight - screenPosition.y);
+        LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate = new Vector2(screenPosition.x, screenPosition.y);
         //마우스 위치가 아닌 마커 위치로 정상인식
         Debug.Log("screen Coord: " + IDX + " " + LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate);
         

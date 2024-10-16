@@ -70,7 +70,7 @@ public class DLT_solve : MonoBehaviour
                     worldPoints[i * 3 + 2] = -(double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].worldCoordinate.z;
 
                     imagePoints[i * 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.x;
-                    imagePoints[i * 2 + 1] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.y;
+                    imagePoints[i * 2 + 1] = projCam.pixelHeight - (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.y;
                 }
                 //확인 절차
                 Debug.Log("3D Matrix: " + string.Join(", ", worldPoints));
@@ -91,28 +91,28 @@ public class DLT_solve : MonoBehaviour
                 //PMat.SetRow(1, new Vector4((float)projectionMatrix[4], (float)projectionMatrix[5], (float)projectionMatrix[6], (float)projectionMatrix[7]));
                 //PMat.SetRow(2, new Vector4((float)projectionMatrix[8], (float)projectionMatrix[9], (float)projectionMatrix[10], 1));
                 //PMat.SetRow(3, new Vector4(0, 0, 0, 1));
-                //기존 projection matrix 기반으로 변경
-                Matrix4x4 PMat = new Matrix4x4();
-                PMat.SetRow(0, new Vector4((float)projectionMatrix[0], (float)projectionMatrix[1], (float)projectionMatrix[2], (float)projectionMatrix[3])); // Adjusted for Unity
-                PMat.SetRow(1, new Vector4((float)projectionMatrix[4], (float)projectionMatrix[5], (float)projectionMatrix[6], (float)projectionMatrix[7]));
-                PMat.SetRow(2, new Vector4((float)projectionMatrix[8], (float)projectionMatrix[9], (float)projectionMatrix[10], 0));
-                PMat.SetRow(3, new Vector4(0, 0, -1, 0));
-                Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
-                Debug.Log("Projection Matrix Main Camera: " + Camera.main.projectionMatrix);
-                Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
+
+
+                //Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
+                //Debug.Log("Projection Matrix Main Camera: " + Camera.main.projectionMatrix);
+                //Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
                 //newCalibrationWithPM(PMat, projCam);
                 
                 CalculateParameters(projectionMatrix, projCam);
-                MSE(PMat, worldPoints, imagePoints);
+                //MSE(PMat, worldPoints, imagePoints);
+                //Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
 
-                Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
                 Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
                 Debug.Log("Real Camera Rotation: " + projCam.transform.rotation);
                 //cameraCalibrationWithDLT(projectionMatrix, projCam);
 
             }
+            else
+            {
+                Debug.LogError("Not enough index");
+            }
         }
-        // 지속적인 위치 업데이트를 위한 부분인데... 지금은 미사용
+        // 지속적인 위치 업데이트를 위한 부분인데... 지금은 미사용 -> 10/16 얘를 다시 사용해야할 수도?
         //for (int i = 0; i < index; i++)
         //{
         //    Vector3 worldPos = vertexClickTest.clickedObjects[i].transform.position;
@@ -125,155 +125,27 @@ public class DLT_solve : MonoBehaviour
 
     }
     
-    private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
-    {
-        //double[] mseResult = new double[12];
-        // 지금 이 MSE 방식이 정상적인 것인지 잘 모르겠음
-        for(int i =0; i<6; i++)
-        {
-            Vector4 vertexPosition = new Vector4((float)worldCoord[3 * i], (float)worldCoord[3 * i + 1], (float)worldCoord[3 * i + 2], 1);
-            Vector4 result = P * vertexPosition;
-            //Debug.Log(result);
+    //private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
+    //{
+    //    //double[] mseResult = new double[12];
+    //    // 지금 이 MSE 방식이 정상적인 것인지 잘 모르겠음
+    //    for(int i =0; i<6; i++)
+    //    {
+    //        Vector4 vertexPosition = new Vector4((float)worldCoord[3 * i], (float)worldCoord[3 * i + 1], (float)worldCoord[3 * i + 2], 1);
+    //        Vector4 result = P * vertexPosition;
+    //        //Debug.Log(result);
 
-            double projectedX = result.x / result.z;
-            double projectedY = result.y / result.z;
+    //        double projectedX = result.x / result.z;
+    //        double projectedY = result.y / result.z;
 
-            double originalX = imageCoord[2*i];
-            double originalY = imageCoord[2*i+1];
+    //        double originalX = imageCoord[2*i];
+    //        double originalY = imageCoord[2*i+1];
             
-            double errorx = Math.Sqrt(Math.Pow(projectedX - originalX, 2));
-            double errory = Math.Sqrt(Math.Pow(projectedY - originalY, 2));
-            Debug.Log("vx"+i + " " + errorx + "vy" + i + " " + errory);
-        }
-    }
-
-    private void newCalibrationWithPM(Matrix4x4 P, Camera projCam)
-    {
-        projCam.projectionMatrix = P;
-        //projCam.transform.z =
-    }
-    private void cameraCalibrationWithDLT(double[] cameraParameter, Camera projCam)
-    {
-        //a = a1, a2, a3 | b = b1, b2, b3 | c = c1, c2, c3 | a4, b4는 이 계산에서 제외
-        Vector3 a = new Vector3((float)cameraParameter[0], (float)cameraParameter[1], (float)cameraParameter[2]);
-        Vector3 b = new Vector3((float)cameraParameter[4], (float)cameraParameter[5], (float)cameraParameter[6]);
-        Vector3 c = new Vector3((float)cameraParameter[8], (float)cameraParameter[9], (float)cameraParameter[10]);
-
-        double aTa = Vector3.Dot(a, a);
-        double aTb = Vector3.Dot(a, b);
-        double aTc = Vector3.Dot(a, c);
-        double bTc = Vector3.Dot(b, c);
-        double cTc = Vector3.Dot(c, c);
-
-        //eq 6, x0와 y0는 주점. c2는 초점거리의 제곱.
-        double x0 = aTc / cTc;
-        double y0 = bTc / cTc;
-        double c2 = (aTa / cTc) - Math.Pow((aTc / cTc), 2);
-        double p = Math.Sqrt(cTc);
-        
-
-        //eq 7
-        double d = ((aTb * cTc) - (aTc * bTc)) / ((aTa * cTc) - Math.Pow(aTc, 2));
-        //스칼라 삼중곱...?
-        double m = -Vector3.Dot(a, Vector3.Cross(b,c))/(Math.Pow(p,3)*c2);
-
-        //eq 8, 회전 행렬
-        double c1 = Math.Sqrt(c2);
-        Matrix4x4 Rot = new Matrix4x4();
-        Rot.SetRow(0, new Vector4((float)m, 0, -(float)(m * x0), 0));
-        Rot.SetRow(1, new Vector4(-(float)d, 1, (float)((x0 * d) - y0), 0));
-        Rot.SetRow(2, new Vector4(0, 0, -(float)(m * c1), 0));
-        Rot.SetRow(3, new Vector4(0, 0, 0, 1));
-
-        Matrix4x4 abc = new Matrix4x4();
-        abc.SetColumn(0, new Vector4(a.x, a.y, a.z, 0));  
-        abc.SetColumn(1, new Vector4(b.x, b.y, b.z, 0));  
-        abc.SetColumn(2, new Vector4(c.x, c.y, c.z, 0));  
-        abc.SetColumn(3, new Vector4(0, 0, 0, 1));
-        
-
-        Matrix4x4 R = new Matrix4x4();
-        R =  Rot * abc.transpose;
-        R = ScaleMatrix(R, (float)(1.0f / (p * m * c1)));
-        
-        R.m33 = 1.0f;
-        
-        //eq 9, 여기서 구하는게 공간좌표
-        Vector4 spatialPosition = new Vector4();
-        Vector4 ab1 = new Vector4(-(float)cameraParameter[3], -(float)cameraParameter[7], -1, 1);
-        spatialPosition = abc.inverse.transpose * ab1;
-        
-        Vector3 translation = new Vector3(spatialPosition.x, spatialPosition.y, spatialPosition.z);
-        Debug.Log(translation);
-        projCam.fieldOfView = CalculateFieldOfView(c1, projCam.pixelHeight);
-        projCam.lensShift = new Vector2((float)x0 / projCam.pixelWidth, (float)y0 / projCam.pixelHeight);
-
-        //Debug.Log("abcT" + abc.transpose);
-        Debug.Log("rotation"+R);
-        ApplyCameraExtrinsics(projCam, R, translation);
-
-
-
-    }
-
-
-    Matrix4x4 ScaleMatrix(Matrix4x4 matrix, float scalar)
-    {
-        Matrix4x4 result = new Matrix4x4();
-        for (int i = 0; i < 4; i++)  // Row index
-        {
-            for (int j = 0; j < 4; j++)  // Column index
-            {
-                result[i, j] = matrix[i, j] * scalar;
-            }
-        }
-        return result;
-    }
-
-    float CalculateFieldOfView(double f, float imageHeight)
-    {
-        //float fov = 2.0f * Mathf.Atan(imageHeight / (float)(2.0f * f)) * Mathf.Rad2Deg;
-        float fov = 60.0f;
-
-        return fov;
-    }
-
-
-
-    void ApplyCameraExtrinsics(Camera camera, Matrix4x4 R, Vector3 T)
-    {
-
-        Vector3 position = ConvertTranslationOpenCVToUnity(T);
-        position.z += 1000;
-        camera.transform.position = position;
-        //Quaternion rotation = R.rotation;
-        Quaternion rotation = ConvertOpenCVToUnityQuaternion(R);
-        camera.transform.rotation = rotation;
-
-    }
-
-    Vector3 ConvertTranslationOpenCVToUnity(Vector3 translation)
-    {
-        
-        return new Vector3(translation.x, -translation.y, translation.z); // Flip Y and Z axes
-    }
-    Quaternion ConvertOpenCVToUnityQuaternion(Matrix4x4 R)
-    {
-        // OpenCV -> Unity 좌표계 변환 (y축과 z축 반전)
-        Vector3 right = new Vector3(R.m00, -R.m10, R.m20);
-        Vector3 up = new Vector3(R.m01, -R.m11, R.m21);
-        Vector3 forward = new Vector3(R.m02, -R.m12, -R.m22); // z축 반전 -> 없으면 y -180도 회전
-
-        // Unity의 좌표계에 맞춰 회전 행렬 재구성
-        Matrix4x4 unityMatrix = new Matrix4x4();
-        unityMatrix.SetColumn(0, new Vector4(right.x, right.y, right.z, 0));
-        unityMatrix.SetColumn(1, new Vector4(up.x, up.y, up.z, 0));
-        unityMatrix.SetColumn(2, new Vector4(forward.x, forward.y, forward.z, 0));
-        unityMatrix.SetColumn(3, new Vector4(0, 0, 0, 1));
-
-        // Unity의 Quaternion으로 변환
-        return Quaternion.LookRotation(forward, up);
-    }
+    //        double errorx = Math.Sqrt(Math.Pow(projectedX - originalX, 2));
+    //        double errory = Math.Sqrt(Math.Pow(projectedY - originalY, 2));
+    //        Debug.Log("vx"+i + " " + errorx + "vy" + i + " " + errory);
+    //    }
+    //}
 
 
     //새로 작성
@@ -514,7 +386,6 @@ public class DLT_solve : MonoBehaviour
         // OpenCV is right-handed, Unity is left-handed: invert Y and Z
         translation.y = -translation.y;
         translation.z = -translation.z;
-        translation.z += 1000;
         return translation;
         
     }

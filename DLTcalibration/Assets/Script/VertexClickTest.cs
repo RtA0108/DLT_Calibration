@@ -36,7 +36,7 @@ public class VertexClickTest : MonoBehaviour
     private void Update()
     {
         // Check if the left mouse button is clicked
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) && Display.activeEditorGameViewTarget == 0)
         {
             // Shoot a ray from the camera to the mouse position
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -47,30 +47,29 @@ public class VertexClickTest : MonoBehaviour
             {
                 // Store clicked object
                 GameObject clickedObject = hit.collider.gameObject;
-                
+
                 // Check if the clicked object is not already in the array
                 if (!ArrayContains(clickedObjects, clickedObject))
                 {
                     // Find first empty slot
                     int index = System.Array.IndexOf(clickedObjects, null);
-                    Debug.Log("index: "+ index);
-                   
+                    Debug.Log("index: " + index);
+
                     if (index != -1 && clickedObject.tag == "SphereMainCam")
                     {
-                        //임시로 "SphereIn2D" 태그에서 현재태그로 변경. -> 이거 아냐...이렇게 하면 안돼... VertexInteraction에서 array에 추가하는 코드로 변경해야 함
+                        //임시로 "SphereIn2D" 태그에서 현재태그로 변경. -> VertexInteraction에서 array에 추가하는 코드로 변경해야 함
                         //여기 확인 필요
                         clickedObjects[index] = clickedObject;
                         Debug.Log("Object already clicked vertex MainCam: " + clickedObject.name);
                         verticesStruct[index].uniqIndex = index;
-                        verticesStruct[index].screenCoordinate = new Vector2(projectCam.WorldToScreenPoint(clickedObject.transform.position).x, projectCam.pixelHeight - projectCam.WorldToScreenPoint(clickedObject.transform.position).y);
+                        verticesStruct[index].worldCoordinate = clickedObject.transform.position;
+                        //verticesStruct[index].screenCoordinate = new Vector2(projectCam.WorldToScreenPoint(clickedObject.transform.position).x, projectCam.pixelHeight - projectCam.WorldToScreenPoint(clickedObject.transform.position).y);
                         arrayIndex++;
-
-                        Debug.Log(verticesStruct[index].uniqIndex);
-                        Debug.Log(verticesStruct[index].worldCoordinate);
-                        Debug.Log(verticesStruct[index].screenCoordinate);
+                        Debug.Log("Working");
                     }
                     else
                     {
+                        Debug.Log("Object already clicked vertex MainCam: " + clickedObject.name);
                         Debug.LogWarning("Clicked objects array is full. Increase array size if needed.");
                     }
                     
