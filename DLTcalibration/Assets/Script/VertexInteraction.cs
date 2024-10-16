@@ -57,7 +57,7 @@ public class VertexInteraction : MonoBehaviour
             // copy.transform.Translate(0f,0f,-10f);
             // copy.transform.Position()
             Vector2 screenCoordMarker = new Vector2(mainCam.WorldToScreenPoint(newPos).x, mainCam.WorldToScreenPoint(newPos).y);
-            Debug.Log(screenCoordMarker);
+            Debug.Log("interaction"+screenCoordMarker);
             markerManager.GetComponent<MarkerManager>().CreateMarker(screenCoordMarker);
             //마커 2D 추가
             LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinate = screenCoordMarker;

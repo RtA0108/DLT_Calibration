@@ -13,10 +13,9 @@ GameObject:
   - component: {fileID: 4759804502979460159}
   - component: {fileID: 4170330441122027276}
   - component: {fileID: 3359327240999226528}
-  - component: {fileID: -8644732792439624988}
   m_Layer: 0
   m_Name: Sphere
-  m_TagString: Untagged
+  m_TagString: SphereMainCam
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -122,18 +121,3 @@ MonoBehaviour:
   newMeshPrefab: {fileID: 6118707599407543504, guid: 53f6a23c9b5c8fd46885b4a33c2fd666,
     type: 3}
   mainCam: {fileID: 0}
---- !u!114 &-8644732792439624988
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6118707599407543504}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 156c22972cfae614ca3921689b73ad8f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  clickedObjects: []
-  arrayIndex: 0
-  projectCam: {fileID: 0}

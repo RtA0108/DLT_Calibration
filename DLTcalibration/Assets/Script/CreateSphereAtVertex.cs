@@ -68,7 +68,7 @@ public class CreateSphereAtVertex : MonoBehaviour
                     foreach (GameObject vertexSphere in allObjects){
                         //Debug.Log(somethingElse + "is an active object" + somethingElse.GetInstanceID());
                         //vertex 위치 출력
-                        Debug.Log(vertexSphere.transform.position);
+                        Debug.Log(vertexSphere.transform.position + " Name: " + vertexSphere.name);
                     }
                 }
                 // Optional: Attach the sphere to a parent object for organization
