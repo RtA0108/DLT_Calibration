@@ -125,6 +125,12 @@ public class DLT_solve : MonoBehaviour
 
     }
     
+    private void RMSE()
+    {
+
+    }
+
+
     //private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
     //{
     //    //double[] mseResult = new double[12];
