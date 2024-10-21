@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Transactions;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
@@ -26,10 +27,6 @@ public class DLT_solve : MonoBehaviour
     
     private Camera projCam;
     
-    //private GameObject somethingMesh;
-    //private MeshFilter meshFilter;
-    //private Mesh mesh;
-
     void Awake()
     {
 
@@ -37,15 +34,7 @@ public class DLT_solve : MonoBehaviour
         Debug.Log(vertexCountDLT);
         LVManger = GameObject.Find("LevelManager");
         projCam = GameObject.FindGameObjectWithTag("Project Camera").gameObject.GetComponent<Camera>();
-        //somethingMesh = GameObject.FindGameObjectWithTag("Project Mesh"); //프로젝션 타겟 메시?
-        //meshFilter = somethingMesh.GetComponent<MeshFilter>(); //왜 something 이라고 해놓고 project mesh를 사용했지?
-        //mesh = meshFilter.mesh;
-        
-        //if (somethingMesh == null)
-        //{
-        //    Debug.LogError("MeshFilter not found on the GameObject");
-        //}
-        //Debug.Log("vertices" + string.Join(", ", mesh.vertices));
+    
     }
 
 
@@ -62,6 +51,8 @@ public class DLT_solve : MonoBehaviour
                 //3D point, 2D point 저장 및 변환?
                 double[] worldPoints = new double[18];
                 double[] imagePoints = new double[12];
+
+                double[] imagePointsGT = new double[12];
                 for (int i = 0; i < index; i++)
                 {
                     //y를 -로 둔채로 계산하면 최종 계산되는 position에서 y가 -로 나옴 -> DLT에서 계산한 뒤로 unity로 넘겨줄때 y와 관련된 부분에 -를 해야할듯
@@ -71,10 +62,14 @@ public class DLT_solve : MonoBehaviour
 
                     imagePoints[i * 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.x;
                     imagePoints[i * 2 + 1] = projCam.pixelHeight - (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinate.y;
+
+                    imagePointsGT[i * 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinateGT.x;
+                    imagePointsGT[i * 2 + 1] = projCam.pixelHeight - (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinateGT.y;
                 }
                 //확인 절차
                 Debug.Log("3D Matrix: " + string.Join(", ", worldPoints));
                 Debug.Log("2D Matrix: " + string.Join(", ", imagePoints));
+                Debug.Log("2D Matrix GT: " + string.Join(", ", imagePointsGT));
 
                 //double[] imagePoints = vertexClickTest.imagePoints;
                 int numPoints = index;
@@ -83,9 +78,10 @@ public class DLT_solve : MonoBehaviour
                 // DLT 식에 사용되는 행렬 (3x4 행렬, (2,3)은 1로 고정? 아니면 12 배열로 만들어서 마지막 값으로 나누는걸로 변경?)
                 double[] projectionMatrix = new double[11];
                 DLT(worldPoints, imagePoints, numPoints, projectionMatrix);
-
+                double[] projectionMatrixGT = new double[11];
+                DLT(worldPoints, imagePointsGT, numPoints, projectionMatrixGT);
                 Debug.Log("Projection Matrix: " + string.Join(", ", projectionMatrix));
-
+                Debug.Log("Projection Matrix GT: " + string.Join(", ", projectionMatrixGT));
                 //Matrix4x4 PMat = new Matrix4x4();
                 //PMat.SetRow(0, new Vector4((float)projectionMatrix[0], (float)projectionMatrix[1], (float)projectionMatrix[2], (float)projectionMatrix[3])); // Adjusted for Unity
                 //PMat.SetRow(1, new Vector4((float)projectionMatrix[4], (float)projectionMatrix[5], (float)projectionMatrix[6], (float)projectionMatrix[7]));
@@ -97,15 +93,17 @@ public class DLT_solve : MonoBehaviour
                 //Debug.Log("Projection Matrix Main Camera: " + Camera.main.projectionMatrix);
                 //Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
                 //newCalibrationWithPM(PMat, projCam);
-                
+
                 CalculateParameters(projectionMatrix, projCam);
+                Residual(imagePointsGT, imagePoints);
+                RMSE(projectionMatrixGT, projectionMatrix);
                 //MSE(PMat, worldPoints, imagePoints);
                 //Debug.Log("Projection Matrix: " + string.Join(", ", PMat));
 
                 Debug.Log("Projection Matrix Projection Camera: " + projCam.projectionMatrix);
                 Debug.Log("Real Camera Rotation: " + projCam.transform.rotation);
-                //cameraCalibrationWithDLT(projectionMatrix, projCam);
-
+                
+                
             }
             else
             {
@@ -125,11 +123,34 @@ public class DLT_solve : MonoBehaviour
 
     }
     
-    private void RMSE()
+    private void Residual(double[] GT, double[] imageCoordinate)
     {
 
+        float distanceResult = 0;
+        for (int i = 0; i < GT.Length; i += 2) {
+            Vector2 gt2D = new Vector2((float)GT[i], (float)GT[i + 1]);
+            Vector2 image2D = new Vector2((float)imageCoordinate[i], (float)imageCoordinate[i + 1]);
+            float distance = Vector2.Distance(gt2D, image2D);
+            distanceResult += distance;
+        }
+        Debug.Log("(Total 2D)Res: " + distanceResult);
     }
 
+    private void RMSE(double[] GT, double[] DLT)
+    {
+        double rmse = 0;
+        //물론 둘다 DLT, GT는 ???의 DLT 파라미터, DLT는 projector에 적용된 DLT 파라미터
+        for (int i = 0; i < GT.Length; i++) 
+        {
+            double difference = GT[i] - DLT[i];
+            rmse += difference*difference;
+            Debug.Log("DLT Parameter " + (i+1) + " : " + difference);
+        }
+
+        double rmseResult = Math.Sqrt(rmse / GT.Length);
+        Debug.Log("(DLT)Rmse: " + rmseResult);
+
+    }
 
     //private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
     //{
@@ -146,7 +167,7 @@ public class DLT_solve : MonoBehaviour
 
     //        double originalX = imageCoord[2*i];
     //        double originalY = imageCoord[2*i+1];
-            
+
     //        double errorx = Math.Sqrt(Math.Pow(projectedX - originalX, 2));
     //        double errory = Math.Sqrt(Math.Pow(projectedY - originalY, 2));
     //        Debug.Log("vx"+i + " " + errorx + "vy" + i + " " + errory);

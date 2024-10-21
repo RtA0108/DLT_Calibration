@@ -14,11 +14,14 @@ public class VertexClickTest : MonoBehaviour
         public int uniqIndex;
         public Vector3 worldCoordinate;
         public Vector2 screenCoordinate;
-        public VertexStruct(int vertexIndex, Vector3 worldCoord, Vector2 screenCoord)
+        public Vector2 screenCoordinateGT;
+        public VertexStruct(int vertexIndex, Vector3 worldCoord, Vector2 screenCoord, Vector2 screenCoordGT)
         {
             this.uniqIndex = vertexIndex;
             this.worldCoordinate = worldCoord;
-            screenCoordinate = screenCoord;
+            this.screenCoordinate = screenCoord;
+            this.screenCoordinateGT = screenCoordGT;
+            //원래는 screenCoordinate에 this가 붙어있지 않았는데 이게 원인이었을까?
         }
     }
     public VertexStruct[] verticesStruct;

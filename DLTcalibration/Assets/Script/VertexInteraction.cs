@@ -54,6 +54,7 @@ public class VertexInteraction : MonoBehaviour
             markerManager.GetComponent<MarkerManager>().CreateMarker(screenCoordMarker);
             //마커 2D 추가
             LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinate = screenCoordMarker;
+            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinateGT = screenCoordMarker;
             meshCounter++;
             copied = true;
         }
