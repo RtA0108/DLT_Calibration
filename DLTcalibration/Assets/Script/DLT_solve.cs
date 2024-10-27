@@ -148,7 +148,7 @@ public class DLT_solve : MonoBehaviour
         }
 
         double rmseResult = Math.Sqrt(rmse / GT.Length);
-        Debug.Log("(DLT)Rmse: " + rmseResult);
+        Debug.Log("(DLT)RMSE: " + rmseResult);
 
     }
 
@@ -195,7 +195,8 @@ public class DLT_solve : MonoBehaviour
         // c^2 = (a^T a) / (c^T c) - (a^T c / c^T c)^2
         double cSquared = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(a.x, a.y, a.z)) / cTc) - Mathf.Pow((float)Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)) / cTc, 2);
         // focalLength c
-        double focalLength = Mathf.Sqrt((float)cSquared);
+        double focalLength = Mathf.Sqrt((float)cSquared); //픽셀 단위일 가능성 농후 (그래서 값이 상당히 큼)
+        Debug.Log("Focal Length: "+focalLength);
         // d = ((a^T b) * (c^T c) - (a^T c) * (b^T c)) / ((a^T a)(c^T c) - (a^T c)^2)
         double numerator_d = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(b.x, b.y, b.z)) * cTc) - (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)) * Vector3.Dot(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));
         double denominator_d = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(a.x, a.y, a.z)) * cTc) - Mathf.Pow(Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)), 2);
@@ -329,6 +330,7 @@ public class DLT_solve : MonoBehaviour
         // Compute frustum boundaries using the intrinsic parameters
         float left = (float)((principalX - Screen.width) * near / focalLength);
         float right = (float)(principalX * near / focalLength);
+
         float bottom = (float)((principalY - Screen.height) * near / focalLength);
         float top = (float)(principalY * near / focalLength);
 
@@ -359,10 +361,11 @@ public class DLT_solve : MonoBehaviour
         projectionMatrix.m32 = -1.0f;
         projectionMatrix.m33 = 0.0f;
 
+        Debug.Log("ProjectionCam intrinsics." + projCam.projectionMatrix.ToString());
         // Apply the calculated projection matrix to the main camera
         projCam.projectionMatrix = projectionMatrix;
 
-        Debug.Log("Applied camera intrinsics." + projectionMatrix);
+        Debug.Log("Applied camera intrinsics." + projCam.projectionMatrix);
     }
 
     // Apply extrinsic parameters (rotation and translation) to Unity's camera
