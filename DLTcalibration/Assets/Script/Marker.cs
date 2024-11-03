@@ -62,6 +62,9 @@ public class Marker : MonoBehaviour, IDragHandler
         LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate = new Vector2(screenPosition.x, screenPosition.y);
         //마우스 위치가 아닌 마커 위치로 정상인식
         Debug.Log("screen Coord: " + IDX + " " + LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate);
-        
+        Vector2 gt2D = new Vector2((float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinateGT.x, (float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinateGT.y);
+        Vector2 image2D = new Vector2((float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate.x, (float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate.y);
+        float distance = Vector2.Distance(gt2D, image2D);
+        Debug.Log("Res " + IDX + " " + distance);
     }
 }

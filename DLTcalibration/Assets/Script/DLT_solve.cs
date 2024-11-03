@@ -152,28 +152,6 @@ public class DLT_solve : MonoBehaviour
 
     }
 
-    //private void MSE(Matrix4x4 P, double[] worldCoord, double[] imageCoord)
-    //{
-    //    //double[] mseResult = new double[12];
-    //    // 지금 이 MSE 방식이 정상적인 것인지 잘 모르겠음
-    //    for(int i =0; i<6; i++)
-    //    {
-    //        Vector4 vertexPosition = new Vector4((float)worldCoord[3 * i], (float)worldCoord[3 * i + 1], (float)worldCoord[3 * i + 2], 1);
-    //        Vector4 result = P * vertexPosition;
-    //        //Debug.Log(result);
-
-    //        double projectedX = result.x / result.z;
-    //        double projectedY = result.y / result.z;
-
-    //        double originalX = imageCoord[2*i];
-    //        double originalY = imageCoord[2*i+1];
-
-    //        double errorx = Math.Sqrt(Math.Pow(projectedX - originalX, 2));
-    //        double errory = Math.Sqrt(Math.Pow(projectedY - originalY, 2));
-    //        Debug.Log("vx"+i + " " + errorx + "vy" + i + " " + errory);
-    //    }
-    //}
-
 
     //새로 작성
     private void CalculateParameters(double[] dltMatrix, Camera projCam)
@@ -316,8 +294,8 @@ public class DLT_solve : MonoBehaviour
     public void ApplyIntrinsicsAndExtrinsics(double focalLength, double skew, double principalX, double principalY, Matrix4x4 rotationMatrix, Vector3 translation, Camera projCam)
     {
         // Step 1: Apply intrinsics to the Unity camera's projection matrix
-        ApplyIntrinsics(focalLength, skew, principalX, principalY, projCam);
-
+        //ApplyIntrinsics(focalLength, skew, principalX, principalY, projCam);
+        ApplyIntrinsicsPhysic(focalLength, skew, principalX, principalY, projCam);
         // Step 2: Apply extrinsics (rotation and translation) to the Unity camera's transform
         ApplyExtrinsics(rotationMatrix, translation, projCam);
     }
@@ -368,6 +346,16 @@ public class DLT_solve : MonoBehaviour
         Debug.Log("Applied camera intrinsics." + projCam.projectionMatrix);
     }
 
+    private void ApplyIntrinsicsPhysic(double focalLength, double skew, double principalX, double principalY, Camera projCam)
+    {
+        projCam.focalLength = (float)focalLength * (36.0f / Screen.width);
+        Vector2 lensShift = new Vector2(
+            (float)(principalX / Screen.width) * 2.0f - 1.0f, // X축으로 정규화
+            (float)(principalY / Screen.height) * 2.0f - 1.0f  // Y축으로 정규화
+        );
+        projCam.lensShift = lensShift;
+
+    }
     // Apply extrinsic parameters (rotation and translation) to Unity's camera
     private void ApplyExtrinsics(Matrix4x4 rotationMatrix, Vector3 translation, Camera projCam)
     {
