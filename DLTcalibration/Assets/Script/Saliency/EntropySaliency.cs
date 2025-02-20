@@ -4,7 +4,7 @@ using System.Linq;
 
 public class EntropySaliency : MonoBehaviour
 {
-    public float neighborhoodRadius = 0.1f; // Radius for local neighborhood analysis
+    public float neighborhoodRadius = 0.1f; // Radius for local neighborhood analysis == sigma
     public float visualizationSize = 10.0f; // Size of saliency markers
 
     private Mesh mesh;
