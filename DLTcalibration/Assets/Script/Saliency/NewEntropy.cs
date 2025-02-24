@@ -1,13 +1,12 @@
-//거리기반(max-min distance) 카메라 무관
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 
-public class NewEntropy : MonoBehaviour
+public class EnhancedEntropySaliency : MonoBehaviour
 {
     public MeshFilter meshFilter;
-    public int neighborCount = 10;
-    public int topCandidates = 20; // Number of top entropy candidates to consider
+    public int neighborCount = 10; // For fixed neighbor mode (optional)
+    public float[] sigmaScales = new float[] { 0.1f, 0.2f, 0.3f }; // Multi-scale sigma values
     public int topVerticesToHighlight = 6; // Final number of vertices to highlight
     public Color highlightColor = Color.red;
     public float highlightSize = 0.05f;
@@ -15,7 +14,6 @@ public class NewEntropy : MonoBehaviour
     // Vertex data storage
     private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
-    private Dictionary<int, List<int>> vertexNeighbors = new Dictionary<int, List<int>>();
 
     void Start()
     {
@@ -36,72 +34,74 @@ public class NewEntropy : MonoBehaviour
             vertexNormals[i] = normals[i];
         }
 
-        // Step 2: Find neighbors for each vertex
-        for (int i = 0; i < positions.Length; i++)
-        {
-            List<int> neighbors = GetNeighbors(positions, i, neighborCount);
-            vertexNeighbors[i] = neighbors;
-        }
+        // Step 2: Calculate multi-scale entropy for all vertices
+        float[] entropyValues = CalculateMultiScaleEntropy(positions, normals, sigmaScales);
 
-        // Step 3: Calculate entropy for all vertices and highlight top ones
-        float[] entropyValues = CalculateEntropyForAllVertices();
+        // Step 3: Highlight top vertices based on entropy
         HighlightTopVerticesWithMaxMin(entropyValues);
     }
 
-    // Find nearest neighbors
-    private List<int> GetNeighbors(Vector3[] vertices, int index, int count)
+    // Calculate multi-scale entropy
+    private float[] CalculateMultiScaleEntropy(Vector3[] vertices, Vector3[] normals, float[] sigmaScales)
     {
-        return vertices
-            .Select((v, idx) => new { idx, distance = Vector3.Distance(v, vertices[index]) })
-            .OrderBy(x => x.distance)
-            .Skip(1) // Exclude the vertex itself
-            .Take(count)
-            .Select(x => x.idx)
-            .ToList();
-    }
+        float[] entropyValues = new float[vertices.Length];
 
-    // Calculate entropy for all vertices
-    private float[] CalculateEntropyForAllVertices()
-    {
-        float[] entropyValues = new float[vertexPositions.Count];
-
-        foreach (var entry in vertexPositions)
+        for (int i = 0; i < vertices.Length; i++)
         {
-            int vertexIndex = entry.Key;
-            List<int> neighbors = vertexNeighbors[vertexIndex];
+            float aggregatedEntropy = 0f;
 
-            // Step 1: Build histogram of neighbor normals / 양자화 진행(QuantizeNormal), 수식 2 / 확인 필
-            Dictionary<Vector3Int, int> histogram = new Dictionary<Vector3Int, int>();
-            foreach (int neighborIndex in neighbors)
+            foreach (float sigma in sigmaScales)
             {
-                Vector3 normal = vertexNormals[neighborIndex];
-                Vector3Int quantizedNormal = QuantizeNormal(normal);
+                List<int> neighbors = GetNeighborsByDistance(vertices, i, sigma);
 
-                if (!histogram.ContainsKey(quantizedNormal))
+                // Step 1: Build histogram of neighbor normals
+                Dictionary<Vector3Int, int> histogram = new Dictionary<Vector3Int, int>();
+                foreach (int neighborIndex in neighbors)
                 {
-                    histogram[quantizedNormal] = 0;
+                    Vector3 normal = normals[neighborIndex];
+                    Vector3Int quantizedNormal = QuantizeNormal(normal);
+
+                    if (!histogram.ContainsKey(quantizedNormal))
+                    {
+                        histogram[quantizedNormal] = 0;
+                    }
+                    histogram[quantizedNormal]++;
                 }
-                histogram[quantizedNormal]++;
+
+                // Step 2: Calculate entropy for this scale
+                float entropy = 0f;
+                int total = neighbors.Count;
+
+                foreach (var count in histogram.Values)
+                {
+                    float probability = (float)count / total;
+                    entropy -= probability * Mathf.Log(probability);
+                }
+
+                aggregatedEntropy += entropy; // Aggregate entropy across scales
             }
 
-            // Step 2: Calculate entropy / 샤논 엔트로피 사용 / 논문 수식과 동일
-            float entropy = 0f;
-            int total = neighbors.Count;
-
-            foreach (var count in histogram.Values)
-            {
-                float probability = (float)count / total;
-                entropy -= probability * Mathf.Log(probability);
-            }
-
-            entropyValues[vertexIndex] = entropy;
-            Debug.Log($"Vertex {vertexIndex} - Entropy: {entropy}");
+            // Average entropy over all scales
+            entropyValues[i] = aggregatedEntropy / sigmaScales.Length;
+            Debug.Log($"Vertex {i} - Multi-Scale Entropy: {entropyValues[i]}");
         }
 
         return entropyValues;
     }
 
-    // Quantize normal vectors for histogram, 
+    // Find neighbors within sigma distance
+    private List<int> GetNeighborsByDistance(Vector3[] vertices, int index, float sigma)
+    {
+        Vector3 centerVertex = vertices[index];
+
+        return vertices
+            .Select((v, idx) => new { idx, distance = Vector3.Distance(v, centerVertex) })
+            .Where(x => x.distance > 0 && x.distance <= sigma) // Exclude self and apply sigma threshold
+            .Select(x => x.idx)
+            .ToList();
+    }
+
+    // Quantize normals for histogram
     private Vector3Int QuantizeNormal(Vector3 normal, int scale = 100)
     {
         return new Vector3Int(
@@ -118,7 +118,7 @@ public class NewEntropy : MonoBehaviour
         var topCandidatesList = entropyValues
             .Select((value, index) => new { index, value })
             .OrderByDescending(item => item.value)
-            .Take(topCandidates)
+            .Take(topVerticesToHighlight * 3) // Take more candidates for Max-Min
             .ToList();
 
         // Step 2: Max-Min Distance selection
@@ -187,6 +187,197 @@ public class NewEntropy : MonoBehaviour
         }
     }
 }
+
+
+////거리기반(max-min distance) 카메라 무관
+//using UnityEngine;
+//using System.Collections.Generic;
+//using System.Linq;
+
+//public class NewEntropy : MonoBehaviour
+//{
+//    public MeshFilter meshFilter;
+//    public int neighborCount = 10;
+//    public int topCandidates = 20; // Number of top entropy candidates to consider
+//    public int topVerticesToHighlight = 6; // Final number of vertices to highlight
+//    public Color highlightColor = Color.red;
+//    public float highlightSize = 0.05f;
+
+//    // Vertex data storage
+//    private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
+//    private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
+//    private Dictionary<int, List<int>> vertexNeighbors = new Dictionary<int, List<int>>();
+
+//    void Start()
+//    {
+//        if (meshFilter == null)
+//        {
+//            Debug.LogError("MeshFilter가 할당되지 않았습니다.");
+//            return;
+//        }
+
+//        Mesh mesh = meshFilter.mesh;
+//        Vector3[] positions = mesh.vertices;
+//        Vector3[] normals = mesh.normals;
+
+//        // Step 1: Store vertex positions and normals
+//        for (int i = 0; i < positions.Length; i++)
+//        {
+//            vertexPositions[i] = positions[i];
+//            vertexNormals[i] = normals[i];
+//        }
+
+//        // Step 2: Find neighbors for each vertex
+//        for (int i = 0; i < positions.Length; i++)
+//        {
+//            List<int> neighbors = GetNeighbors(positions, i, neighborCount);
+//            vertexNeighbors[i] = neighbors;
+//        }
+
+//        // Step 3: Calculate entropy for all vertices and highlight top ones
+//        float[] entropyValues = CalculateEntropyForAllVertices();
+//        HighlightTopVerticesWithMaxMin(entropyValues);
+//    }
+
+//    // Find nearest neighbors
+//    private List<int> GetNeighbors(Vector3[] vertices, int index, int count)
+//    {
+//        return vertices
+//            .Select((v, idx) => new { idx, distance = Vector3.Distance(v, vertices[index]) })
+//            .OrderBy(x => x.distance)
+//            .Skip(1) // Exclude the vertex itself
+//            .Take(count)
+//            .Select(x => x.idx)
+//            .ToList();
+//    }
+
+//    // Calculate entropy for all vertices
+//    private float[] CalculateEntropyForAllVertices()
+//    {
+//        float[] entropyValues = new float[vertexPositions.Count];
+
+//        foreach (var entry in vertexPositions)
+//        {
+//            int vertexIndex = entry.Key;
+//            List<int> neighbors = vertexNeighbors[vertexIndex];
+
+//            // Step 1: Build histogram of neighbor normals / 양자화 진행(QuantizeNormal), 수식 2 / 확인 필
+//            Dictionary<Vector3Int, int> histogram = new Dictionary<Vector3Int, int>();
+//            foreach (int neighborIndex in neighbors)
+//            {
+//                Vector3 normal = vertexNormals[neighborIndex];
+//                Vector3Int quantizedNormal = QuantizeNormal(normal);
+
+//                if (!histogram.ContainsKey(quantizedNormal))
+//                {
+//                    histogram[quantizedNormal] = 0;
+//                }
+//                histogram[quantizedNormal]++;
+//            }
+
+//            // Step 2: Calculate entropy / 샤논 엔트로피 사용 / 논문 수식과 동일
+//            float entropy = 0f;
+//            int total = neighbors.Count;
+
+//            foreach (var count in histogram.Values)
+//            {
+//                float probability = (float)count / total;
+//                entropy -= probability * Mathf.Log(probability);
+//            }
+
+//            entropyValues[vertexIndex] = entropy;
+//            Debug.Log($"Vertex {vertexIndex} - Entropy: {entropy}");
+//        }
+
+//        return entropyValues;
+//    }
+
+//    // Quantize normal vectors for histogram, 
+//    private Vector3Int QuantizeNormal(Vector3 normal, int scale = 100)
+//    {
+//        return new Vector3Int(
+//            Mathf.RoundToInt(normal.x * scale),
+//            Mathf.RoundToInt(normal.y * scale),
+//            Mathf.RoundToInt(normal.z * scale)
+//        );
+//    }
+
+//    // Highlight top vertices using Max-Min Distance strategy
+//    private void HighlightTopVerticesWithMaxMin(float[] entropyValues)
+//    {
+//        // Step 1: Select top entropy candidates
+//        var topCandidatesList = entropyValues
+//            .Select((value, index) => new { index, value })
+//            .OrderByDescending(item => item.value)
+//            .Take(topCandidates)
+//            .ToList();
+
+//        // Step 2: Max-Min Distance selection
+//        List<int> selectedIndices = new List<int>();
+
+//        // Start with the vertex with the highest entropy
+//        selectedIndices.Add(topCandidatesList[0].index);
+//        topCandidatesList.RemoveAt(0);
+
+//        while (selectedIndices.Count < topVerticesToHighlight && topCandidatesList.Count > 0)
+//        {
+//            float maxMinDist = float.MinValue;
+//            int selectedIdx = -1;
+
+//            foreach (var candidate in topCandidatesList)
+//            {
+//                float minDist = float.MaxValue;
+
+//                foreach (int selIdx in selectedIndices)
+//                {
+//                    float dist = Vector3.Distance(vertexPositions[candidate.index], vertexPositions[selIdx]);
+//                    if (dist < minDist)
+//                        minDist = dist;
+//                }
+
+//                if (minDist > maxMinDist)
+//                {
+//                    maxMinDist = minDist;
+//                    selectedIdx = candidate.index;
+//                }
+//            }
+
+//            if (selectedIdx != -1)
+//            {
+//                selectedIndices.Add(selectedIdx);
+//                topCandidatesList.RemoveAll(c => c.index == selectedIdx);
+//            }
+//            else
+//            {
+//                break; // No more suitable candidates
+//            }
+//        }
+
+//        // Step 3: Visualize selected vertices
+//        foreach (int vertexIndex in selectedIndices)
+//        {
+//            if (vertexPositions.TryGetValue(vertexIndex, out Vector3 position) &&
+//                vertexNormals.TryGetValue(vertexIndex, out Vector3 normal))
+//            {
+//                // Create a sphere to highlight the vertex
+//                GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+//                sphere.transform.position = meshFilter.transform.TransformPoint(position);
+//                sphere.transform.localScale = Vector3.one * highlightSize;
+//                sphere.GetComponent<Renderer>().material.color = highlightColor;
+
+//                // Output detailed information
+//                Debug.Log($"Highlighted Vertex {vertexIndex}");
+//                Debug.Log($"  Entropy: {entropyValues[vertexIndex]}");
+//                Debug.Log($"  Position: {position}");
+//                Debug.Log($"  Normal: {normal}");
+//            }
+//            else
+//            {
+//                Debug.LogWarning($"Vertex {vertexIndex} data not found in vertexPositions or vertexNormals");
+//            }
+//        }
+//    }
+//}
 
 //using UnityEngine;
 //using System.Collections.Generic;
