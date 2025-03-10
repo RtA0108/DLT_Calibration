@@ -6,22 +6,26 @@ using System;
 public class NewEntropy : MonoBehaviour
 {
     public MeshFilter meshFilter;
+    public Camera mainCamera; // Main camera reference
     public float[] sigmaScales = new float[] { 0.1f, 0.2f, 0.3f };
     public float topEntropyPercentage = 0.1f; // 10% of vertices
     public int bestDistributedVertices = 6; // Number of best-spread vertices
+    public float humanFOVAngle = 60f; // Human Field of View (FOV) angle
     public Color highlightColor = Color.red;
     public float highlightSize = 0.05f;
+    public LayerMask visibilityLayerMask; // Defines which layers to check for occlusion
 
     private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
 
     void Start()
     {
-        if (meshFilter == null)
+        if (meshFilter == null || mainCamera == null)
         {
-            Debug.LogError("MeshFilter is not assigned.");
+            Debug.LogError("MeshFilter or Main Camera is not assigned.");
             return;
         }
+
 
         Mesh mesh = meshFilter.mesh;
         Vector3[] positions = mesh.vertices;
@@ -38,7 +42,7 @@ public class NewEntropy : MonoBehaviour
         float[] entropyValues = ComputeVertexEntropy(positions, normals, sigmaScales);
 
         // Step 3: Select the best distributed high-entropy vertices
-        SelectBestDistributedVertices(entropyValues);
+        SelectBestDistributedHumanVisibleVertices(entropyValues);
     }
 
     private float ComputeMeshCharacteristicLength(Vector3[] vertices)
@@ -134,38 +138,53 @@ public class NewEntropy : MonoBehaviour
         );
     }
 
-    private void SelectBestDistributedVertices(float[] entropyValues)
+    private void SelectBestDistributedHumanVisibleVertices(float[] entropyValues)
     {
         int numTopEntropy = Mathf.CeilToInt(vertexPositions.Count * topEntropyPercentage);
 
-        // Step 1: Get top 10% highest entropy vertices
-        var topEntropyVertices = entropyValues
-            .Select((value, index) => new { index, value })
-            .OrderByDescending(item => item.value)
+        // Step 1: Filter only vertices that are inside human vision FOV
+        List<int> humanVisibleVertices = new List<int>();
+        Dictionary<int, float> projectedAreaMap = new Dictionary<int, float>();
+
+        foreach (var kvp in vertexPositions)
+        {
+            int vertexIndex = kvp.Key;
+            Vector3 vertexWorldPos = kvp.Value;
+            Vector3 vertexNormal = vertexNormals[vertexIndex]; 
+
+            if (IsVertexInHumanVision(vertexWorldPos, vertexNormal)) 
+            {
+                humanVisibleVertices.Add(kvp.Key);
+                projectedAreaMap[kvp.Key] = ComputeProjectedArea(kvp.Value);
+            }
+        }
+
+        Debug.Log($"Total Human-Visible Vertices: {humanVisibleVertices.Count}");
+
+        // Step 2: Select top 10% highest entropy vertices within human-visible region
+        var topEntropyVisibleVertices = humanVisibleVertices
+            .Select(index => new { index, entropy = entropyValues[index], area = projectedAreaMap[index] })
+            .OrderByDescending(item => item.entropy) // Prioritize entropy first
             .Take(numTopEntropy)
             .Select(item => item.index)
             .ToList();
 
-        Debug.Log($"Total Candidates in Top {topEntropyPercentage * 100}%: {topEntropyVertices.Count}");
+        Debug.Log($"Total Candidates in Top {topEntropyPercentage * 100}% (Human Visible Only): {topEntropyVisibleVertices.Count}");
 
-        // Step 2: Use Farthest Point Sampling (FPS) to spread selections
+        // Step 3: Select widely distributed vertices using FPS, prioritizing entropy & projected area
         List<int> selectedVertices = new List<int>();
+        selectedVertices.Add(topEntropyVisibleVertices[0]);
+        topEntropyVisibleVertices.RemoveAt(0);
 
-        // Step 2.1: Start with the highest entropy vertex
-        selectedVertices.Add(topEntropyVertices[0]);
-        topEntropyVertices.RemoveAt(0);
-
-        // Step 2.2: Pick next points using Farthest Point Sampling
-        while (selectedVertices.Count < bestDistributedVertices && topEntropyVertices.Count > 0)
+        while (selectedVertices.Count < bestDistributedVertices && topEntropyVisibleVertices.Count > 0)
         {
             float maxMinDist = float.MinValue;
             int selectedIdx = -1;
 
-            foreach (var candidateIdx in topEntropyVertices)
+            foreach (var candidateIdx in topEntropyVisibleVertices)
             {
                 float minDist = float.MaxValue;
 
-                // Find the closest distance to already selected points
                 foreach (int selIdx in selectedVertices)
                 {
                     float dist = Vector3.Distance(vertexPositions[candidateIdx], vertexPositions[selIdx]);
@@ -173,10 +192,11 @@ public class NewEntropy : MonoBehaviour
                         minDist = dist;
                 }
 
-                // Pick the vertex that is farthest from already selected points
-                if (minDist > maxMinDist)
+                float weightedScore = minDist * projectedAreaMap[candidateIdx];
+
+                if (weightedScore > maxMinDist)
                 {
-                    maxMinDist = minDist;
+                    maxMinDist = weightedScore;
                     selectedIdx = candidateIdx;
                 }
             }
@@ -184,7 +204,7 @@ public class NewEntropy : MonoBehaviour
             if (selectedIdx != -1)
             {
                 selectedVertices.Add(selectedIdx);
-                topEntropyVertices.Remove(selectedIdx);
+                topEntropyVisibleVertices.Remove(selectedIdx);
             }
             else
             {
@@ -192,20 +212,62 @@ public class NewEntropy : MonoBehaviour
             }
         }
 
-        Debug.Log("===== Best Distributed High-Entropy Vertices =====");
+        Debug.Log("===== Best Distributed Human-Visible High-Entropy Vertices =====");
         foreach (int vertexIndex in selectedVertices)
         {
-            Debug.Log($"Vertex {vertexIndex} - Entropy: {entropyValues[vertexIndex]}");
+            Debug.Log($"Vertex {vertexIndex} - Entropy: {entropyValues[vertexIndex]} - Projected Area: {projectedAreaMap[vertexIndex]}");
 
             if (vertexPositions.TryGetValue(vertexIndex, out Vector3 position))
             {
-                GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                sphere.transform.position = meshFilter.transform.TransformPoint(position);
-                sphere.transform.localScale = Vector3.one * highlightSize;
-                sphere.GetComponent<Renderer>().material.color = highlightColor;
+                HighlightVertex(position);
             }
         }
     }
+
+    private bool IsVertexInHumanVision(Vector3 vertexWorldPos, Vector3 vertexNormal)
+    {
+        Vector3 camToVertex = (vertexWorldPos - mainCamera.transform.position).normalized;
+        float angle = Vector3.Angle(mainCamera.transform.forward, camToVertex);
+
+        // Step 1: Ensure vertex is within the human's FOV
+        if (angle > humanFOVAngle / 2) return false;
+
+        // Step 2: Ensure vertex normal is facing the camera
+        float normalAngle = Vector3.Angle(mainCamera.transform.forward, vertexNormal);
+        if (normalAngle > 90f) return false; // Back-facing vertex, discard
+
+        // Step 3: Perform an accurate occlusion check using Raycasting
+        Ray ray = new Ray(mainCamera.transform.position, vertexWorldPos - mainCamera.transform.position);
+        if (Physics.Raycast(ray, out RaycastHit hit, Vector3.Distance(mainCamera.transform.position, vertexWorldPos), visibilityLayerMask))
+        {
+            // Ensure the vertex itself is directly visible (small margin for floating-point precision)
+            if (Vector3.Distance(hit.point, vertexWorldPos) > 0.0005f)
+            {
+                return false; // The vertex is blocked by another object
+            }
+        }
+
+        return true; // The vertex is fully visible
+    }
+
+    private float ComputeProjectedArea(Vector3 vertexWorldPos)
+    {
+        Vector3 screenPoint = mainCamera.WorldToScreenPoint(meshFilter.transform.TransformPoint(vertexWorldPos));
+        float screenArea = screenPoint.z / mainCamera.farClipPlane; // Normalize depth-based area scaling
+        return Mathf.Max(screenArea, 0.001f); // Avoid zero area
+    }
+
+    private void HighlightVertex(Vector3 position)
+    {
+        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.position = meshFilter.transform.TransformPoint(position);
+        sphere.transform.localScale = Vector3.one * highlightSize;
+         
+        Material highlightMaterial = new Material(Shader.Find("Standard"));
+        highlightMaterial.color = highlightColor;
+        sphere.GetComponent<Renderer>().material = highlightMaterial;
+    }
+
 }
 
 //using UnityEngine;

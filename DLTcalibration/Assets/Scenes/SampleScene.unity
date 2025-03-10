@@ -240,15 +240,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   meshFilter: {fileID: 216437366}
+  mainCamera: {fileID: 330585545}
   sigmaScales:
   - 0.1
   - 0.2
   - 0.3
-  saliencyThreshold: 0.75
-  topVerticesToHighlight: 6
-  debugUniquePositions: 20
+  topEntropyPercentage: 0.1
+  bestDistributedVertices: 6
   highlightColor: {r: 1, g: 0, b: 0.9465084, a: 1}
-  highlightSize: 7.5
+  highlightSize: 10
+  visibilityLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
