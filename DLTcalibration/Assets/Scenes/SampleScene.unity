@@ -247,8 +247,9 @@ MonoBehaviour:
   - 0.3
   topEntropyPercentage: 0.1
   bestDistributedVertices: 6
+  humanFOVAngle: 60
   highlightColor: {r: 1, g: 0, b: 0.9465084, a: 1}
-  highlightSize: 10
+  highlightSize: 6
   visibilityLayerMask:
     serializedVersion: 2
     m_Bits: 0
