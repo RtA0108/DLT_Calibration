@@ -54,11 +54,12 @@ public class CreateSphereAtVertex : MonoBehaviour
                         uvIndex.Add(uvCoordinate, indexNumber);
 
 
-                        //vertex가 가시적으로 
-                        Instantiate(vertexSphere, vertexPosition, Quaternion.identity);
-                        vertexSphere.transform.localScale = new Vector3(5.0f,5.0f,5.0f);
-                        vertexSphere.name = "vertex" + indexNumber;
-                        
+                        GameObject sphere = Instantiate(vertexSphere, vertexPosition, Quaternion.identity);
+                        sphere.transform.localScale = new Vector3(5.0f, 5.0f, 5.0f);
+                        sphere.name = "vertex" + indexNumber;
+
+                        // Assign layer to **IGNORE** it for raycasting
+                        sphere.layer = LayerMask.NameToLayer("Vertex In 3D");
                     }
                     //foreach (KeyValuePair <int, Vector3 > key in posIndex)
                     //{
