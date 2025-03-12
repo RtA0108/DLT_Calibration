@@ -247,12 +247,12 @@ MonoBehaviour:
   - 0.3
   topEntropyPercentage: 0.1
   bestDistributedVertices: 6
-  highlightColor: {r: 1, g: 0, b: 0.9465084, a: 1}
+  highlightColor: {r: 0.8623762, g: 0, b: 1, a: 1}
   highlightSize: 6
   visibilityLayerMask:
     serializedVersion: 2
     m_Bits: 0
-  visibilityColor: {r: 0, g: 0, b: 1, a: 1}
+  visibilityColor: {r: 0, g: 1, b: 0.19270587, a: 1}
 --- !u!64 &216437372
 MeshCollider:
   m_ObjectHideFlags: 0

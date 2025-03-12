@@ -17,7 +17,8 @@ public class NewEntropy : MonoBehaviour
 
     private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
-
+    private List<int> visibleVertices = new List<int>();
+    private Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
     void Start()
     {
         int vertexLayer = LayerMask.NameToLayer("Vertex In 3D");
@@ -52,20 +53,22 @@ public class NewEntropy : MonoBehaviour
             vertexPositions[i] = positions[i];
             vertexNormals[i] = normals[i];
         }
-
+        //Debug.Log(positions.Length);
+        HighlightVisibleVertices();
         // Step 2: Filter only vertices visible in the camera
-        List<int> visibleVertices = FilterVisibleVertices();
-        if (visibleVertices.Count == 0)
-        {
-            Debug.LogError("No visible vertices found!");
-            return;
-        }
+        //List<int> visibleVertices = FilterVisibleVertices();
+        //if (visibleVertices.Count == 0)
+        //{
+        //    Debug.LogError("No visible vertices found!");
+        //    return;
+        //}
 
-        foreach (int vertexIndex in visibleVertices)
-        {
-            Vector3 worldPosition = meshFilter.transform.TransformPoint(vertexPositions[vertexIndex]); // Convert to world space
-            HighlightVertex(worldPosition, visibilityColor);
-        }
+        //foreach (int vertexIndex in visibleVertices)
+        //{
+        //    Vector3 worldPosition = meshFilter.transform.TransformPoint(vertexPositions[vertexIndex]);
+        //    HighlightVertex(worldPosition, visibilityColor, false);
+        //}
+
         // Step 3: Compute entropy for only visible vertices
         Dictionary<int, float> entropyMap = ComputeEntropyForVisibleVertices(visibleVertices);
 
@@ -76,47 +79,125 @@ public class NewEntropy : MonoBehaviour
         List<int> finalSelectedVertices = SelectMaxMinDistanceVertices(topEntropyVertices, entropyMap);
 
         // Step 6: Highlight selected vertices
+        int entropyIndex = 0;
         foreach (int vertexIndex in finalSelectedVertices)
         {
-            Vector3 worldPosition = meshFilter.transform.TransformPoint(vertexPositions[vertexIndex]); // Convert to world space
-            HighlightVertex(worldPosition, highlightColor);
+            Vector3 worldPosition = meshFilter.transform.TransformPoint(vertexPositions[vertexIndex]);
+            HighlightVertex(worldPosition, highlightColor, true, entropyIndex++);
         }
     }
-    private List<int> FilterVisibleVertices()
-    {
-        List<int> visibleVertices = new List<int>();
 
+    private void HighlightVisibleVertices()
+    {
+        visibleVertices.Clear();
+        uniquePositions.Clear();
+
+        MeshRenderer meshRenderer = GetComponentInChildren<MeshRenderer>();
         Plane[] frustumPlanes = GeometryUtility.CalculateFrustumPlanes(mainCamera);
-        Bounds bounds = meshFilter.GetComponent<MeshRenderer>().bounds;
-        if (!GeometryUtility.TestPlanesAABB(frustumPlanes, bounds)) return visibleVertices; // Skip if completely outside
+        Bounds bounds = meshRenderer.bounds;
+        if (!GeometryUtility.TestPlanesAABB(frustumPlanes, bounds)) return;
+
+        Vector3 camPos = mainCamera.transform.position;
 
         foreach (var kvp in vertexPositions)
         {
             int vertexIndex = kvp.Key;
             Vector3 vertexWorldPos = meshFilter.transform.TransformPoint(kvp.Value);
             Vector3 vertexNormal = vertexNormals[vertexIndex];
-            Vector3 camPos = mainCamera.transform.position;
-
-            // Step 2: Ensure vertex normal is facing the camera
+            Vector3 roundedVertex = new Vector3(
+                Mathf.Round(vertexWorldPos.x * 1000f) / 1000f,
+                Mathf.Round(vertexWorldPos.y * 1000f) / 1000f,
+                Mathf.Round(vertexWorldPos.z * 1000f) / 1000f
+            );
+            Vector3 worldNormal = meshFilter.transform.TransformDirection(vertexNormals[vertexIndex]);
             Vector3 toCamera = (camPos - vertexWorldPos).normalized;
-            if (Vector3.Dot(vertexNormal, toCamera) <= 0)
-            {
-                continue; // Ignore back-facing vertices
-            }
 
-            // Step 3: Perform occlusion check with raycasting (Same as `VisibleVerticesRaycast`)
+            if (Vector3.Dot(worldNormal, toCamera) <= 0) continue;
+
             Ray ray = new Ray(camPos, (vertexWorldPos - camPos).normalized);
-            if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
+            if (Physics.Raycast(ray, out RaycastHit hit))
             {
                 if (Vector3.Distance(hit.point, vertexWorldPos) < 0.01f)
+                {
+                    visibleVertices.Add(vertexIndex); // 보이는 정점을 리스트에 추가
+                    uniquePositions[roundedVertex] = true;
+                    HighlightVertex(vertexWorldPos, visibilityColor, false);
+                }
+            }
+
+            Debug.Log($"Total Unique Visible Vertices: {visibleVertices.Count}");
+        }
+    }
+    private List<int> FilterVisibleVertices()
+    {
+        List<int> visibleVertices = new List<int>();
+        HashSet<Vector3> uniquePositions = new HashSet<Vector3>(); //  Store unique world positions
+
+        // Step 1: Frustum Culling
+        if (!IsModelInFrustum()) return visibleVertices;
+
+        foreach (var kvp in vertexPositions)
+        {
+            int vertexIndex = kvp.Key;
+            Vector3 vertexWorldPos = meshFilter.transform.TransformPoint(kvp.Value);
+            Vector3 vertexNormal = vertexNormals[vertexIndex];
+
+            if (IsVertexTrulyVisible(vertexWorldPos, vertexNormal))
+            {
+                //  Ensure only unique world positions are stored
+                if (uniquePositions.Add(vertexWorldPos)) // Returns `true` if newly added
                 {
                     visibleVertices.Add(vertexIndex);
                 }
             }
         }
 
-        Debug.Log($"Total Visible Vertices: {visibleVertices.Count}");
+        Debug.Log($"Total Unique Visible Vertices: {visibleVertices.Count}");
         return visibleVertices;
+    }
+
+    private bool IsModelInFrustum()
+    {
+        Plane[] frustumPlanes = GeometryUtility.CalculateFrustumPlanes(mainCamera);
+        Bounds bounds = meshFilter.GetComponent<MeshRenderer>().bounds;
+        return GeometryUtility.TestPlanesAABB(frustumPlanes, bounds);
+    }
+
+    private bool IsVertexTrulyVisible(Vector3 vertexWorldPos, Vector3 vertexNormal)
+    {
+        // Step 1: Convert world position to viewport space
+        Vector3 viewportPoint = mainCamera.WorldToViewportPoint(vertexWorldPos);
+
+        // Ensure the vertex is inside the camera's viewport
+        if (viewportPoint.z < 0 || viewportPoint.x < 0 || viewportPoint.x > 1 || viewportPoint.y < 0 || viewportPoint.y > 1)
+        {
+            return false;
+        }
+
+        // Step 2: Use `Vector3.Dot()` for Backface Culling
+        Vector3 camToVertex = (mainCamera.transform.position - vertexWorldPos).normalized;
+        if (Vector3.Dot(vertexNormal, camToVertex) <= 0)
+        {
+            return false;
+        }
+
+        // Step 3: Perform occlusion check with raycasting
+        return IsDirectlyVisibleByRaycast(vertexWorldPos);
+    }
+
+    private bool IsDirectlyVisibleByRaycast(Vector3 vertexWorldPos)
+    {
+        Vector3 camPosition = mainCamera.transform.position;
+        Vector3 direction = (vertexWorldPos - camPosition).normalized;
+        float distance = Vector3.Distance(camPosition, vertexWorldPos);
+
+        // Perform Raycast
+        if (Physics.Raycast(camPosition, direction, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
+        {
+            return Vector3.Distance(hit.point, vertexWorldPos) < 0.01f;
+        }
+
+        return false; // Occluded
     }
 
     private Dictionary<int, float> ComputeEntropyForVisibleVertices(List<int> visibleVertices)
@@ -243,23 +324,31 @@ public class NewEntropy : MonoBehaviour
 
         return entropyValues;
     }
-    private void HighlightVertex(Vector3 position)
-    {
-        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.position = position;
-        sphere.transform.localScale = Vector3.one * highlightSize;
-        sphere.GetComponent<Renderer>().material.color = highlightColor;
-    }
-    private void HighlightVertex(Vector3 position, Color color)
-    {
-        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.transform.position = position;
-        sphere.transform.localScale = Vector3.one * highlightSize;
 
-        // Ensure unique material instances to avoid shared color issues
-        Material highlightMaterial = new Material(Shader.Find("Standard"));
-        highlightMaterial.color = color;
-        sphere.GetComponent<Renderer>().material = highlightMaterial;
+    private void HighlightVertex(Vector3 position, Color color, bool isEntropyHighlight, int index = -1)
+    {
+        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        sphere.transform.position = position;
+        sphere.transform.localScale = Vector3.one * highlightSize;
+        if (isEntropyHighlight)
+        {
+            sphere.name = $"HighVertex_{index}";
+        }
+
+        Renderer sphereRenderer = sphere.GetComponent<Renderer>();
+        if (sphereRenderer != null)
+        {
+            // Use a separate material instance only if needed
+            if (isEntropyHighlight)
+            {
+                sphereRenderer.material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = color };
+            }
+            else
+            {
+                sphereRenderer.sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                sphereRenderer.sharedMaterial.color = color;
+            }
+        }
     }
 }
 
