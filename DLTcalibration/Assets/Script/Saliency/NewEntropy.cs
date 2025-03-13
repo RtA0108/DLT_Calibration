@@ -1,7 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-using System;
 
 public class NewEntropy : MonoBehaviour
 {
@@ -10,10 +9,11 @@ public class NewEntropy : MonoBehaviour
     public float[] sigmaScales = new float[] { 0.1f, 0.2f, 0.3f };
     public float topEntropyPercentage = 0.5f;
     public int bestDistributedVertices = 6;
+    public Color visibilityColor = Color.blue;
     public Color highlightColor = Color.red;
     public float highlightSize = 0.05f;
     public LayerMask visibilityLayerMask;
-    public Color visibilityColor = Color.blue;
+    
 
     private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
@@ -22,6 +22,7 @@ public class NewEntropy : MonoBehaviour
     private Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
     void Start()
     {
+        //occlusion culling을 위한 사전 작업 (가시적으로 생성된 vertex raycasting 제외, mesh 관련 사전 처리)
         int vertexLayer = LayerMask.NameToLayer("Vertex In 3D");
         if (vertexLayer != -1)
         {
@@ -48,15 +49,16 @@ public class NewEntropy : MonoBehaviour
         Vector3[] positions = mesh.vertices;
         Vector3[] normals = mesh.normals;
 
-        // Step 1: Store vertex positions and normals
+        // Store vertex positions and normals
         for (int i = 0; i < positions.Length; i++)
         {
             vertexPositions[i] = positions[i];
             vertexNormals[i] = normals[i];
         }
 
+
+        // Filter only vertices visible in the camera
         HighlightVisibleVertices();
-        // Step 2: Filter only vertices visible in the camera
 
         Dictionary<Vector3, float> entropyMap = ComputeEntropyForVisibleVertices(visibleVertices);
 
@@ -64,21 +66,13 @@ public class NewEntropy : MonoBehaviour
         List<Vector3> topEntropyVertices = SelectTopEntropyVertices(entropyMap);
 
         // Select 6 widely distributed vertices using Max-Min Distance
-        //List<Vector3> finalSelectedVertices = SelectMaxMinDistanceVertices(topEntropyVertices, entropyMap);
         List<Vector3> distributedVertices = SelectMaxMinDistanceVertices(topEntropyVertices, entropyMap, 20);
-        // Step 6: Highlight selected vertices
+        // Highlight selected vertices
         List<Vector3> refinedVertices = RefineByEntropy(distributedVertices, entropyMap);
 
-        // Step 4: Final Selection Based on Total Entropy Sum
+        // Final Selection Based on Total Entropy Sum
         List<Vector3> finalSelectedVertices = SelectFinalSubsetByEntropySum(refinedVertices, entropyMap);
-        //int entropyIndex = 0;
-        //Debug.Log("===== Final Selected High-Entropy (Red) Vertices =====");
-        //foreach (Vector3 vertexPosition in finalSelectedVertices)
-        //{
-        //    //Vector3 worldPosition = meshFilter.transform.TransformPoint(vertexPositions[vertexIndex]);
-        //    Debug.Log($"[RED] Selected Vertex: {vertexPosition}, Entropy: {entropyMap[vertexPosition]}");
-        //    HighlightVertex(vertexPosition, highlightColor, true, entropyIndex++);
-        //}
+
     }
 
     private void HighlightVisibleVertices()
@@ -159,7 +153,10 @@ public class NewEntropy : MonoBehaviour
     private List<Vector3> SelectMaxMinDistanceVertices(List<Vector3> topEntropyVertices, Dictionary<Vector3, float> entropyMap, int selectionCount)
     {
         List<Vector3> distributedVertices = new List<Vector3>();
+        HashSet<Vector3Int> usedGridCells = new HashSet<Vector3Int>();
+
         distributedVertices.Add(topEntropyVertices[0]); // Start with the highest entropy vertex
+        usedGridCells.Add(QuantizePosition(topEntropyVertices[0]));
         topEntropyVertices.RemoveAt(0);
 
         while (distributedVertices.Count < selectionCount && topEntropyVertices.Count > 0)
@@ -169,15 +166,23 @@ public class NewEntropy : MonoBehaviour
 
             foreach (var candidatePos in topEntropyVertices)
             {
+                Vector3Int candidateGridCell = QuantizePosition(candidatePos);
+                if (usedGridCells.Contains(candidateGridCell))
+                    continue; // Skip this vertex if its grid cell is already occupied
+
                 float minDist = float.MaxValue;
+
+
                 foreach (Vector3 selPos in distributedVertices)
                 {
                     float dist = Vector3.Distance(candidatePos, selPos);
+
                     if (dist < minDist)
                         minDist = dist;
                 }
 
-                float spreadPenalty = Mathf.Exp(-minDist * 1.5f);
+
+                float spreadPenalty = Mathf.Exp(-minDist * 3.0f);
                 float weightedScore = entropyMap[candidatePos] * (1 - spreadPenalty);
 
                 if (weightedScore > maxMinDist)
@@ -190,6 +195,7 @@ public class NewEntropy : MonoBehaviour
             if (selectedPos != Vector3.zero)
             {
                 distributedVertices.Add(selectedPos);
+                usedGridCells.Add(QuantizePosition(selectedPos));
                 topEntropyVertices.Remove(selectedPos);
             }
             else
@@ -199,6 +205,14 @@ public class NewEntropy : MonoBehaviour
         }
 
         return distributedVertices;
+    }
+    private Vector3Int QuantizePosition(Vector3 position, float gridSize = 0.5f)
+    {
+        return new Vector3Int(
+            Mathf.RoundToInt(position.x / gridSize),
+            Mathf.RoundToInt(position.y / gridSize),
+            Mathf.RoundToInt(position.z / gridSize)
+        );
     }
     private List<Vector3> RefineByEntropy(List<Vector3> distributedVertices, Dictionary<Vector3, float> entropyMap)
     {
@@ -219,9 +233,10 @@ public class NewEntropy : MonoBehaviour
     }
     private List<Vector3> SelectFinalSubsetByEntropySum(List<Vector3> refinedVertices, Dictionary<Vector3, float> entropyMap)
     {
-        List<Vector3> finalSelection = refinedVertices.OrderByDescending(v => entropyMap[v])
-                                                      .Take(bestDistributedVertices)
-                                                      .ToList();
+        List<Vector3> finalSelection = refinedVertices
+            .OrderByDescending(v => entropyMap[v])
+            .Take(bestDistributedVertices)
+            .ToList();
 
         Debug.Log("===== Final Selected Vertices (RED) =====");
         foreach (Vector3 vertex in finalSelection)
@@ -231,6 +246,70 @@ public class NewEntropy : MonoBehaviour
         }
 
         return finalSelection;
+    }
+
+
+    //entropy 계산 작업 수행
+    private float[] ComputeVertexEntropy(List<Vector3> visibleVertices)
+    {
+        float[] entropyValues = new float[visibleVertices.Count];
+        Vector3[] vertexArray = visibleVertices.ToArray();
+        float L = ComputeMeshCharacteristicLength(vertexPositions.Values.ToArray());
+
+        float sigma = 0.05f * L; // 논문에서는 5%l 사용 (기본적으로 5% 바운딩 박스 대각선)
+
+        for (int i = 0; i < visibleVertices.Count; i++)
+        {
+            // 현재 정점의 이웃 정점 찾기
+            List<Vector3> neighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma, vertexArray);
+            if (neighbors.Count == 0) continue;
+
+            // 히스토그램 생성 (법선 벡터의 분포 계산)
+            Dictionary<Vector3Int, int> normalHistogram = new Dictionary<Vector3Int, int>();
+            foreach (Vector3 neighbor in neighbors)
+            {
+                Vector3 normal = GetVertexNormal(neighbor);
+                Vector3Int quantizedNormal = QuantizeNormal(normal);
+
+                if (!normalHistogram.ContainsKey(quantizedNormal))
+                {
+                    normalHistogram[quantizedNormal] = 0;
+                }
+                normalHistogram[quantizedNormal]++;
+            }
+
+            // 샤논 엔트로피 계산
+            float entropy = 0f;
+            int totalNormals = neighbors.Count;
+            foreach (var count in normalHistogram.Values)
+            {
+                float probability = (float)count / totalNormals;
+                entropy -= probability * Mathf.Log(probability + 1e-6f); // log(0) 방지
+            }
+
+            entropyValues[i] = entropy; // 단일 sigma 엔트로피 값 저장
+        }
+
+        return entropyValues;
+    }
+    private Vector3Int QuantizeNormal(Vector3 normal, int scale = 5000)
+    {
+        return new Vector3Int(
+            Mathf.RoundToInt(normal.x * scale),
+            Mathf.RoundToInt(normal.y * scale),
+            Mathf.RoundToInt(normal.z * scale)
+        );
+    }
+    private Vector3 GetVertexNormal(Vector3 vertexPosition)
+    {
+        foreach (var kvp in vertexPositions)
+        {
+            if (Vector3.Distance(meshFilter.transform.TransformPoint(kvp.Value), vertexPosition) < 0.001f)
+            {
+                return vertexNormals[kvp.Key]; // Return the stored normal
+            }
+        }
+        return Vector3.zero; // Return zero vector if no normal is found
     }
     private float ComputeMeshCharacteristicLength(Vector3[] vertices)
     {
@@ -248,6 +327,7 @@ public class NewEntropy : MonoBehaviour
 
         return totalEdges > 0 ? totalDistance / totalEdges : 1f;
     }
+
     private List<Vector3> GetNeighborsByEuclideanDistance(Vector3 position, float sigma, Vector3[] vertices)
     {
         List<Vector3> neighbors = new List<Vector3>();
@@ -257,40 +337,10 @@ public class NewEntropy : MonoBehaviour
             if (Vector3.Distance(position, vertex) <= sigma)
             {
                 neighbors.Add(vertex);
-            } 
+            }
         }
 
         return neighbors;
-    }
-
-    private float[] ComputeVertexEntropy(List<Vector3> visibleVertices)
-    {
-        float[] entropyValues = new float[visibleVertices.Count];
-        Vector3[] vertexArray = visibleVertices.ToArray();
-
-        float L = ComputeMeshCharacteristicLength(vertexPositions.Values.ToArray());
-
-        for (int i = 0; i < visibleVertices.Count; i++)
-        {
-            float aggregatedEntropy = 0f;
-            float totalWeight = 0f;
-
-            foreach (float sigma in sigmaScales)
-            {
-                float scaledSigma = sigma * L;
-                List<Vector3> neighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], scaledSigma, vertexArray);
-
-                if (neighbors.Count == 0) continue;
-
-                float entropy = neighbors.Count * Mathf.Log(neighbors.Count);
-                aggregatedEntropy += entropy;
-                totalWeight += 1.0f / sigma;
-            }
-
-            entropyValues[i] = aggregatedEntropy / totalWeight;
-        }
-
-        return entropyValues;
     }
 
     private void HighlightVertex(Vector3 position, Color color, bool isEntropyHighlight, int index = -1)
