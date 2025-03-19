@@ -68,11 +68,12 @@ public class NewEntropy : MonoBehaviour
         //상위 50% 정점에서 가장 분산된 6개 정점 선택
         List<Vector3> finalVertices = SelectMaxMinDistanceVertices(topEntropyVertices, entropyMap, 6);
 
+
         //최종 정점 사용자에게 추천
         Debug.Log("Projection Mapping Calibration을 위한 최적 정점 추천 완료!");
 
     }
-
+   
     private void HighlightVisibleVertices()
     {
         visibleVertices.Clear();
@@ -111,7 +112,7 @@ public class NewEntropy : MonoBehaviour
                 }
             }
 
-            Debug.Log($"Total Unique Visible Vertices: {visibleVertices.Count}");
+            //Debug.Log($"Total Unique Visible Vertices: {visibleVertices.Count}");
         }
     }
 
@@ -209,67 +210,71 @@ public class NewEntropy : MonoBehaviour
         return distributedVertices;
     }
 
-
-    //entropy 계산 작업 수행
     private float[] ComputeVertexEntropy(List<Vector3> visibleVertices)
     {
         float[] entropyValues = new float[visibleVertices.Count];
         Vector3[] vertexArray = visibleVertices.ToArray();
-        float L = ComputeMeshCharacteristicLength(vertexPositions.Values.ToArray());
+        float l = ComputeMeshCharacteristicLength(meshFilter);
 
-        float sigma = 0.1f * L; // 논문에서는 5%l 사용 (기본적으로 5% 바운딩 박스 대각선)
+        //  Multi-Scale 적용 (3가지 sigma 값 사용)
+        float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
+        float sigma_max = sigmaScales.Max(); // 
 
         for (int i = 0; i < visibleVertices.Count; i++)
         {
-            // 현재 정점의 이웃 정점 찾기
-            List<Vector3> neighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma, vertexArray);
 
-            neighbors = neighbors.Where(v => !Mathf.Approximately(Vector3.Distance(v, visibleVertices[i]), 0f)).ToList();
+            List<Vector3> allNeighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma_max, vertexArray);//
 
-            Debug.Log($"[INFO] Vertex {i}: Neighbors Found = {neighbors.Count}");
+            float aggregatedEntropy = 0f;
+            float totalWeight = 0f;
 
-            if (neighbors.Count == 0) 
+            foreach (float sigma in sigmaScales)
             {
-                entropyValues[i] = 0f; // 이웃이 없으면 엔트로피 0
-                continue;
-            }
+                List<Vector3> neighbors = allNeighbors.Where(v => Vector3.Distance(v, visibleVertices[i]) <= sigma).ToList();
+                //List<Vector3> neighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma, vertexArray);
+                if (neighbors.Count == 0) continue;
 
-            // 히스토그램 생성 (법선 벡터의 분포 계산)
-            Dictionary<Vector3Int, int> normalHistogram = new Dictionary<Vector3Int, int>();
+                float entropy = 0f;
+                int totalNormals = neighbors.Count;
 
-            foreach (Vector3 neighbor in neighbors)
-            {
-                Vector3 normal = GetVertexNormal(neighbor);
-                Vector3Int quantizedNormal = QuantizeNormal(normal, 300);
+                Dictionary<Vector3Int, int> normalHistogram = new Dictionary<Vector3Int, int>();
 
-                if (!normalHistogram.ContainsKey(quantizedNormal))
+                foreach (Vector3 neighbor in neighbors)
                 {
-                    normalHistogram[quantizedNormal] = 0;
+                    Vector3 normal = GetVertexNormal(neighbor);
+                    Vector3Int quantizedNormal = QuantizeNormal(normal, 500); // scale 값 1000 → 500으로 조정
+
+                    if (!normalHistogram.ContainsKey(quantizedNormal))
+                    {
+                        normalHistogram[quantizedNormal] = 0;
+                    }
+                    normalHistogram[quantizedNormal]++;
                 }
-                normalHistogram[quantizedNormal]++;
-            }
 
-            // 샤논 엔트로피 계산
-            int totalNormals = neighbors.Count;
-            float entropy = 0f;
-
-            foreach (var count in normalHistogram.Values)
-            {
-                float probability = (float)count / totalNormals;
-
-                // 확률이 0이 아니어야 log 계산 가능
-                if (probability > 0)
+                foreach (var count in normalHistogram.Values)
                 {
-                    entropy -= probability * Mathf.Log(probability + 1e-6f); // log(0) 방지
+                    float probability = (float)count / (totalNormals + 1e-6f);
+                    if (probability > 0)
+                    {
+                        entropy -= probability * Mathf.Log(probability + 1e-6f);
+                    }
                 }
+
+                float maxEntropy = Mathf.Log(totalNormals + 1e-6f);
+                float normalizedEntropy = entropy / maxEntropy;
+
+                float weight = 1.0f / sigma; // 작은 sigma 값이 더 큰 영향을 주도록 가중치 적용
+                aggregatedEntropy += normalizedEntropy * weight;
+                totalWeight += weight;
             }
 
-            float maxEntropy = Mathf.Log(totalNormals + 1e-6f);
-            entropyValues[i] = entropy / maxEntropy;
+            entropyValues[i] = aggregatedEntropy / totalWeight; // 가중 평균 적용
         }
 
         return entropyValues;
     }
+    //entropy 계산 작업 수행
+
     private Vector3Int QuantizeNormal(Vector3 normal, int scale = 1000)
     {
         return new Vector3Int(
@@ -289,25 +294,16 @@ public class NewEntropy : MonoBehaviour
         }
         return Vector3.zero; // Return zero vector if no normal is found
     }
-    private float ComputeMeshCharacteristicLength(Vector3[] vertices)
+    private float ComputeMeshCharacteristicLength(MeshFilter meshFilter)
     {
-        float totalDistance = 0f;
-        int totalEdges = 0;
-
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            for (int j = i + 1; j < vertices.Length; j++)
-            {
-                totalDistance += Vector3.Distance(vertices[i], vertices[j]);
-                totalEdges++;
-            }
-        }
-
-        return totalEdges > 0 ? totalDistance / totalEdges : 1f;
+        Bounds bounds = meshFilter.mesh.bounds;
+        return Vector3.Distance(bounds.min, bounds.max); // 바운딩 박스 대각선 길이 반환
     }
 
     private List<Vector3> GetNeighborsByEuclideanDistance(Vector3 position, float sigma, Vector3[] vertices, int maxNeighbors = 50)
     {
+
+
         List<Vector3> neighbors = new List<Vector3>();
 
         float adaptiveSigma = sigma;
@@ -317,6 +313,7 @@ public class NewEntropy : MonoBehaviour
             foreach (Vector3 vertex in vertices)
             {
                 float distance = Vector3.Distance(position, vertex);
+
                 if (distance > 0f && distance <= adaptiveSigma)
                 {
                     neighbors.Add(vertex);
@@ -324,13 +321,7 @@ public class NewEntropy : MonoBehaviour
             }
 
             if (neighbors.Count < 5)
-                adaptiveSigma *= 1.5f; // sigma 값 증가
-        }
-
-        // 이웃 정점이 너무 많으면 일정 개수까지만 유지 (최대 50개)
-        if (neighbors.Count > maxNeighbors)
-        {
-            neighbors = neighbors.OrderBy(v => Vector3.Distance(position, v)).Take(maxNeighbors).ToList();
+                adaptiveSigma *= 1.2f; // sigma 값 증가
         }
 
         return neighbors;
