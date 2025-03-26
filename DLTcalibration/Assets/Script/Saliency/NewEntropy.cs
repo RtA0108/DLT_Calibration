@@ -6,7 +6,7 @@ public class NewEntropy : MonoBehaviour
 {
     public MeshFilter meshFilter;
     public Camera mainCamera;
-    public float[] sigmaScales = new float[] { 0.1f, 0.2f, 0.3f };
+    //public float[] sigmaScales = new float[] { 0.1f, 0.2f, 0.3f };
     public float topEntropyPercentage = 0.5f;
     public int bestDistributedVertices = 6;
     public Color visibilityColor = Color.blue;
@@ -15,6 +15,8 @@ public class NewEntropy : MonoBehaviour
     public LayerMask visibilityLayerMask;
 
 
+    private float l = 0f;
+    private float[] sigmaScales = new float[] { 0.05f, 0.075f, 0.1f };
     private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
     //이 부분 무조건 vector3
@@ -48,17 +50,31 @@ public class NewEntropy : MonoBehaviour
         Mesh mesh = meshFilter.mesh;
         Vector3[] positions = mesh.vertices;
         Vector3[] normals = mesh.normals;
-
+        //sigmaScale setting
+        l = ComputeMeshCharacteristicLength(meshFilter);
+        for (int i = 0; i < sigmaScales.Length; i++)
+        {
+            sigmaScales[i] *= l;
+        }
         // Store vertex positions and normals
         for (int i = 0; i < positions.Length; i++)
         {
             vertexPositions[i] = positions[i];
             vertexNormals[i] = normals[i];
         }
+        
+      
 
-
+        //이걸로 사용하니까 entropy가 2배 가까이 상승하는데 원인 파악 필요//
+        visibleVertices = OcclusionCulling.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
+        visibleVertices = FilterSilhouetteVertices(visibleVertices, 0.5f, 0.08f); 
         // Filter only vertices visible in the camera
-        HighlightVisibleVertices();
+
+        //HighlightVisibleVertices();
+
+        var grouped = visibleVertices.GroupBy(v => v);
+        Debug.Log($"중복을 포함한 정점 수: {visibleVertices.Count}");
+        Debug.Log($"고유 위치 수: {grouped.Count()}");
 
         //엔트로피 맵 저장
         Dictionary<Vector3, float> entropyMap = ComputeEntropyForVisibleVertices(visibleVertices);
@@ -68,13 +84,71 @@ public class NewEntropy : MonoBehaviour
 
         //상위 50% 정점에서 가장 분산된 6개 정점 선택
         List<Vector3> finalVertices = SelectMaxMinDistanceVertices(topEntropyVertices, entropyMap, 6);
-
+        //KMeans수정 필요
+        //List<Vector3> finalVertices = SelectKMeansWeightedByEntropy(topEntropyVertices, entropyMap, 6);
 
         //최종 정점 사용자에게 추천
         Debug.Log("Projection Mapping Calibration을 위한 최적 정점 추천 완료!");
 
     }
-    
+    private List<Vector3> FilterSilhouetteVertices(List<Vector3> vertices, float dotThreshold = 0.3f, float varianceThreshold = 0.15f)
+    {
+        List<Vector3> filtered = new List<Vector3>();
+        Vector3 cameraPos = mainCamera.transform.position;
+
+        foreach (Vector3 v in vertices)
+        {
+            Vector3 normal = GetVertexNormal(v).normalized;
+            Vector3 toCamera = (cameraPos - v).normalized;
+
+            //cameraDot이 높을수록 정면, 즉 dotThreshold가 높을수록 꼼꼼히 검토하는 것
+            float cameraDot = Mathf.Abs(Vector3.Dot(normal, toCamera));
+           // Debug.Log($"Vertex {v} → cameraDot: {cameraDot}");
+            // 1단계: normal과 카메라 시선이 수직에 가까운가?
+            if (cameraDot > dotThreshold)
+            {
+                filtered.Add(v); // 정면을 향하고 있음 → 실루엣 아님
+                
+                continue;
+               
+            }
+
+            // 2단계: 주변 normal과의 평균 편차가 작은가?
+            float sigma = sigmaScales.Min();
+            List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, vertices.ToArray()); // sigma 조절 가능
+            if (neighbors.Count == 0)
+            {
+                filtered.Add(v); // 주변 없으면 유지
+                Debug.Log("Hi----------------------------------");
+                continue; 
+            }
+
+            float variance = 0f;
+            foreach (Vector3 n in neighbors)
+            {
+                Vector3 neighborNormal = GetVertexNormal(n).normalized;
+                float dot = Vector3.Dot(normal, neighborNormal);
+                variance += (1f - dot); // 방향 차이 누적
+                //Debug.Log($"Vertex: {v}, Dot: {cameraDot:F2}, Var: {variance:F2}");
+            }
+
+            variance /= neighbors.Count;
+
+            if (variance < varianceThreshold)
+            {
+                filtered.Add(v); // 곡률이 급하지 않음 → 유지
+            }
+            else
+            {
+                // 실루엣 정점으로 판단 → 제거
+                //Debug.Log($"[Silhouette Removed] {v}, Dot: {cameraDot:F2}, Var: {variance:F2}");
+            }
+
+        }
+
+        //Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
+        return filtered;
+    }
     //필터링 / mesh의 center를 기준으로 판단. 하지만 지금은 mesh의 턱부분만 필터링됌.
     private List<Vector3> FilterEdgeVertices(List<Vector3> vertices)
     {
@@ -145,7 +219,7 @@ public class NewEntropy : MonoBehaviour
                     if (!uniqueCheck.ContainsKey(roundedVertex))
                     {
                         uniqueCheck[roundedVertex] = vertexWorldPos;
-                        //HighlightVertex(vertexWorldPos, Color.blue, 5.5f, false); // 파란색으로 Highlight
+                        HighlightVertex(vertexWorldPos, Color.blue, 5.5f, false); // 파란색으로 Highlight
                     }
 
                     visibleVertices.Add(vertexWorldPos); // 중복 제거 후 보이는 정점만 추가
@@ -155,10 +229,11 @@ public class NewEntropy : MonoBehaviour
             
             //Debug.Log($"Total Unique Visible Vertices: {visibleVertices.Count}");
         }
-        int beforeFiltering = visibleVertices.Count;
-        visibleVertices = FilterEdgeVertices(visibleVertices);
-        int afterFiltering = visibleVertices.Count; ;
-        Debug.Log($"Before Filtering: {beforeFiltering} vertices, After Filtering: {afterFiltering} vertices");
+
+        //int beforeFiltering = visibleVertices.Count;
+        //visibleVertices = FilterEdgeVertices(visibleVertices);
+        //int afterFiltering = visibleVertices.Count; ;
+        //Debug.Log($"Before Filtering: {beforeFiltering} vertices, After Filtering: {afterFiltering} vertices");
     }
 
     //----------------------------------------------------------------------------------------------------------
@@ -167,7 +242,7 @@ public class NewEntropy : MonoBehaviour
     private Dictionary<Vector3, float> ComputeEntropyForVisibleVertices(List<Vector3> visibleVertices)
     {
         Dictionary<Vector3, float> entropyMap = new Dictionary<Vector3, float>();
-        float[] entropyValues = ComputeVertexEntropy(visibleVertices);
+        float[] entropyValues = ComputeVertexEntropy(visibleVertices, l);
 
         Debug.Log("===== Entropy Values for Visible Vertices =====");
 
@@ -181,20 +256,20 @@ public class NewEntropy : MonoBehaviour
     }
     //Entropy 계산
 
-    private float[] ComputeVertexEntropy(List<Vector3> visibleVertices)
+    private float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l)
     {
         float[] entropyValues = new float[visibleVertices.Count];
         Vector3[] vertexArray = visibleVertices.ToArray();
-        float l = ComputeMeshCharacteristicLength(meshFilter);
+        
 
         // Multi-Scale 적용 (작은 sigma부터 점진적으로 Neighbor 확장)
         float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
         float sigma_max = sigmaScales.Max(); // 기존 방식 유지
-
+        Debug.Log("sigma_max: " + sigma_max);
         for (int i = 0; i < visibleVertices.Count; i++)
         {
             List<Vector3> allNeighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma_max, vertexArray);
-
+            
             float aggregatedEntropy = 0f;
             float totalWeight = 0f;
 
@@ -406,6 +481,94 @@ public class NewEntropy : MonoBehaviour
         return distributedVertices;
     }
 
+
+    private List<Vector3> SelectKMeansWeightedByEntropy(List<Vector3> candidates, Dictionary<Vector3, float> entropyMap, int k)
+    {
+        if (candidates.Count < k) return new List<Vector3>(candidates);
+
+        // Step 1. 랜덤 초기 중심 선택
+        List<Vector3> centroids = new List<Vector3>();
+        System.Random rand = new System.Random();
+        HashSet<int> chosenIndices = new HashSet<int>();
+        while (centroids.Count < k)
+        {
+            int index = rand.Next(candidates.Count);
+            if (!chosenIndices.Contains(index))
+            {
+                centroids.Add(candidates[index]);
+                chosenIndices.Add(index);
+            }
+        }
+
+        // Step 2. 클러스터 반복 업데이트 (고정 반복 횟수)
+        int iterations = 10;
+        for (int iter = 0; iter < iterations; iter++)
+        {
+            List<List<Vector3>> clusters = new List<List<Vector3>>(new List<Vector3>[k]);
+            for (int i = 0; i < k; i++) clusters[i] = new List<Vector3>();
+
+            foreach (Vector3 point in candidates)
+            {
+                float minDist = float.MaxValue;
+                int bestCluster = 0;
+
+                for (int i = 0; i < k; i++)
+                {
+                    float dist = Vector3.Distance(point, centroids[i]);
+                    if (dist < minDist)
+                    {
+                        minDist = dist;
+                        bestCluster = i;
+                    }
+                }
+
+                clusters[bestCluster].Add(point);
+            }
+
+            for (int i = 0; i < k; i++)
+            {
+                if (clusters[i].Count > 0)
+                    centroids[i] = ComputeCentroid(clusters[i]);
+            }
+        }
+
+        // Step 3. 각 클러스터에서 가장 entropy가 높은 점 선택
+        List<Vector3> selected = new List<Vector3>();
+        foreach (Vector3 centroid in centroids)
+        {
+            Vector3 bestPoint = Vector3.zero;
+            float bestScore = float.MinValue;
+
+            foreach (Vector3 point in candidates)
+            {
+                if (Vector3.Distance(point, centroid) < 0.2f) // 중심과 가까운 애들 중
+                {
+                    if (entropyMap.ContainsKey(point) && entropyMap[point] > bestScore)
+                    {
+                        bestScore = entropyMap[point];
+                        bestPoint = point;
+                    }
+                }
+            }
+
+            if (bestScore > float.MinValue)
+                selected.Add(bestPoint);
+        }
+        foreach (Vector3 vertex in selected)
+        {
+            Debug.Log($"[RED] 최종 선택된 정점: {vertex}, 엔트로피: {entropyMap[vertex]}");
+            HighlightVertex(vertex, Color.red, 7f, true);
+        }
+        return selected;
+    }
+
+    // 중심 계산 함수
+    private Vector3 ComputeCentroid(List<Vector3> points)
+    {
+        Vector3 sum = Vector3.zero;
+        foreach (Vector3 p in points) sum += p;
+        return sum / points.Count;
+    }
     //----------------------------------------------------------------------------------------------------------
 
     //하이라이트
