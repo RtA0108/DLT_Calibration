@@ -234,25 +234,18 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 216437364}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: eb697be9549cbb5449a4d82828743183, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   meshFilter: {fileID: 216437366}
   mainCamera: {fileID: 330585545}
-  sigmaScales:
-  - 0.1
-  - 0.2
-  - 0.3
   topEntropyPercentage: 0.5
   bestDistributedVertices: 6
-  highlightColor: {r: 0.8623762, g: 0, b: 1, a: 1}
-  highlightSize: 6
   visibilityLayerMask:
     serializedVersion: 2
     m_Bits: 0
-  visibilityColor: {r: 0, g: 0.30674195, b: 1, a: 1}
 --- !u!64 &216437372
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -317,6 +310,23 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &216437376
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 216437364}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 27d3e1ecf162e914d80bb07d6c9b63ce, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  saliencyMode: 1
+  mainCamera: {fileID: 330585545}
+  meshFilter: {fileID: 216437366}
+  recommendedVertexCount: 6
+  topSaliencyPercentage: 0.5
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -857,6 +867,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 216437371}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 216437376}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       insertIndex: -1

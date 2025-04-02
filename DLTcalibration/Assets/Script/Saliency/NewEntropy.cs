@@ -12,7 +12,7 @@ public class NewEntropy : MonoBehaviour
 
 
     private float l = 0f;
-    private float[] sigmaScales = new float[] { 0.05f, 0.075f, 0.1f };
+    private float[] sigmaScales = new float[] { 0.05f, 0.1f, 0.2f };
     private Dictionary<int, Vector3> vertexPositions = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> vertexNormals = new Dictionary<int, Vector3>();
     //이 부분 무조건 vector3
@@ -110,7 +110,7 @@ public class NewEntropy : MonoBehaviour
         
 
         // Multi-Scale 적용 (작은 sigma부터 점진적으로 Neighbor 확장)
-        float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
+        //float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
         float sigma_max = sigmaScales.Max(); // 기존 방식 유지
         Debug.Log("sigma_max: " + sigma_max);
         for (int i = 0; i < visibleVertices.Count; i++)
