@@ -83,9 +83,9 @@ public class NewEntropy : MonoBehaviour
         List<Vector3> topEntropyVertices = SelectTopEntropyVertices(entropyMap);
 
         //상위 50% 정점에서 가장 분산된 6개 정점 선택
-        List<Vector3> finalVertices = SelectMaxMinDistanceVertices(topEntropyVertices, entropyMap, 6);
-        //KMeans수정 필요
-        //List<Vector3> finalVertices = SelectKMeansWeightedByEntropy(topEntropyVertices, entropyMap, 6);
+        //(vertices, saliency map, highlight count, alpha)
+        List<Vector3> finalVertices = SelectHybridDistributedVertices(topEntropyVertices, entropyMap, 6, alpha: 0.6f);
+
 
         //최종 정점 사용자에게 추천
         Debug.Log("Projection Mapping Calibration을 위한 최적 정점 추천 완료!");
@@ -119,7 +119,7 @@ public class NewEntropy : MonoBehaviour
             if (neighbors.Count == 0)
             {
                 filtered.Add(v); // 주변 없으면 유지
-                Debug.Log("Hi----------------------------------");
+                //Debug.Log("Hi----------------------------------");
                 continue; 
             }
 
@@ -146,7 +146,7 @@ public class NewEntropy : MonoBehaviour
 
         }
 
-        //Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
+        Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
         return filtered;
     }
     //필터링 / mesh의 center를 기준으로 판단. 하지만 지금은 mesh의 턱부분만 필터링됌.
@@ -481,93 +481,141 @@ public class NewEntropy : MonoBehaviour
         return distributedVertices;
     }
 
+    //private List<Vector3> SelectHybridDistributedVertices(List<Vector3> candidates, Dictionary<Vector3, float> entropyMap, int k)
+    //{
+    //    List<Vector3> selected = new List<Vector3>();
 
-    private List<Vector3> SelectKMeansWeightedByEntropy(List<Vector3> candidates, Dictionary<Vector3, float> entropyMap, int k)
+    //    if (candidates.Count < k) return new List<Vector3>(candidates);
+
+    //    // ----------------------------
+    //    // Step 1: 첫 번째 vertex 선정 (entropy + viewport proximity)
+    //    // ----------------------------
+    //    float alpha = 0.5f;  // entropy vs viewport proximity 비율
+    //    Vector3 firstPoint = Vector3.zero;
+    //    float firstScore = float.MinValue;
+
+    //    foreach (var v in candidates)
+    //    {
+    //        float entropy = entropyMap[v];
+
+    //        // Viewport proximity 계산
+    //        Vector3 viewportPos = mainCamera.WorldToViewportPoint(v);
+    //        float viewportProximity = 1f - Vector2.Distance(new Vector2(viewportPos.x, viewportPos.y), new Vector2(0.5f, 0.5f)) * 2f;
+    //        viewportProximity = Mathf.Clamp01(viewportProximity);
+
+    //        // Hybrid score
+    //        float score = alpha * entropy + (1 - alpha) * viewportProximity;
+
+    //        if (score > firstScore)
+    //        {
+    //            firstScore = score;
+    //            firstPoint = v;
+    //        }
+    //    }
+
+    //    selected.Add(firstPoint);
+    //    Debug.Log($"[Selected First] {firstPoint}, score: {firstScore:F3}, entropy: {entropyMap[firstPoint]:F3}");
+
+    //    // ----------------------------
+    //    // Step 2: max-min + entropy 하이브리드 분산
+    //    // ----------------------------
+    //    while (selected.Count < k)
+    //    {
+    //        Vector3 bestPoint = Vector3.zero;
+    //        float bestScore = float.MinValue;
+
+    //        foreach (var v in candidates)
+    //        {
+    //            if (selected.Contains(v)) continue;
+
+    //            float minDist = selected.Min(s => Vector3.Distance(s, v));
+    //            float score = minDist * entropyMap[v];  // 여기는 그대로 하이브리드 분산
+
+    //            if (score > bestScore)
+    //            {
+    //                bestScore = score;
+    //                bestPoint = v;
+    //            }
+    //        }
+
+    //        if (bestPoint != Vector3.zero)
+    //        {
+    //            selected.Add(bestPoint);
+    //            Debug.Log($"[Selected] {bestPoint}, score: {bestScore:F3}, entropy: {entropyMap[bestPoint]:F3}");
+    //        }
+    //        else
+    //        {
+    //            break;
+    //        }
+    //    }
+
+    //    // ----------------------------
+    //    // Step 3: 하이라이트
+    //    // ----------------------------
+    //    for (int i = 0; i < selected.Count; i++)
+    //    {
+    //        HighlightVertex(selected[i], Color.red, 7f, true, i);
+    //    }
+
+    //    return selected;
+    //}
+    private List<Vector3> SelectHybridDistributedVertices(List<Vector3> candidates, Dictionary<Vector3, float> entropyMap, int selectionCount, float alpha = 0.5f)
     {
-        if (candidates.Count < k) return new List<Vector3>(candidates);
-
-        // Step 1. 랜덤 초기 중심 선택
-        List<Vector3> centroids = new List<Vector3>();
-        System.Random rand = new System.Random();
-        HashSet<int> chosenIndices = new HashSet<int>();
-        while (centroids.Count < k)
-        {
-            int index = rand.Next(candidates.Count);
-            if (!chosenIndices.Contains(index))
-            {
-                centroids.Add(candidates[index]);
-                chosenIndices.Add(index);
-            }
-        }
-
-        // Step 2. 클러스터 반복 업데이트 (고정 반복 횟수)
-        int iterations = 10;
-        for (int iter = 0; iter < iterations; iter++)
-        {
-            List<List<Vector3>> clusters = new List<List<Vector3>>(new List<Vector3>[k]);
-            for (int i = 0; i < k; i++) clusters[i] = new List<Vector3>();
-
-            foreach (Vector3 point in candidates)
-            {
-                float minDist = float.MaxValue;
-                int bestCluster = 0;
-
-                for (int i = 0; i < k; i++)
-                {
-                    float dist = Vector3.Distance(point, centroids[i]);
-                    if (dist < minDist)
-                    {
-                        minDist = dist;
-                        bestCluster = i;
-                    }
-                }
-
-                clusters[bestCluster].Add(point);
-            }
-
-            for (int i = 0; i < k; i++)
-            {
-                if (clusters[i].Count > 0)
-                    centroids[i] = ComputeCentroid(clusters[i]);
-            }
-        }
-
-        // Step 3. 각 클러스터에서 가장 entropy가 높은 점 선택
         List<Vector3> selected = new List<Vector3>();
-        foreach (Vector3 centroid in centroids)
+
+        if (candidates.Count <= selectionCount)
+            return new List<Vector3>(candidates);
+
+        // --- Step 1: 가장 높은 엔트로피를 가진 정점으로 첫 정점 선택 ---
+        Vector3 first = candidates.OrderByDescending(v => entropyMap[v]).First();
+        selected.Add(first);
+        candidates.Remove(first);
+
+        // --- Step 2: Hybrid 분산 선택 ---
+        while (selected.Count < selectionCount)
         {
-            Vector3 bestPoint = Vector3.zero;
+            Vector3 bestVertex = Vector3.zero;
             float bestScore = float.MinValue;
 
-            foreach (Vector3 point in candidates)
+            foreach (var candidate in candidates)
             {
-                if (Vector3.Distance(point, centroid) < 0.2f) // 중심과 가까운 애들 중
+                // 최소 거리 계산
+                float minDist = float.MaxValue;
+                foreach (var s in selected)
                 {
-                    if (entropyMap.ContainsKey(point) && entropyMap[point] > bestScore)
-                    {
-                        bestScore = entropyMap[point];
-                        bestPoint = point;
-                    }
+                    float dist = Vector3.Distance(candidate, s);
+                    if (dist < minDist) minDist = dist;
+                }
+
+                // 하이브리드 점수 (alpha 조절)
+                float score = alpha * entropyMap[candidate] + (1 - alpha) * (minDist / l); // l로 정규화된 거리 사용
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestVertex = candidate;
                 }
             }
 
-            if (bestScore > float.MinValue)
-                selected.Add(bestPoint);
+            if (bestVertex != Vector3.zero)
+            {
+                selected.Add(bestVertex);
+                candidates.Remove(bestVertex);
+            }
+            else
+            {
+                break;
+            }
         }
-        foreach (Vector3 vertex in selected)
-        {
-            Debug.Log($"[RED] 최종 선택된 정점: {vertex}, 엔트로피: {entropyMap[vertex]}");
-            HighlightVertex(vertex, Color.red, 7f, true);
-        }
-        return selected;
-    }
 
-    // 중심 계산 함수
-    private Vector3 ComputeCentroid(List<Vector3> points)
-    {
-        Vector3 sum = Vector3.zero;
-        foreach (Vector3 p in points) sum += p;
-        return sum / points.Count;
+        // --- 하이라이트 ---
+        for (int i = 0; i < selected.Count; i++)
+        {
+            var vertex = selected[i];
+            Debug.Log($"[RED] 추천된 정점: {vertex}, Entropy: {entropyMap[vertex]}");
+            HighlightVertex(vertex, Color.red, 7f, true, i);
+        }
+
+        return selected;
     }
     //----------------------------------------------------------------------------------------------------------
 
