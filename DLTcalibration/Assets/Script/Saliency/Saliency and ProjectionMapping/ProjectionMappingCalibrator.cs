@@ -42,8 +42,16 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
 
         var sigmaMin = 0.05f * l;
-        var filtered = SaliencyUtils.FilterSilhouetteVertices(mainCamera, meshFilter, visible, sigmaMin, 0.5f, 0.08f); // ★ 수치 복원
-
+        var filtered = SaliencyUtils.FilterSilhouetteVertices(mainCamera, meshFilter, visible, sigmaMin, 0.8f, 0.05f); // ★ 수치 복원 (기존 0.5f, 0.08f)
+        //var filtered = SaliencyUtils.FilterSilhouetteVertices(
+//    mainCamera, meshFilter, visible, sigmaMin,
+//    0.5f, 0.08f,          // 기본 실루엣 조건
+//    0.8f, 1.0f, 0.01f      // 중심 제한, 측면/턱 제거
+//);
+        foreach (var vertex in filtered)
+        {
+            SaliencyUtils.HighlightVertex(vertex, Color.blue, 6f, false); // or 다른 색으로 구분
+        }
         Dictionary<Vector3, float> saliencyMap = saliencyMode switch
         {
             SaliencyMode.Entropy => EntropySaliencyComputer.Compute(meshFilter, filtered, l),

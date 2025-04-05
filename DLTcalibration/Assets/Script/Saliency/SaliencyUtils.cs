@@ -5,6 +5,7 @@ using UnityEngine;
 
 public static class SaliencyUtils
 {
+    //Occlusion Culling
     public static List<Vector3> GetVisibleVertices(Camera camera, MeshFilter meshFilter, Dictionary<int, Vector3> vertexPositions, LayerMask visibilityLayerMask)
     {
         List<Vector3> visibleVertices = new List<Vector3>();
@@ -23,12 +24,13 @@ public static class SaliencyUtils
 
             Vector3 worldNormal = meshFilter.transform.TransformDirection(meshFilter.mesh.normals[vertexIndex]);
             Vector3 toCamera = (camPos - vertexWorldPos).normalized;
-
-            if (Vector3.Dot(worldNormal, toCamera) <= 0) continue;
+            //이 부분에서 normalVector의 방향 감지 (우측의 수치보다 낮으면 카메라를 바라보지 않는 것으로 간주)
+            if (Vector3.Dot(worldNormal, toCamera) <= 0.5f) continue;
 
             Ray ray = new Ray(camPos, (vertexWorldPos - camPos).normalized);
             if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
             {
+                //이 부분에서 hit.point 체크 강화 (기존 값: 0.01f) -> 이 부분은 크게 영향을 미치지 않음.(0.001f까지 내려봤음)
                 if (Vector3.Distance(hit.point, vertexWorldPos) < 0.01f)
                 {
                     if (!uniquePositions.ContainsKey(roundedVertex))
@@ -43,7 +45,7 @@ public static class SaliencyUtils
         return visibleVertices;
     }
 
-    public static List<Vector3> FilterSilhouetteVertices(Camera cam, MeshFilter meshFilter, List<Vector3> vertices, float sigma, float dotThreshold = 0.3f, float varianceThreshold = 0.15f)
+    public static List<Vector3> FilterSilhouetteVertices(Camera cam, MeshFilter meshFilter, List<Vector3> vertices, float sigma, float dotThreshold = 0.5f, float varianceThreshold = 0.08f)
     {
         List<Vector3> filtered = new List<Vector3>();
         Vector3 cameraPos = cam.transform.position;
@@ -84,7 +86,48 @@ public static class SaliencyUtils
         Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
         return filtered;
     }
+    //public static List<Vector3> FilterSilhouetteVertices(
+    //Camera cam, MeshFilter meshFilter, List<Vector3> vertices, float sigma,
+    //float dotThreshold = 0.5f, float varianceThreshold = 0.08f,
+    //float screenDistanceThreshold = 0.4f, float xBoundaryScale = 0.9f, float yLowerCutoff = 0.1f)
+    //{
+    //    List<Vector3> filtered = new List<Vector3>();
+    //    Vector3 cameraPos = cam.transform.position;
+    //    Bounds bounds = meshFilter.mesh.bounds;
 
+    //    foreach (Vector3 v in vertices)
+    //    {
+    //        Vector3 normal = GetVertexNormal(meshFilter, v).normalized;
+    //        Vector3 toCamera = (cameraPos - v).normalized;
+    //        float cameraDot = Mathf.Abs(Vector3.Dot(normal, toCamera));
+
+    //        // 1단계: Normal이 카메라를 정면으로 보고 있지 않으면 실루엣으로 제거
+    //        if (cameraDot <= dotThreshold) continue;
+
+    //        // 2단계: 주변 normal variance 체크 (곡률 급변 여부)
+    //        List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, vertices.ToArray());
+    //        if (neighbors.Count > 0)
+    //        {
+    //            float variance = neighbors.Sum(n => (1f - Vector3.Dot(normal, GetVertexNormal(meshFilter, n).normalized))) / neighbors.Count;
+    //            if (variance >= varianceThreshold) continue; // 급격한 경사면 제거
+    //        }
+
+    //        // 3단계: Viewport 중심에서 너무 멀면 제거 (측면/하단 방지)
+    //        Vector3 screenPos = cam.WorldToViewportPoint(v);
+    //        float screenDist = Vector2.Distance(new Vector2(screenPos.x, screenPos.y), new Vector2(0.5f, 0.5f));
+    //        if (screenDist > screenDistanceThreshold) continue;
+
+    //        // 4단계: Bounding box 기준 측면/하단 제거
+    //        Vector3 local = meshFilter.transform.InverseTransformPoint(v);
+    //        if (Mathf.Abs(local.x) > bounds.extents.x * xBoundaryScale) continue;
+    //        if (local.y < bounds.min.y + bounds.size.y * yLowerCutoff) continue;
+
+    //        filtered.Add(v); // 모든 조건 통과 시 최종 유지
+    //    }
+
+    //    Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
+    //    return filtered;
+    //}
     public static List<Vector3> SelectHybridDistributedVertices(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float l, int selectionCount, float alpha = 0.5f)
     {
         List<Vector3> selected = new List<Vector3>();

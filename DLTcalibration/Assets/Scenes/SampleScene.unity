@@ -322,7 +322,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27d3e1ecf162e914d80bb07d6c9b63ce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  saliencyMode: 1
+  saliencyMode: 0
   mainCamera: {fileID: 330585545}
   meshFilter: {fileID: 216437366}
   recommendedVertexCount: 6
