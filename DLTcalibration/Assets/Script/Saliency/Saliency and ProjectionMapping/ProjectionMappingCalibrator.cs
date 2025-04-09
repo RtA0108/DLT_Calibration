@@ -40,17 +40,20 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     void Run()
     {
         var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
+        foreach (var v in visible)
+            SaliencyUtils.HighlightVertex(v, Color.blue, 5.5f, false);
 
-        var sigmaMin = 0.05f * l;
-        var filtered = SaliencyUtils.FilterSilhouetteVertices(mainCamera, meshFilter, visible, sigmaMin, 0.8f, 0.05f); // ★ 수치 복원 (기존 0.5f, 0.08f)
+        var sigmaMax = 0.2f * l;
+        //var filtered = SaliencyUtils.FilterSilhouetteVertices(mainCamera, meshFilter, visible, sigmaMax, 0.3f, 0.15f, 0.3f); // ★ 수치 복원 (기존 0.5f, 0.08f)
         //var filtered = SaliencyUtils.FilterSilhouetteVertices(
-//    mainCamera, meshFilter, visible, sigmaMin,
-//    0.5f, 0.08f,          // 기본 실루엣 조건
-//    0.8f, 1.0f, 0.01f      // 중심 제한, 측면/턱 제거
-//);
+        //    mainCamera, meshFilter, visible, sigmaMax,
+        //    0.5f, 0.08f,          // 기본 실루엣 조건
+        //    0.8f, 1.0f, 0.01f      // 중심 제한, 측면/턱 제거
+        //);
+        var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible, sigmaMax);
         foreach (var vertex in filtered)
-        {
-            SaliencyUtils.HighlightVertex(vertex, Color.blue, 6f, false); // or 다른 색으로 구분
+        { 
+            SaliencyUtils.HighlightVertex(vertex, Color.green, 6f, false); // or 다른 색으로 구분
         }
         Dictionary<Vector3, float> saliencyMap = saliencyMode switch
         {

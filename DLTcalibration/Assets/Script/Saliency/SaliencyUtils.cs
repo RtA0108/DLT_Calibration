@@ -5,12 +5,16 @@ using UnityEngine;
 
 public static class SaliencyUtils
 {
-    //Occlusion Culling
-    public static List<Vector3> GetVisibleVertices(Camera camera, MeshFilter meshFilter, Dictionary<int, Vector3> vertexPositions, LayerMask visibilityLayerMask)
+
+    public static List<Vector3> GetVisibleVertices(
+    Camera camera, MeshFilter meshFilter, Dictionary<int, Vector3> vertexPositions, LayerMask visibilityLayerMask)
     {
         List<Vector3> visibleVertices = new List<Vector3>();
         Vector3 camPos = camera.transform.position;
         Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
+
+        float dotThreshold = 0.7f; // ← 더 정면을 향한 정점만 raycast 시도
+        float hitTolerance = 0.005f;
 
         foreach (var kvp in vertexPositions)
         {
@@ -24,14 +28,13 @@ public static class SaliencyUtils
 
             Vector3 worldNormal = meshFilter.transform.TransformDirection(meshFilter.mesh.normals[vertexIndex]);
             Vector3 toCamera = (camPos - vertexWorldPos).normalized;
-            //이 부분에서 normalVector의 방향 감지 (우측의 수치보다 낮으면 카메라를 바라보지 않는 것으로 간주)
-            if (Vector3.Dot(worldNormal, toCamera) <= 0.5f) continue;
+
+            if (Vector3.Dot(worldNormal, toCamera) <= dotThreshold) continue;
 
             Ray ray = new Ray(camPos, (vertexWorldPos - camPos).normalized);
             if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
             {
-                //이 부분에서 hit.point 체크 강화 (기존 값: 0.01f) -> 이 부분은 크게 영향을 미치지 않음.(0.001f까지 내려봤음)
-                if (Vector3.Distance(hit.point, vertexWorldPos) < 0.01f)
+                if (Vector3.Distance(hit.point, vertexWorldPos) < hitTolerance)
                 {
                     if (!uniquePositions.ContainsKey(roundedVertex))
                     {
@@ -44,48 +47,224 @@ public static class SaliencyUtils
 
         return visibleVertices;
     }
-
-    public static List<Vector3> FilterSilhouetteVertices(Camera cam, MeshFilter meshFilter, List<Vector3> vertices, float sigma, float dotThreshold = 0.5f, float varianceThreshold = 0.08f)
+    public static List<Vector3> FilterVerticesForCalibration(
+        Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
+        float sigma,
+        //float minViewDot = 0.2f,
+        float silhouetteDotThreshold = 0.35f,
+        float silhouetteVarianceThreshold = 0.4f)
+        //float userNormalYMin = -0.25f, // 기존 수치 -0.15
+        //float userNormalXMaxAbs = 0.7f, // 기존 수치 0.6
+        //float maxSideViewAmount = 0.075f, // 별 상관 없었음 -> 0.075f로 하면 낫밷
+        //float viewportEdgeMargin = 0.1f)
     {
         List<Vector3> filtered = new List<Vector3>();
         Vector3 cameraPos = cam.transform.position;
+        Vector3 cameraRight = cam.transform.right;
+
+        // [0] Viewport edge filtering (가장 먼저 적용)
+        //vertices = FilterViewportEdgeVertices(cam, vertices, viewportEdgeMargin);
+
+        // === View angle 계산 ===
+        Vector3 meshCenter = meshFilter.transform.position;
+        Vector3 toMesh = (meshCenter - cameraPos).normalized;
+        float viewAngle = Vector3.Angle(meshFilter.transform.forward, toMesh);
+        Debug.Log($"[ViewAngle] Camera-Mesh angle: {viewAngle:F2}°");
+
+        // === 동적 필터 파라미터 설정 ===
+        float minViewDot, userNormalYMin, userNormalXMaxAbs, maxSideViewAmount;
+        if (viewAngle < 30f)
+        {
+            minViewDot = 0.2f;
+            userNormalYMin = -0.2f;
+            userNormalXMaxAbs = 0.65f;
+            maxSideViewAmount = 0.075f;
+        }
+        else if (viewAngle < 60f)
+        {
+            minViewDot = 0.15f;
+            userNormalYMin = -0.25f;
+            userNormalXMaxAbs = 0.7f;
+            maxSideViewAmount = 0.15f;
+        }
+        else
+        {
+            minViewDot = 0.1f;
+            userNormalYMin = -0.3f;
+            userNormalXMaxAbs = 0.8f;
+            maxSideViewAmount = 0.25f;
+        }
+
+        int total = vertices.Count; 
+        int viewDotRemoved = 0, silhouetteRemoved = 0, userFacingRemoved = 0, sideViewRemoved = 0;
 
         foreach (Vector3 v in vertices)
         {
-            Vector3 normal = GetVertexNormal(meshFilter, v).normalized;
+            Vector3 normal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, v)).normalized;
             Vector3 toCamera = (cameraPos - v).normalized;
-            //cameraDot이 높을수록 정면, 즉 dotThreshold가 높을수록 꼼꼼히 검토하는 것
-            float cameraDot = Mathf.Abs(Vector3.Dot(normal, toCamera));
-
-            // 1단계: normal과 카메라 시선이 수직에 가까운가?
-            if (cameraDot > dotThreshold)
+            float dot = Vector3.Dot(normal, toCamera);
+            float sideViewAmount = Mathf.Abs(Vector3.Dot(toCamera.normalized, cameraRight));
+            
+            // [1] 너무 얕게 보이는 정점 제거
+            if (dot < minViewDot)
             {
-                filtered.Add(v); //정면을 향하고 있음 -> 실루엣 아님
+                viewDotRemoved++;
                 continue;
             }
 
-            // 2단계: 주변 normal과의 평균 편차가 작은가?
-            List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, vertices.ToArray());
-            if (neighbors.Count == 0)
+            // [2] 실루엣 제거
+            if (dot < silhouetteDotThreshold)
             {
-                filtered.Add(v); //주변에 없으면 유지
+                List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, vertices.ToArray());
+                if (neighbors.Count > 0)
+                {
+                    float variance = neighbors.Sum(n =>
+                        (1f - Vector3.Dot(normal, GetVertexNormal(meshFilter, n).normalized))) / neighbors.Count;
+                    //Debug.Log($"[Silhouette Test] Dot={dot:F2}, Var={variance:F2}, Pos={v}"); 
+                    if (variance < silhouetteVarianceThreshold)
+                    {
+                        silhouetteRemoved++;
+                        continue;
+                    }
+                }
+            }
+
+            // [3] 사용자 접근 어려운 normal 방향 제거
+            if (normal.y < userNormalYMin || Mathf.Abs(normal.x) > userNormalXMaxAbs)
+            {
+                userFacingRemoved++;
                 continue;
             }
 
-            float variance = neighbors.Sum(n => (1f - Vector3.Dot(normal, GetVertexNormal(meshFilter, n).normalized))) / neighbors.Count;
+            // [4] 측면에서 보는 시야 제거
 
-            if (variance < varianceThreshold)
-                filtered.Add(v); //곡률이 급하지 않음 -> 유지
-            //else
-            //{
-            // 실루엣 정점으로 판단 → 제거
-            //Debug.Log($"[Silhouette Removed] {v}, Dot: {cameraDot:F2}, Var: {variance:F2}");
-            //}
+            if (sideViewAmount > maxSideViewAmount)
+            {
+                sideViewRemoved++;
+                continue;
+            }
+
+            // [통과]
+            filtered.Add(v);
+            //Debug.Log($"[PASSED] Pos={v}, Dot={dot:F3}, Norm={normal}, SideView={sideViewAmount:F3}");
         }
 
-        Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
+        // 디버깅 출력
+        Debug.Log($"[Calibration Filter] Total input: {total}");
+        Debug.Log($"ViewDot removed: {viewDotRemoved}");
+        Debug.Log($"Silhouette removed: {silhouetteRemoved}");
+        Debug.Log($"UserNormal removed: {userFacingRemoved}");
+        Debug.Log($"SideView removed: {sideViewRemoved}");
+        Debug.Log($"Filtered kept: {filtered.Count}");
+
         return filtered;
     }
+    public static List<Vector3> FilterViewportEdgeVertices(Camera cam, List<Vector3> candidates, float edgeMargin = 0.1f)
+    {
+        List<Vector3> filtered = new List<Vector3>();
+
+        foreach (var v in candidates)
+        {
+            Vector3 viewportPos = cam.WorldToViewportPoint(v);
+            bool isEdge = viewportPos.x < edgeMargin || viewportPos.x > 1f - edgeMargin ||
+                          viewportPos.y < edgeMargin || viewportPos.y > 1f - edgeMargin;
+
+            if (!isEdge)
+            {
+                filtered.Add(v);
+            }
+            else
+            {
+                Debug.Log($"[Viewport Edge Removed] ViewportPos: {viewportPos}, WorldPos: {v}");
+            }
+        }
+
+        Debug.Log($"[Viewport Edge Filter] Before: {candidates.Count}, After: {filtered.Count}");
+        return filtered;
+    }
+
+
+    //Occlusion Culling
+    //public static List<Vector3> GetVisibleVertices(Camera camera, MeshFilter meshFilter, Dictionary<int, Vector3> vertexPositions, LayerMask visibilityLayerMask)
+    //{
+    //    List<Vector3> visibleVertices = new List<Vector3>();
+    //    Vector3 camPos = camera.transform.position;
+    //    Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
+
+    //    foreach (var kvp in vertexPositions)
+    //    {
+    //        int vertexIndex = kvp.Key;
+    //        Vector3 vertexWorldPos = meshFilter.transform.TransformPoint(kvp.Value);
+    //        Vector3 roundedVertex = new Vector3(
+    //            Mathf.Round(vertexWorldPos.x * 1000f) / 1000f,
+    //            Mathf.Round(vertexWorldPos.y * 1000f) / 1000f,
+    //            Mathf.Round(vertexWorldPos.z * 1000f) / 1000f
+    //        );
+
+    //        Vector3 worldNormal = meshFilter.transform.TransformDirection(meshFilter.mesh.normals[vertexIndex]);
+    //        Vector3 toCamera = (camPos - vertexWorldPos).normalized;
+    //        //이 부분에서 normalVector의 방향 감지 (우측의 수치보다 낮으면 카메라를 바라보지 않는 것으로 간주)
+    //        if (Vector3.Dot(worldNormal, toCamera) <= 0.5f) continue;
+
+    //        Ray ray = new Ray(camPos, (vertexWorldPos - camPos).normalized);
+    //        if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
+    //        {
+    //            //이 부분에서 hit.point 체크 강화 (기존 값: 0.01f) -> 이 부분은 크게 영향을 미치지 않음.(0.001f까지 내려봤음)
+    //            if (Vector3.Distance(hit.point, vertexWorldPos) < 0.01f)
+    //            {
+    //                if (!uniquePositions.ContainsKey(roundedVertex))
+    //                {
+    //                    uniquePositions[roundedVertex] = true;
+    //                    visibleVertices.Add(vertexWorldPos);
+    //                }
+    //            }
+    //        }
+    //    }
+
+    //    return visibleVertices;
+    //}
+
+    //public static List<Vector3> FilterSilhouetteVertices(Camera cam, MeshFilter meshFilter, List<Vector3> vertices, float sigma, float dotThreshold = 0.5f, float varianceThreshold = 0.08f)
+    //{
+    //    List<Vector3> filtered = new List<Vector3>();
+    //    Vector3 cameraPos = cam.transform.position;
+
+    //    foreach (Vector3 v in vertices)
+    //    {
+    //        Vector3 normal = GetVertexNormal(meshFilter, v).normalized;
+    //        Vector3 toCamera = (cameraPos - v).normalized;
+    //        //cameraDot이 높을수록 정면, 즉 dotThreshold가 높을수록 꼼꼼히 검토하는 것
+    //        float cameraDot = Mathf.Abs(Vector3.Dot(normal, toCamera));
+
+    //        // 1단계: normal과 카메라 시선이 수직에 가까운가?
+    //        if (cameraDot > dotThreshold)
+    //        {
+    //            filtered.Add(v); //정면을 향하고 있음 -> 실루엣 아님
+    //            continue;
+    //        }
+
+    //        // 2단계: 주변 normal과의 평균 편차가 작은가?
+    //        List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, vertices.ToArray());
+    //        if (neighbors.Count == 0)
+    //        {
+    //            filtered.Add(v); //주변에 없으면 유지
+    //            continue;
+    //        }
+
+    //        float variance = neighbors.Sum(n => (1f - Vector3.Dot(normal, GetVertexNormal(meshFilter, n).normalized))) / neighbors.Count;
+
+    //        if (variance < varianceThreshold)
+    //            filtered.Add(v); //곡률이 급하지 않음 -> 유지
+    //        //else
+    //        //{
+    //        // 실루엣 정점으로 판단 → 제거
+    //        //Debug.Log($"[Silhouette Removed] {v}, Dot: {cameraDot:F2}, Var: {variance:F2}");
+    //        //}
+    //    }
+
+    //    Debug.Log($"[Silhouette Filter] Before: {vertices.Count}, After: {filtered.Count}");
+    //    return filtered;
+    //}
     //public static List<Vector3> FilterSilhouetteVertices(
     //Camera cam, MeshFilter meshFilter, List<Vector3> vertices, float sigma,
     //float dotThreshold = 0.5f, float varianceThreshold = 0.08f,

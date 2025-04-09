@@ -57,7 +57,7 @@ public class NewEntropy : MonoBehaviour
 
         //이걸로 사용하니까 entropy가 2배 가까이 상승하는데 원인 파악 필요//
         visibleVertices = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
-        visibleVertices = SaliencyUtils.FilterSilhouetteVertices(mainCamera, meshFilter, visibleVertices, sigmaScales.Min(), 0.5f, 0.08f);
+        //visibleVertices = SaliencyUtils.FilterSilhouetteVertices(mainCamera, meshFilter, visibleVertices, sigmaScales.Min(), 0.5f, 0.08f);
 
         //var grouped = visibleVertices.GroupBy(v => v);
         //Debug.Log($"중복을 포함한 정점 수: {visibleVertices.Count}");
