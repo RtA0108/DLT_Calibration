@@ -18,10 +18,7 @@ public static class EntropySaliencyComputer
     private static float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l, MeshFilter meshFilter)
     {
         float[] entropyValues = new float[visibleVertices.Count];
-        Vector3[] allMeshVertices = meshFilter.mesh.vertices
-            .Select(v => meshFilter.transform.TransformPoint(v))
-            .Distinct()
-            .ToArray();
+        Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
         Vector3[] vertexArray = visibleVertices.ToArray();
         
         float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };

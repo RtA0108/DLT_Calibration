@@ -5,7 +5,7 @@ using UnityEngine;
 
 public static class SaliencyUtils
 {
-
+    //Occlusion Culling
     public static List<Vector3> GetVisibleVertices(
     Camera camera, MeshFilter meshFilter, Dictionary<int, Vector3> vertexPositions, LayerMask visibilityLayerMask)
     {
@@ -50,140 +50,152 @@ public static class SaliencyUtils
     public static List<Vector3> FilterVerticesForCalibration(
         Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
         float sigma,
-        //float minViewDot = 0.2f,
-        float silhouetteDotThreshold = 0.35f,
-        float silhouetteVarianceThreshold = 0.4f)
-        //float userNormalYMin = -0.25f, // 기존 수치 -0.15
-        //float userNormalXMaxAbs = 0.7f, // 기존 수치 0.6
-        //float maxSideViewAmount = 0.075f, // 별 상관 없었음 -> 0.075f로 하면 낫밷
-        //float viewportEdgeMargin = 0.1f)
+        float viewportEdgeMarginRatio = 0.1f // 메시 화면 투영 기준 가장자리 비율
+    )
     {
         List<Vector3> filtered = new List<Vector3>();
         Vector3 cameraPos = cam.transform.position;
         Vector3 cameraRight = cam.transform.right;
 
-        // [0] Viewport edge filtering (가장 먼저 적용)
-        //vertices = FilterViewportEdgeVertices(cam, vertices, viewportEdgeMargin);
+        float minViewDot = 0.2f;
+        //float maxSideViewAmount = 0.25f;
 
-        // === View angle 계산 ===
-        Vector3 meshCenter = meshFilter.transform.position;
-        Vector3 toMesh = (meshCenter - cameraPos).normalized;
-        float viewAngle = Vector3.Angle(meshFilter.transform.forward, toMesh);
-        Debug.Log($"[ViewAngle] Camera-Mesh angle: {viewAngle:F2}°");
+        int total = vertices.Count;
+        int edgeRemoved = 0, viewDotRemoved = 0, userFacingRemoved = 0;//, sideViewRemoved = 0, accessibilityRemoved = 0;
 
-        // === 동적 필터 파라미터 설정 ===
-        float minViewDot, userNormalYMin, userNormalXMaxAbs, maxSideViewAmount;
-        if (viewAngle < 30f)
+        // 중복 제거된 전체 mesh vertex
+        Vector3[] allMeshVertices = GetUniqueWorldVertices(meshFilter);
+
+        // === [0] Viewport Box Edge Filter ===
+        List<Vector3> vpPositions = vertices
+            .Select(v => cam.WorldToViewportPoint(v))
+            .Where(vp => vp.z > 0f)
+            .ToList();
+
+        if (vpPositions.Count == 0)
         {
-            minViewDot = 0.2f;
-            userNormalYMin = -0.2f;
-            userNormalXMaxAbs = 0.65f;
-            maxSideViewAmount = 0.075f;
-        }
-        else if (viewAngle < 60f)
-        {
-            minViewDot = 0.15f;
-            userNormalYMin = -0.25f;
-            userNormalXMaxAbs = 0.7f;
-            maxSideViewAmount = 0.15f;
-        }
-        else
-        {
-            minViewDot = 0.1f;
-            userNormalYMin = -0.3f;
-            userNormalXMaxAbs = 0.8f;
-            maxSideViewAmount = 0.25f;
+            Debug.LogWarning("[Calibration Filter] No visible vertex in Viewport.");
+            return new List<Vector3>();
         }
 
-        int total = vertices.Count; 
-        int viewDotRemoved = 0, silhouetteRemoved = 0, userFacingRemoved = 0, sideViewRemoved = 0;
+        float vpMinX = vpPositions.Min(vp => vp.x);
+        float vpMaxX = vpPositions.Max(vp => vp.x);
+        float vpMinY = vpPositions.Min(vp => vp.y);
+        float vpMaxY = vpPositions.Max(vp => vp.y);
+        float marginX = (vpMaxX - vpMinX) * viewportEdgeMarginRatio;
+        float marginY = (vpMaxY - vpMinY) * viewportEdgeMarginRatio;
 
-        foreach (Vector3 v in vertices)
+        List<Vector3> prefiltered = new List<Vector3>();
+        foreach (var v in vertices)
         {
-            Vector3 normal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, v)).normalized;
+            Vector3 vp = cam.WorldToViewportPoint(v);
+            if (vp.z < 0f) continue;
+
+            bool isEdge =
+                vp.x < vpMinX + marginX || vp.x > vpMaxX - marginX ||
+                vp.y < vpMinY + marginY || vp.y > vpMaxY - marginY;
+
+            if (isEdge)
+            {
+                edgeRemoved++;
+                //HighlightVertex(v, new Color(1f, 0.4f, 1f), 6f, false); // 핑크색
+                continue;
+            }
+
+            prefiltered.Add(v);
+        }
+
+        foreach (Vector3 v in prefiltered)
+        {
+            Vector3 worldNormal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, v)).normalized;
             Vector3 toCamera = (cameraPos - v).normalized;
-            float dot = Vector3.Dot(normal, toCamera);
-            float sideViewAmount = Mathf.Abs(Vector3.Dot(toCamera.normalized, cameraRight));
-            
-            // [1] 너무 얕게 보이는 정점 제거
+            float dot = Vector3.Dot(worldNormal, toCamera);
+            float sideViewAmount = Mathf.Abs(Vector3.Dot(toCamera, cameraRight));
+
+            // === [1] ViewDot Filter
             if (dot < minViewDot)
             {
                 viewDotRemoved++;
+                Debug.Log($"[ViewDot Removed] Dot={dot:F3}, Pos={v}");
+
                 continue;
             }
 
-            // [2] 실루엣 제거
-            if (dot < silhouetteDotThreshold)
-            {
-                List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, vertices.ToArray());
-                if (neighbors.Count > 0)
-                {
-                    float variance = neighbors.Sum(n =>
-                        (1f - Vector3.Dot(normal, GetVertexNormal(meshFilter, n).normalized))) / neighbors.Count;
-                    //Debug.Log($"[Silhouette Test] Dot={dot:F2}, Var={variance:F2}, Pos={v}"); 
-                    if (variance < silhouetteVarianceThreshold)
-                    {
-                        silhouetteRemoved++;
-                        continue;
-                    }
-                }
-            }
+            // === [2] UserNormal (시점 무관)
+            Vector3 camSpaceNormal = cam.transform.InverseTransformDirection(worldNormal);
+            float minYNorm = -0.5f;
+            float maxYNorm = 1.0f;
+            float userNormalXMaxAbs = 0.9f;
 
-            // [3] 사용자 접근 어려운 normal 방향 제거
-            if (normal.y < userNormalYMin || Mathf.Abs(normal.x) > userNormalXMaxAbs)
+            if (camSpaceNormal.y < minYNorm || camSpaceNormal.y > maxYNorm ||
+                Mathf.Abs(camSpaceNormal.x) > userNormalXMaxAbs)
             {
                 userFacingRemoved++;
+
                 continue;
             }
 
-            // [4] 측면에서 보는 시야 제거
+            // === [3] Accessibility Filter (시점 무관)
+            //float normalVertical = Mathf.Abs(worldNormal.y);
+            //float steepnessThreshold = 0.98f;
+            //float normalToCameraDot = Vector3.Dot(worldNormal, toCamera);
 
+            //if (normalVertical < (1f - steepnessThreshold)) // y < 0.02
+            //{
+            //    accessibilityRemoved++;
+
+            //    Debug.Log($"[Accessibility Removed - Steep Normal] y={normalVertical:F2}, Pos={v}");
+            //    continue;
+            //}
+
+            //if (normalToCameraDot < 0.1f)
+            //{
+            //    accessibilityRemoved++;
+            //    Debug.Log($"[Accessibility Removed - Facing Away] Dot={normalToCameraDot:F2}, Pos={v}");
+            //    continue;
+            //}
+
+            //List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, allMeshVertices);
+            //if (neighbors.Count > 0)
+            //{
+            //    float normalVariance = neighbors.Sum(n =>
+            //    {
+            //        Vector3 neighborNormal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, n)).normalized;
+            //        return (1f - Vector3.Dot(worldNormal, neighborNormal));
+            //    }) / neighbors.Count;
+
+            //    if (normalVariance > 0.6f)
+            //    {
+            //        accessibilityRemoved++;
+            //        HighlightVertex(v, new Color(1f, 0.4f, 1f), 6f, false);
+            //        Debug.Log($"[Accessibility Removed - High Curvature] Var={normalVariance:F2}, Pos={v}");
+            //        continue;
+            //    }
+            //}
+
+            // === [4] SideView (주석 상태 유지)
+            /*
             if (sideViewAmount > maxSideViewAmount)
             {
                 sideViewRemoved++;
                 continue;
             }
+            */
 
-            // [통과]
             filtered.Add(v);
-            //Debug.Log($"[PASSED] Pos={v}, Dot={dot:F3}, Norm={normal}, SideView={sideViewAmount:F3}");
         }
 
-        // 디버깅 출력
-        Debug.Log($"[Calibration Filter] Total input: {total}");
+        Debug.Log($"[Calibration Filter]");
+        Debug.Log($"Total input: {total}");
+        Debug.Log($"Edge removed: {edgeRemoved}");
         Debug.Log($"ViewDot removed: {viewDotRemoved}");
-        Debug.Log($"Silhouette removed: {silhouetteRemoved}");
         Debug.Log($"UserNormal removed: {userFacingRemoved}");
-        Debug.Log($"SideView removed: {sideViewRemoved}");
+       // Debug.Log($"Accessibility removed: {accessibilityRemoved}");
+       // Debug.Log($"SideView removed: {sideViewRemoved}");
         Debug.Log($"Filtered kept: {filtered.Count}");
 
         return filtered;
     }
-    public static List<Vector3> FilterViewportEdgeVertices(Camera cam, List<Vector3> candidates, float edgeMargin = 0.1f)
-    {
-        List<Vector3> filtered = new List<Vector3>();
-
-        foreach (var v in candidates)
-        {
-            Vector3 viewportPos = cam.WorldToViewportPoint(v);
-            bool isEdge = viewportPos.x < edgeMargin || viewportPos.x > 1f - edgeMargin ||
-                          viewportPos.y < edgeMargin || viewportPos.y > 1f - edgeMargin;
-
-            if (!isEdge)
-            {
-                filtered.Add(v);
-            }
-            else
-            {
-                Debug.Log($"[Viewport Edge Removed] ViewportPos: {viewportPos}, WorldPos: {v}");
-            }
-        }
-
-        Debug.Log($"[Viewport Edge Filter] Before: {candidates.Count}, After: {filtered.Count}");
-        return filtered;
-    }
-
-
     //Occlusion Culling
     //public static List<Vector3> GetVisibleVertices(Camera camera, MeshFilter meshFilter, Dictionary<int, Vector3> vertexPositions, LayerMask visibilityLayerMask)
     //{
@@ -364,7 +376,18 @@ public static class SaliencyUtils
             r.material.color = color;
         }
     }
-
+    public static Vector3[] GetUniqueWorldVertices(MeshFilter meshFilter, int precision = 1000)
+    {
+        return meshFilter.mesh.vertices
+            .Select(v => meshFilter.transform.TransformPoint(v))
+            .GroupBy(v => new Vector3(
+                Mathf.Round(v.x * precision) / precision,
+                Mathf.Round(v.y * precision) / precision,
+                Mathf.Round(v.z * precision) / precision
+            ))
+            .Select(g => g.First())
+            .ToArray();
+    }
     private static List<Vector3> GetNeighborsByEuclideanDistance(Vector3 position, float sigma, Vector3[] vertices)
     {
         List<Vector3> neighbors = new List<Vector3>();
