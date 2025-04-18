@@ -64,9 +64,9 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
         var threshold = saliencyMap.Values.OrderByDescending(v => v).ElementAt((int)(saliencyMap.Count * topSaliencyPercentage));
         var topCandidates = saliencyMap.Where(kv => kv.Value >= threshold).Select(kv => kv.Key).ToList();
-
+        EntropySaliencyComputer.CheckFilteredVerticesMatch(saliencyMap, filtered);
         var final = SaliencyUtils.SelectHybridDistributedVertices(topCandidates, saliencyMap, l, recommendedVertexCount, alpha: 0.6f); // ★ alpha 복원
-
+        Debug.Log(final.Count);
         for (int i = 0; i < final.Count; i++)
             SaliencyUtils.HighlightVertex(final[i], Color.red, 7f, true, i); // ★ Highlight 크기 복원
 

@@ -11,7 +11,7 @@ public static class EntropySaliencyComputer
 
         for (int i = 0; i < visibleVertices.Count; i++)
             entropyMap[visibleVertices[i]] = entropyValues[i];
-
+        //Debug.Log($"[EntropySaliencyComputer] EntropyMap Generated: {entropyMap.Count} entries for {visibleVertices.Count} visible vertices.");
         return entropyMap;
     }
 
@@ -72,7 +72,27 @@ public static class EntropySaliencyComputer
 
         return entropyValues;
     }
+    //디버깅용 함수 (다른 mesh를 넣었는데 빨간점이 안나옴.)
+    public static void CheckFilteredVerticesMatch(Dictionary<Vector3, float> entropyMap, List<Vector3> filteredVertices)
+    {
+        int matched = 0;
+        int unmatched = 0;
 
+        foreach (var v in filteredVertices)
+        {
+            if (entropyMap.ContainsKey(v))
+            {
+                matched++;
+            }
+            else
+            {
+                unmatched++;
+                Debug.LogWarning($"[Filtered Vertex Missing in EntropyMap] Pos={v}");
+            }
+        }
+
+        Debug.Log($"[Entropy Map Match Check] Matched: {matched}, Unmatched: {unmatched}, Total Filtered: {filteredVertices.Count}");
+    }
     private static List<Vector3> GetNeighborsByEuclideanDistance(Vector3 position, float sigma, Vector3[] vertices)
     {
         List<Vector3> neighbors = new List<Vector3>();
