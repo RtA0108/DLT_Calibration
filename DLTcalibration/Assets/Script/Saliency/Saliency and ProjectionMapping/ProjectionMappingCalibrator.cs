@@ -26,6 +26,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     {
         // Layer 설정 복원
         int vertexLayer = LayerMask.NameToLayer("Vertex In 3D");
+        //int vertexLayer = LayerMask.NameToLayer("Default");
         if (vertexLayer != -1)
             visibilityLayerMask = ~(1 << vertexLayer);
         else
@@ -51,7 +52,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
         var sigmaMax = 0.2f * l;
 
-        var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible, sigmaMax);
+        var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible); //, sigmaMax
         foreach (var vertex in filtered)
             SaliencyUtils.HighlightVertex(vertex, Color.green, 6f, false);
 
