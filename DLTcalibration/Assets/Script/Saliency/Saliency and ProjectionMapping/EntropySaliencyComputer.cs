@@ -21,7 +21,7 @@ public static class EntropySaliencyComputer
         Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
         Vector3[] vertexArray = visibleVertices.ToArray();
         
-        float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
+        float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
         float sigma_max = sigmaScales.Max();
         
         for (int i = 0; i < visibleVertices.Count; i++)
@@ -77,12 +77,22 @@ public static class EntropySaliencyComputer
     {
         Dictionary<Vector3, float> entropyMap = new Dictionary<Vector3, float>();
         Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
-        Vector3[] vertexArray = visibleVertices.ToArray();
+        //Vector3[] vertexArray = visibleVertices.ToArray(); -> 이건 뭐지?
+
+        // neighbor 통계용 변수들
+        int zeroNeighborCount = 0;
+        int oneNeighborCount = 0;
+        int twoOrLessNeighborCount = 0;
+        List<int> allNeighborCounts = new List<int>();
 
         for (int i = 0; i < visibleVertices.Count; i++)
         {
             var neighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma, allMeshVertices);
-            if (neighbors.Count == 0) {  continue; }
+            int nCount = neighbors.Count;
+            allNeighborCounts.Add(nCount);
+            if (nCount == 0) { zeroNeighborCount++; continue; }
+            if (nCount == 1) oneNeighborCount++;
+            if (nCount <= 2) twoOrLessNeighborCount++;
 
             Dictionary<Vector3Int, int> normalHistogram = new Dictionary<Vector3Int, int>();
 
@@ -111,6 +121,13 @@ public static class EntropySaliencyComputer
             normalized = Mathf.Clamp01(normalized);
 
             entropyMap[visibleVertices[i]] = normalized;
+        }
+        // 디버그 로그
+        Debug.Log($"[Entropy Debug σ={sigma:F4}] Total: {visibleVertices.Count}, Zero: {zeroNeighborCount}, One: {oneNeighborCount}, ≤2: {twoOrLessNeighborCount}");
+        if (allNeighborCounts.Count > 0)
+        {
+            float avg = (float)allNeighborCounts.Average();
+            Debug.Log($"[Entropy Debug σ={sigma:F4}] 평균 neighbor 수: {avg:F2}, 최대: {allNeighborCounts.Max()}, 최소: {allNeighborCounts.Min()}");
         }
 
         return entropyMap;

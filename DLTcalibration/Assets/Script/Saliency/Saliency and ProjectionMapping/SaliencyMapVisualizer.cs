@@ -13,9 +13,47 @@ public class SaliencyMapVisualizer : MonoBehaviour
     private void Start()
     {
         if (runOnStart)
+        {
+            ApplyVertexColorMaterial();
             StartCoroutine(VisualizePerSigmaCoroutine());
+        }
     }
+    private void LogSaliencyStatistics(Dictionary<Vector3, float> saliencyMap)
+    {
+        float[] values = saliencyMap.Values.ToArray();
+        float min = values.Min();
+        float max = values.Max();
+        float avg = values.Average();
+        float median = values.OrderBy(v => v).ElementAt(values.Length / 2);
+        float stdDev = Mathf.Sqrt(values.Select(v => Mathf.Pow(v - avg, 2)).Average());
 
+        Debug.Log($"[Saliency Stats] Count: {values.Length}, Min: {min:F4}, Max: {max:F4}, Avg: {avg:F4}, Median: {median:F4}, StdDev: {stdDev:F4}");
+    }
+    void ApplyVertexColorMaterial()
+    {
+        var renderer = meshFilter.GetComponent<Renderer>();
+        if (renderer == null)
+        {
+            Debug.LogError("[SaliencyMapVisualizer] MeshRenderer를 찾을 수 없습니다.");
+            return;
+        }
+
+        Shader shader = Shader.Find("Universal Render Pipeline/VertexColorLitS");
+        if (shader == null)
+        {
+            Debug.LogError("[SaliencyMapVisualizer] 셰이더를 찾을 수 없습니다. 이름을 확인하세요.");
+            return;
+        }
+
+        Material material = new Material(shader);
+        material.enableInstancing = false;
+
+        int slotCount = renderer.materials.Length;
+        Material[] materials = Enumerable.Repeat(material, slotCount).ToArray();
+        renderer.materials = materials;
+
+        Debug.Log("[SaliencyMapVisualizer] 런타임에 VertexColorLitS 머티리얼 적용 완료");
+    }
     IEnumerator VisualizePerSigmaCoroutine()
     {
         if (meshFilter == null || mainCamera == null)
@@ -34,7 +72,7 @@ public class SaliencyMapVisualizer : MonoBehaviour
         float l = scaled.magnitude;
 
         // 3. 여러 sigma 설정
-        float[] sigmas = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
+        float[] sigmas = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
 
         for (int i = 0; i < sigmas.Length; i++)
         {
@@ -43,10 +81,12 @@ public class SaliencyMapVisualizer : MonoBehaviour
 
             // 4. sigma별 entropy 계산
             Dictionary<Vector3, float> saliencyMap = EntropySaliencyComputer.ComputeAtSigma(meshFilter, allVertexList, sigma);
+
+            LogSaliencyStatistics(saliencyMap);
             Debug.Log($"[SaliencyMapVisualizer] saliencyMap.Count = {saliencyMap.Count}");
             // 5. vertex color로 시각화
-            ApplyVertexColors(meshFilter.mesh, saliencyMap);
-
+            //ApplyVertexColors(meshFilter.mesh, saliencyMap);
+            ApplyVertexColorsWithStretch(meshFilter.mesh, saliencyMap);
             Debug.Log($"[SaliencyMapVisualizer] Sigma {i} 시각화 완료. 2초간 대기 중...");
             yield return new WaitForSeconds(2.0f); // 다음 sigma로 넘어가기 전 대기
         }
@@ -69,6 +109,33 @@ public class SaliencyMapVisualizer : MonoBehaviour
             Vector3 nearest = saliencyMap.Keys
                 .OrderBy(v => Vector3.Distance(v, worldPos))
                 .FirstOrDefault();
+
+            if (saliencyMap.TryGetValue(nearest, out float saliency))
+            {
+                float t = Mathf.Clamp01((saliency - min) / (max - min));
+                colors[i] = Color.Lerp(Color.blue, Color.red, t);
+            }
+            else
+            {
+                colors[i] = Color.black;
+            }
+        }
+
+        mesh.colors = colors;
+    }
+    private void ApplyVertexColorsWithStretch(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
+    {
+        Vector3[] vertices = mesh.vertices;
+        Color[] colors = new Color[vertices.Length];
+
+        var values = saliencyMap.Values.OrderBy(v => v).ToList();
+        float min = values[values.Count / 20];             // 하위 5% 컷
+        float max = values[values.Count * 19 / 20];         // 상위 95% 컷
+
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
+            Vector3 nearest = saliencyMap.Keys.OrderBy(v => Vector3.Distance(v, worldPos)).FirstOrDefault();
 
             if (saliencyMap.TryGetValue(nearest, out float saliency))
             {

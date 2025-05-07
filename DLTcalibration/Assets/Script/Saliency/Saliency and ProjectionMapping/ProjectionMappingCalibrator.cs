@@ -10,6 +10,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     public Camera mainCamera;
     public MeshFilter meshFilter;
     public int recommendedVertexCount = 6;
+    public bool visualized = true;
     [Range(0f, 1f)] public float topSaliencyPercentage = 0.5f;
 
     private Dictionary<int, Vector3> vertexPositions;
@@ -47,15 +48,18 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     void Run()
     {
         var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
-        foreach (var v in visible)
-            SaliencyUtils.HighlightVertex(v, Color.blue, 5.5f, false);
-
+        if (visualized)
+        {
+            foreach (var v in visible)
+                SaliencyUtils.HighlightVertex(v, Color.blue, 5.5f, false);
+        }
         var sigmaMax = 0.2f * l;
 
         var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible); //, sigmaMax
-        foreach (var vertex in filtered)
-            SaliencyUtils.HighlightVertex(vertex, Color.green, 6f, false);
-
+        if (visualized) { 
+            foreach (var vertex in filtered)
+                SaliencyUtils.HighlightVertex(vertex, Color.green, 6f, false);
+        }
         // Saliency 계산
         Dictionary<Vector3, float> saliencyMap = saliencyMode switch
         {
@@ -70,7 +74,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         // (Optional) entropyMap과 filtered 매칭 체크 (디버깅용)
         EntropySaliencyComputer.CheckFilteredVerticesMatch(saliencyMap, filtered);
 
-        var final = SaliencyUtils.SelectHybridDistributedVertices(topCandidates, saliencyMap, l, recommendedVertexCount, alpha: 0.6f);
+        var final = SaliencyUtils.SelectHybridDistributedVertices(topCandidates, saliencyMap, l, recommendedVertexCount, topSaliencyPercentage);
 
         Debug.Log($"[Final Recommended] {final.Count} vertices selected.");
 
