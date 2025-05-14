@@ -9,13 +9,26 @@ public class SaliencyMapVisualizer : MonoBehaviour
     public Camera mainCamera;
     public LayerMask visibilityLayerMask;
     public bool runOnStart = true;
+    Material[] originalMaterials;
 
     private void Start()
     {
+        // 자동으로 하위에서 MeshFilter를 가져오도록 보정
+        if (meshFilter == null)
+        {
+            meshFilter = GetComponentInChildren<MeshFilter>();
+            if (meshFilter == null)
+            {
+                Debug.LogError("[SaliencyMapVisualizer] 하위에서 MeshFilter를 찾을 수 없습니다.");
+                return;
+            }
+        }
+
         if (runOnStart)
         {
+            StoreOriginalMaterials();
             ApplyVertexColorMaterial();
-            StartCoroutine(VisualizePerSigmaCoroutine());
+            StartCoroutine(VisualizeOnce());
         }
     }
     private void LogSaliencyStatistics(Dictionary<Vector3, float> saliencyMap)
@@ -29,9 +42,32 @@ public class SaliencyMapVisualizer : MonoBehaviour
 
         Debug.Log($"[Saliency Stats] Count: {values.Length}, Min: {min:F4}, Max: {max:F4}, Avg: {avg:F4}, Median: {median:F4}, StdDev: {stdDev:F4}");
     }
+    void OnDisable()
+    {
+        RestoreOriginalMaterials();
+    }
+    void StoreOriginalMaterials()
+    {
+        var renderer = meshFilter.GetComponent<Renderer>() ?? meshFilter.GetComponentInChildren<Renderer>();
+        if (renderer != null)
+            originalMaterials = renderer.sharedMaterials;
+    }
+
+    void RestoreOriginalMaterials()
+    {
+        var renderer = meshFilter.GetComponent<Renderer>() ?? meshFilter.GetComponentInChildren<Renderer>();
+        if (renderer != null && originalMaterials != null)
+        {
+            renderer.materials = originalMaterials;
+            Debug.Log("[SaliencyMapVisualizer] 원래 머티리얼로 복원됨");
+        }
+    }
+
     void ApplyVertexColorMaterial()
     {
-        var renderer = meshFilter.GetComponent<Renderer>();
+        if (!Application.isPlaying) return;
+
+        var renderer = meshFilter.GetComponent<Renderer>() ?? meshFilter.GetComponentInChildren<Renderer>();
         if (renderer == null)
         {
             Debug.LogError("[SaliencyMapVisualizer] MeshRenderer를 찾을 수 없습니다.");
@@ -48,13 +84,63 @@ public class SaliencyMapVisualizer : MonoBehaviour
         Material material = new Material(shader);
         material.enableInstancing = false;
 
-        int slotCount = renderer.materials.Length;
+        int slotCount = renderer.sharedMaterials.Length;
         Material[] materials = Enumerable.Repeat(material, slotCount).ToArray();
         renderer.materials = materials;
 
-        Debug.Log("[SaliencyMapVisualizer] 런타임에 VertexColorLitS 머티리얼 적용 완료");
+        Debug.Log("[SaliencyMapVisualizer] 런타임에 VertexColorLitS 셰이더 적용 완료");
+
+        // 디버깅: vertex color 존재 여부 확인
+        var mesh = meshFilter.sharedMesh;
+        int colorCount = mesh.colors?.Length ?? 0;
+        Debug.Log($"[VC Check] VertexCount: {mesh.vertexCount}, ColorCount: {colorCount}, VC 존재 여부: {(colorCount > 0 ? "있음" : "없음")}");
+
+        // vertex color가 없으면 임의 색상이라도 채워야 셰이더가 동작함
+        if (colorCount == 0)
+        {
+            Color[] colors = new Color[mesh.vertexCount];
+            for (int i = 0; i < colors.Length; i++)
+            {
+                colors[i] = Color.gray; // 또는 테스트용 단색
+            }
+            mesh.colors = colors;
+            Debug.Log("[SaliencyMapVisualizer] vertex color가 비어있어 기본 회색으로 채움");
+        }
+        else if (colorCount > 0)
+        {
+            var distinctColors = mesh.colors.Distinct().ToList();
+            Debug.Log($"[VC Check] Color Count: {colorCount}, Distinct Colors: {distinctColors.Count}");
+            foreach (var c in distinctColors)
+                Debug.Log($"[VC Sample] {c}");
+        }
     }
-    IEnumerator VisualizePerSigmaCoroutine()
+
+    //void ApplyVertexColorMaterial()
+    //{
+    //    var renderer = meshFilter.GetComponent<Renderer>();
+    //    if (renderer == null)
+    //    {
+    //        Debug.LogError("[SaliencyMapVisualizer] MeshRenderer를 찾을 수 없습니다.");
+    //        return;
+    //    }
+
+    //    Shader shader = Shader.Find("Universal Render Pipeline/VertexColorLitS");
+    //    if (shader == null)
+    //    {
+    //        Debug.LogError("[SaliencyMapVisualizer] 셰이더를 찾을 수 없습니다. 이름을 확인하세요.");
+    //        return;
+    //    }
+
+    //    Material material = new Material(shader);
+    //    material.enableInstancing = false;
+
+    //    int slotCount = renderer.materials.Length;
+    //    Material[] materials = Enumerable.Repeat(material, slotCount).ToArray();
+    //    renderer.materials = materials;
+
+    //    Debug.Log("[SaliencyMapVisualizer] 런타임에 VertexColorLitS 머티리얼 적용 완료");
+    //}
+    IEnumerator VisualizeOnce()
     {
         if (meshFilter == null || mainCamera == null)
         {
@@ -62,37 +148,24 @@ public class SaliencyMapVisualizer : MonoBehaviour
             yield break;
         }
 
-        // 1. 전체 정점 가져오기
         Vector3[] allVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
         List<Vector3> allVertexList = new List<Vector3>(allVertices);
 
-        // 2. 특징 길이 l 계산
         Bounds bounds = meshFilter.mesh.bounds;
         Vector3 scaled = Vector3.Scale(bounds.size, meshFilter.transform.lossyScale);
         float l = scaled.magnitude;
 
-        // 3. 여러 sigma 설정
-        float[] sigmas = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
+        Debug.Log($"[SaliencyMapVisualizer] σ = multi-scale 기반 saliency 계산 시작 (l = {l:F4})");
 
-        for (int i = 0; i < sigmas.Length; i++)
-        {
-            float sigma = sigmas[i];
-            Debug.Log($"[SaliencyMapVisualizer] Sigma {i} (σ = {sigma:F4}) 에 대해 saliency 계산 중...");
+        Dictionary<Vector3, float> saliencyMap = EntropySaliencyComputer.Compute(meshFilter, allVertexList, l);
 
-            // 4. sigma별 entropy 계산
-            Dictionary<Vector3, float> saliencyMap = EntropySaliencyComputer.ComputeAtSigma(meshFilter, allVertexList, sigma);
+        LogSaliencyStatistics(saliencyMap);
+        ApplyVertexColorsWithStretch(meshFilter.mesh, saliencyMap);
 
-            LogSaliencyStatistics(saliencyMap);
-            Debug.Log($"[SaliencyMapVisualizer] saliencyMap.Count = {saliencyMap.Count}");
-            // 5. vertex color로 시각화
-            //ApplyVertexColors(meshFilter.mesh, saliencyMap);
-            ApplyVertexColorsWithStretch(meshFilter.mesh, saliencyMap);
-            Debug.Log($"[SaliencyMapVisualizer] Sigma {i} 시각화 완료. 2초간 대기 중...");
-            yield return new WaitForSeconds(2.0f); // 다음 sigma로 넘어가기 전 대기
-        }
-
-        Debug.Log("[SaliencyMapVisualizer] 모든 sigma에 대한 시각화 완료.");
+        Debug.Log("[SaliencyMapVisualizer] 시각화 완료.");
+        yield return null;
     }
+
 
     private void ApplyVertexColors(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
     {
@@ -129,8 +202,8 @@ public class SaliencyMapVisualizer : MonoBehaviour
         Color[] colors = new Color[vertices.Length];
 
         var values = saliencyMap.Values.OrderBy(v => v).ToList();
-        float min = values[values.Count / 20];             // 하위 5% 컷
-        float max = values[values.Count * 19 / 20];         // 상위 95% 컷
+        float min = values[values.Count / 10];             // 하위 10% 컷
+        float max = values[values.Count * 18 / 20];         // 상위 90% 컷
 
         for (int i = 0; i < vertices.Length; i++)
         {
@@ -140,6 +213,7 @@ public class SaliencyMapVisualizer : MonoBehaviour
             if (saliencyMap.TryGetValue(nearest, out float saliency))
             {
                 float t = Mathf.Clamp01((saliency - min) / (max - min));
+                t = Mathf.Sqrt(t); // 밝은 영역 덜 침투하게
                 colors[i] = Color.Lerp(Color.blue, Color.red, t);
             }
             else

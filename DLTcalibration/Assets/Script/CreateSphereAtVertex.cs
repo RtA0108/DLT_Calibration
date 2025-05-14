@@ -29,7 +29,7 @@ public class CreateSphereAtVertex : MonoBehaviour
                 // MeshFilter 내부엔 vertex와 uv정보가 모두 들어있음
                 MeshFilter cubeMeshFilter = obj.GetComponent<MeshFilter>();
                 posIndex = new Dictionary<int, Vector3>();
-                Dictionary<Vector2, int> uvIndex = new Dictionary<Vector2, int>();
+                //Dictionary<Vector2, int> uvIndex = new Dictionary<Vector2, int>();
                 // Ensure the mesh filter is not null and has a mesh
                 if (cubeMeshFilter != null && cubeMeshFilter.sharedMesh != null)
                 {
@@ -50,8 +50,8 @@ public class CreateSphereAtVertex : MonoBehaviour
                             
                         }
                         
-                        Vector2 uvCoordinate = cubeMesh.uv[i];
-                        uvIndex.Add(uvCoordinate, indexNumber);
+                        //Vector2 uvCoordinate = cubeMesh.uv[i];
+                        //uvIndex.Add(uvCoordinate, indexNumber);
 
 
                         GameObject sphere = Instantiate(vertexSphere, vertexPosition, Quaternion.identity);
