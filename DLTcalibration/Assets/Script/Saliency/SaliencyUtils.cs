@@ -50,6 +50,7 @@ public static class SaliencyUtils
 
         return visibleVertices;
     }
+    //필터 정리 (없앨 가능성 많음)
     public static List<Vector3> FilterVerticesForCalibration(
         Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
         float viewportEdgeMarginRatio = 0.1f // 메시 화면 투영 기준 가장자리 비율
@@ -151,7 +152,7 @@ public static class SaliencyUtils
 
         return filtered;
     }
-    
+    // 분산 + saliency score 비율 변경하며 vertex 추천
     public static List<Vector3> SelectHybridDistributedVertices(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float l, int selectionCount, float alpha = 0.5f)
     {
         List<Vector3> selected = new List<Vector3>();
@@ -209,6 +210,7 @@ public static class SaliencyUtils
             r.material.color = color;
         }
     }
+    //중복 없애기 (수정 필요성? -> 추후 확인 예정)
     public static Vector3[] GetUniqueWorldVertices(MeshFilter meshFilter, int precision = 1000)
     {
         return meshFilter.mesh.vertices
@@ -221,6 +223,7 @@ public static class SaliencyUtils
             .Select(g => g.First())
             .ToArray();
     }
+    //기존 이웃 탐지 방식 -> 거리 기반이라 걍 쓰레기
     private static List<Vector3> GetNeighborsByEuclideanDistance(Vector3 position, float sigma, Vector3[] vertices)
     {
         List<Vector3> neighbors = new List<Vector3>();
@@ -235,7 +238,7 @@ public static class SaliencyUtils
 
         return neighbors;
     }
-
+    // 이건 어디에 사용중?
     private static Vector3 GetVertexNormal(MeshFilter meshFilter, Vector3 vertexPosition)
     {
         Vector3[] positions = meshFilter.mesh.vertices;
@@ -248,6 +251,130 @@ public static class SaliencyUtils
         }
 
         return Vector3.zero;
+    }
+
+    //----------------------------------neighbor 탐색 수정 중-----------------------------------------------
+
+
+    private static Dictionary<Mesh, Dictionary<int, HashSet<int>>> _adjacencyCache = new();
+    private static Dictionary<Mesh, Dictionary<Vector3, List<int>>> _positionMapCache = new();
+
+    public static Dictionary<int, HashSet<int>> GetOrBuildAdjacency(Mesh mesh)
+    {
+        if (_adjacencyCache.TryGetValue(mesh, out var cached))
+            return cached;
+
+        var built = BuildAdjacency(mesh);
+        _adjacencyCache[mesh] = built;
+        return built;
+    }
+
+    public static Dictionary<int, HashSet<int>> BuildAdjacency(Mesh mesh)
+    {
+        var adjacency = new Dictionary<int, HashSet<int>>();
+        int[] triangles = mesh.triangles;
+
+        for (int i = 0; i < triangles.Length; i += 3)
+        {
+            int v0 = triangles[i];
+            int v1 = triangles[i + 1];
+            int v2 = triangles[i + 2];
+            AddEdge(adjacency, v0, v1);
+            AddEdge(adjacency, v1, v2);
+            AddEdge(adjacency, v2, v0);
+        }
+
+        return adjacency;
+    }
+
+    private static void AddEdge(Dictionary<int, HashSet<int>> adj, int a, int b)
+    {
+        if (!adj.ContainsKey(a)) adj[a] = new HashSet<int>();
+        if (!adj.ContainsKey(b)) adj[b] = new HashSet<int>();
+        adj[a].Add(b);
+        adj[b].Add(a);
+    }
+
+    /// <summary>
+    /// 중복 위치를 가진 vertex index들을 포함하여 topology neighbor 확장 (depth 제한 적용)
+    /// </summary>
+    public static HashSet<int> FindTopologyNeighbors(int startIndex, Dictionary<int, HashSet<int>> adjacency, int maxDepth, Mesh mesh, Transform transform)
+    {
+        Queue<(int, int)> queue = new Queue<(int, int)>();
+        HashSet<int> visited = new HashSet<int> { startIndex };
+        queue.Enqueue((startIndex, 0));
+
+        while (queue.Count > 0)
+        {
+            var (current, depth) = queue.Dequeue();
+            if (depth >= maxDepth) continue;
+
+            foreach (int neighbor in adjacency[current])
+            {
+                if (visited.Add(neighbor))
+                    queue.Enqueue((neighbor, depth + 1));
+            }
+        }
+
+        // 중복 위치 정점 보정 포함
+        Dictionary<Vector3, List<int>> positionMap = GetOrBuildPositionToIndicesMap(mesh, transform);
+        HashSet<int> expanded = new HashSet<int>(visited);
+        foreach (int idx in visited)
+        {
+            Vector3 wp = transform.TransformPoint(mesh.vertices[idx]);
+            if (positionMap.TryGetValue(wp, out var dupList))
+            {
+                foreach (var dupIdx in dupList)
+                    expanded.Add(dupIdx);
+            }
+        }
+
+        expanded.Remove(startIndex);
+        return expanded;
+    }
+
+    /// <summary>
+    /// worldPos에 가장 가까운 정점 index 반환
+    /// </summary>
+    public static int FindNearestVertexIndex(Vector3 worldPos, Vector3[] worldVertices)
+    {
+        float minDist = float.MaxValue;
+        int nearestIndex = 0;
+        for (int i = 0; i < worldVertices.Length; i++)
+        {
+            float dist = (worldVertices[i] - worldPos).sqrMagnitude;
+            if (dist < minDist)
+            {
+                minDist = dist;
+                nearestIndex = i;
+            }
+        }
+        return nearestIndex;
+    }
+
+    /// <summary>
+    /// 동일 world position을 공유하는 vertex index 리스트 생성
+    /// </summary>
+    public static Dictionary<Vector3, List<int>> GetOrBuildPositionToIndicesMap(Mesh mesh, Transform transform)
+    {
+        if (_positionMapCache.TryGetValue(mesh, out var cached))
+            return cached;
+
+        var dict = new Dictionary<Vector3, List<int>>();
+        Vector3[] verts = mesh.vertices;
+        for (int i = 0; i < verts.Length; i++)
+        {
+            Vector3 worldPos = transform.TransformPoint(verts[i]);
+            if (!dict.TryGetValue(worldPos, out var list))
+            {
+                list = new List<int>();
+                dict[worldPos] = list;
+            }
+            list.Add(i);
+        }
+
+        _positionMapCache[mesh] = dict;
+        return dict;
     }
 }
 //public static List<Vector3> FilterVerticesForCalibration(

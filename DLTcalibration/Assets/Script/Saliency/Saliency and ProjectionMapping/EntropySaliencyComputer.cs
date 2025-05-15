@@ -15,149 +15,155 @@ public static class EntropySaliencyComputer
         return entropyMap;
     }
 
+    //private static float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l, MeshFilter meshFilter)
+    //{
+    //    float[] entropyValues = new float[visibleVertices.Count];
+    //    Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
+
+    //    float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
+    //    float sigma_max = sigmaScales.Max();
+
+    //    Dictionary<Vector3, Vector3> normalCache = BuildNormalCache(meshFilter);
+    //    for (int i = 0; i < visibleVertices.Count; i++)
+    //    {
+    //        Vector3 vertex = visibleVertices[i];
+    //        List<Vector3> allNeighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma_max, allMeshVertices);
+
+    //        float aggregatedEntropy = 0f;
+    //        float totalWeight = 0f;
+
+    //        foreach (float sigma in sigmaScales)
+    //        {
+    //            var neighbors = allNeighbors.Where(v => (v - vertex).sqrMagnitude <= sigma * sigma).ToList();
+    //            if (neighbors.Count == 0) continue;
+
+    //            Dictionary<Vector3Int, int> normalHistogram = new();
+    //            foreach (var neighbor in neighbors)
+    //            {
+    //                if (!normalCache.TryGetValue(neighbor, out Vector3 normal)) continue;
+    //                //Vector3Int quantizedNormal = QuantizeNormal(normal, 10); 
+    //                Vector3Int quantizedNormal = SphericalQuantizeNormal(normal, 10);
+    //                if (!normalHistogram.TryAdd(quantizedNormal, 1))
+    //                    normalHistogram[quantizedNormal]++;
+    //            }
+    //            if (normalHistogram.Count == 0) continue;
+
+    //            float entropy = 0f;
+    //            int totalNormals = neighbors.Count;
+
+    //            foreach (var count in normalHistogram.Values)
+    //            {
+    //                float probability = (float)count / (totalNormals + 1e-6f);
+    //                if (probability > 0f && !float.IsNaN(probability))
+    //                    entropy -= probability * Mathf.Log(probability + 1e-6f);
+    //            }
+    //            if (float.IsNaN(entropy) || float.IsInfinity(entropy))
+    //                entropy = 0f;
+
+    //            float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f); // 개선된 정규화 기준
+    //            float normalized = entropy / (maxEntropy + 1e-6f);
+
+    //            if (float.IsNaN(normalized) || float.IsInfinity(normalized)) normalized = 0f;
+    //            if (float.IsNaN(normalized) || float.IsInfinity(normalized))
+
+    //            normalized = Mathf.Pow(normalized, 2.0f); // 값 분포 완화
+    //            float saliency = Mathf.Clamp01(normalized);
+    //            float weight = 1.0f / sigma;
+
+    //            aggregatedEntropy += saliency * weight;
+    //            totalWeight += weight;
+    //        }
+    //        entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 0f;
+    //    }
+
+    //    return entropyValues;
+    //}
+
     private static float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l, MeshFilter meshFilter)
     {
         float[] entropyValues = new float[visibleVertices.Count];
-        Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
-        //Vector3[] vertexArray = visibleVertices.ToArray();
-        //float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
+        Mesh mesh = meshFilter.sharedMesh;
+        Dictionary<int, HashSet<int>> adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
+        Vector3[] worldPositions = mesh.vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
+        Vector3[] normals = mesh.normals;
         float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
-        float sigma_max = sigmaScales.Max();
-
-        // Cache normals for all world-space vertex positions
-        Dictionary<Vector3, Vector3> normalCache = BuildNormalCache(meshFilter);
 
         for (int i = 0; i < visibleVertices.Count; i++)
         {
             Vector3 vertex = visibleVertices[i];
-
-            List<Vector3> allNeighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma_max, allMeshVertices);
+            int vIndex = SaliencyUtils.FindNearestVertexIndex(vertex, worldPositions);
 
             float aggregatedEntropy = 0f;
             float totalWeight = 0f;
 
             foreach (float sigma in sigmaScales)
             {
-                var neighbors = allNeighbors.Where(v => (v - vertex).sqrMagnitude <= sigma * sigma).ToList();
+                HashSet<int> neighbors = SaliencyUtils.FindTopologyNeighbors(vIndex, adjacency, 1, mesh, meshFilter.transform);
                 if (neighbors.Count == 0) continue;
 
                 Dictionary<Vector3Int, int> normalHistogram = new();
-
-                foreach (var neighbor in neighbors)
+                foreach (int ni in neighbors)
                 {
-                    //Vector3 normal = GetVertexNormal(meshFilter, neighbor);
-                    //Vector3Int quantizedNormal = QuantizeNormal(normal, 1000);
-
-                    //if (!normalHistogram.ContainsKey(quantizedNormal))
-                    //    normalHistogram[quantizedNormal] = 0;
-
-                    //normalHistogram[quantizedNormal]++;
-                    if (!normalCache.TryGetValue(neighbor, out Vector3 normal)) continue;
-                    //Vector3Int quantizedNormal = QuantizeNormal(normal, 10); 
-                    Vector3Int quantizedNormal = SphericalQuantizeNormal(normal, 10);
-                    if (!normalHistogram.TryAdd(quantizedNormal, 1))
-                        normalHistogram[quantizedNormal]++;
+                    Vector3 normal = normals[ni];
+                    Vector3Int quantized = SphericalQuantizeNormal(normal, 10);
+                    if (!normalHistogram.TryAdd(quantized, 1))
+                        normalHistogram[quantized]++;
                 }
-                if (neighbors.Count == 0 || normalHistogram.Count == 0)
-                    continue;
+
+                if (normalHistogram.Count == 0) continue;
 
                 float entropy = 0f;
                 int totalNormals = neighbors.Count;
 
                 foreach (var count in normalHistogram.Values)
                 {
-                    float probability = (float)count / (totalNormals + 1e-6f);
-                    if (probability > 0f && !float.IsNaN(probability))
-                        entropy -= probability * Mathf.Log(probability + 1e-6f);
+                    float p = (float)count / (totalNormals + 1e-6f);
+                    if (p > 0f && !float.IsNaN(p))
+                        entropy -= p * Mathf.Log(p + 1e-6f);
                 }
-                if (float.IsNaN(entropy) || float.IsInfinity(entropy))
-                    entropy = 0f;
-                //entropy = Mathf.Log(1f + entropy); 
-                float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f); // 개선된 정규화 기준
-                float normalized = entropy / (maxEntropy + 1e-6f);
-                if (float.IsNaN(normalized) || float.IsInfinity(normalized))
-                {
-                    normalized = 0f;
-                }
-                normalized = Mathf.Pow(normalized, 2.0f); // 값 분포 완화
 
+                if (float.IsNaN(entropy) || float.IsInfinity(entropy)) entropy = 0f;
+
+                float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f);
+                float normalized = entropy / (maxEntropy + 1e-6f);
+                if (float.IsNaN(normalized) || float.IsInfinity(normalized)) normalized = 0f;
+
+                normalized = Mathf.Pow(normalized, 2.0f);
                 float saliency = Mathf.Clamp01(normalized);
                 float weight = 1.0f / sigma;
+
                 aggregatedEntropy += saliency * weight;
                 totalWeight += weight;
             }
 
-            entropyValues[i] = aggregatedEntropy / totalWeight;
+            entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 0f;
         }
 
         return entropyValues;
     }
-    //0425 추가된 함수
-    //public static Dictionary<Vector3, float> ComputeAtSigma(MeshFilter meshFilter, List<Vector3> visibleVertices, float sigma)
-    //{
-    //    Dictionary<Vector3, float> entropyMap = new Dictionary<Vector3, float>();
-    //    Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
-    //    Dictionary<Vector3, Vector3> normalCache = BuildNormalCache(meshFilter);
-    //    //Vector3[] vertexArray = visibleVertices.ToArray(); -> 이건 뭐지?
 
-    //    // neighbor 통계용 변수들
-    //    //int zeroNeighborCount = 0;
-    //    //int oneNeighborCount = 0;
-    //    //int twoOrLessNeighborCount = 0;
-    //    //List<int> allNeighborCounts = new List<int>();
+    public static Dictionary<Vector3, float> NormalizeSaliencyMap(Dictionary<Vector3, float> saliencyMap)
+    {
+        Dictionary<Vector3, float> normalized = new();
+        float min = saliencyMap.Values.Min();
+        float max = saliencyMap.Values.Max();
+        foreach (var kv in saliencyMap)
+        {
+            float t = Mathf.Clamp01((kv.Value - min) / (max - min));
+            normalized[kv.Key] = t;
+        }
+        return normalized;
+    }
 
-    //    for (int i = 0; i < visibleVertices.Count; i++)
-    //    {
-    //        var neighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma, allMeshVertices);
-    //        int nCount = neighbors.Count;
-    //        if (nCount == 0) continue;
-    //        //allNeighborCounts.Add(nCount);
-    //        //if (nCount == 0) { zeroNeighborCount++; continue; }
-    //        //if (nCount == 1) oneNeighborCount++;
-    //        //if (nCount <= 2) twoOrLessNeighborCount++;
-
-    //        Dictionary<Vector3Int, int> normalHistogram = new Dictionary<Vector3Int, int>();
-
-    //        foreach (var neighbor in neighbors)
-    //        {
-    //            //Vector3 normal = GetVertexNormal(meshFilter, neighbor);
-    //            //Vector3Int quantized = QuantizeNormal(normal, 100);
-
-    //            //if (!normalHistogram.ContainsKey(quantized))
-    //            //    normalHistogram[quantized] = 0;
-
-    //            //normalHistogram[quantized]++;
-    //            if (!normalCache.TryGetValue(neighbor, out Vector3 normal)) continue;
-    //            Vector3Int quantized = QuantizeNormal(normal, 100);
-    //            if (!normalHistogram.TryAdd(quantized, 1))
-    //                normalHistogram[quantized]++;
-    //        }
-
-    //        float entropy = 0f;
-    //        int total = neighbors.Count;
-
-    //        foreach (var count in normalHistogram.Values)
-    //        {
-    //            float p = (float)count / (total + 1e-6f);
-    //            entropy -= p * Mathf.Log(p + 1e-6f);
-    //        }
-
-    //        float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f);
-    //        float normalized = entropy / (maxEntropy + 1e-6f);
-    //        normalized = Mathf.Clamp01(normalized);
-
-    //        entropyMap[visibleVertices[i]] = normalized;
-    //    }
-    //    // 디버그 로그
-    //    //Debug.Log($"[Entropy Debug σ={sigma:F4}] Total: {visibleVertices.Count}, Zero: {zeroNeighborCount}, One: {oneNeighborCount}, ≤2: {twoOrLessNeighborCount}");
-    //    //if (allNeighborCounts.Count > 0)
-    //    //{
-    //    //    float avg = (float)allNeighborCounts.Average();
-    //    //    Debug.Log($"[Entropy Debug σ={sigma:F4}] 평균 neighbor 수: {avg:F2}, 최대: {allNeighborCounts.Max()}, 최소: {allNeighborCounts.Min()}");
-    //    //}
-
-    //    return entropyMap;
-    //}
+    public static Dictionary<Vector3, float> GroupSaliencyByRoundedPosition(Dictionary<Vector3, float> saliencyMap, int precision = 1000)
+    {
+        return saliencyMap
+            .GroupBy(kv => new Vector3(
+                Mathf.Round(kv.Key.x * precision) / precision,
+                Mathf.Round(kv.Key.y * precision) / precision,
+                Mathf.Round(kv.Key.z * precision) / precision))
+            .ToDictionary(g => g.Key, g => g.First().Value);
+    }
 
 
     //디버깅용 함수 (다른 mesh를 넣었는데 빨간점이 안나옴.)
