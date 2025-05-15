@@ -202,9 +202,11 @@ public class SaliencyMapVisualizer : MonoBehaviour
         Color[] colors = new Color[vertices.Length];
 
         var values = saliencyMap.Values.OrderBy(v => v).ToList();
-        float min = values[values.Count / 10];             // 하위 10% 컷
-        float max = values[values.Count * 18 / 20];         // 상위 90% 컷
+        //float min = values[values.Count / 10];             // 하위 10% 컷
+        //float max = values[values.Count * 18 / 20];         // 상위 90% 컷
 
+        float min = values.Min(); // 진짜 최소값
+        float max = values.Max(); // 진짜 최대값
         for (int i = 0; i < vertices.Length; i++)
         {
             Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
@@ -213,8 +215,9 @@ public class SaliencyMapVisualizer : MonoBehaviour
             if (saliencyMap.TryGetValue(nearest, out float saliency))
             {
                 float t = Mathf.Clamp01((saliency - min) / (max - min));
-                t = Mathf.Sqrt(t); // 밝은 영역 덜 침투하게
-                colors[i] = Color.Lerp(Color.blue, Color.red, t);
+                //t = Mathf.Sqrt(t); // 밝은 영역 덜 침투하게
+                //colors[i] = Color.Lerp(Color.blue, Color.red, t);
+                colors[i] = EvaluateTurboColormap(t);
             }
             else
             {
@@ -223,6 +226,31 @@ public class SaliencyMapVisualizer : MonoBehaviour
         }
 
         mesh.colors = colors;
+    }
+
+
+    private static readonly Color[] turboColors = new Color[]
+    {
+        new Color(0.18995f, 0.07176f, 0.23217f),
+        new Color(0.25107f, 0.25237f, 0.63302f),
+        new Color(0.27628f, 0.51281f, 0.83584f),
+        new Color(0.19806f, 0.75294f, 0.64386f),
+        new Color(0.31121f, 0.90487f, 0.38750f),
+        new Color(0.55814f, 0.96702f, 0.26579f),
+        new Color(0.83394f, 0.88904f, 0.17860f),
+        new Color(0.99314f, 0.69015f, 0.12952f),
+        new Color(0.98730f, 0.42773f, 0.14025f),
+        new Color(0.89427f, 0.12115f, 0.16104f)
+    };
+
+    private Color EvaluateTurboColormap(float t)
+    {
+        t = Mathf.Clamp01(t);// ensure in [0, 1]
+        float scaled = t * (turboColors.Length - 1);
+        int i = Mathf.Clamp(Mathf.FloorToInt(scaled), 0, turboColors.Length - 2); 
+        int j = i + 1;
+        float f = scaled - i;
+        return Color.Lerp(turboColors[i], turboColors[j], f);
     }
 }
 

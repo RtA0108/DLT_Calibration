@@ -21,7 +21,7 @@ public static class EntropySaliencyComputer
         Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
         //Vector3[] vertexArray = visibleVertices.ToArray();
         //float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
-        float[] sigmaScales = new float[] { 0.04f * l, 0.045f * l, 0.05f * l };
+        float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
         float sigma_max = sigmaScales.Max();
 
         // Cache normals for all world-space vertex positions
@@ -53,10 +53,13 @@ public static class EntropySaliencyComputer
 
                     //normalHistogram[quantizedNormal]++;
                     if (!normalCache.TryGetValue(neighbor, out Vector3 normal)) continue;
-                    Vector3Int quantizedNormal = QuantizeNormal(normal, 100);
+                    //Vector3Int quantizedNormal = QuantizeNormal(normal, 10); 
+                    Vector3Int quantizedNormal = SphericalQuantizeNormal(normal, 10);
                     if (!normalHistogram.TryAdd(quantizedNormal, 1))
                         normalHistogram[quantizedNormal]++;
                 }
+                if (neighbors.Count == 0 || normalHistogram.Count == 0)
+                    continue;
 
                 float entropy = 0f;
                 int totalNormals = neighbors.Count;
@@ -64,12 +67,19 @@ public static class EntropySaliencyComputer
                 foreach (var count in normalHistogram.Values)
                 {
                     float probability = (float)count / (totalNormals + 1e-6f);
-                    //if (probability > 0)
+                    if (probability > 0f && !float.IsNaN(probability))
                         entropy -= probability * Mathf.Log(probability + 1e-6f);
                 }
+                if (float.IsNaN(entropy) || float.IsInfinity(entropy))
+                    entropy = 0f;
+                //entropy = Mathf.Log(1f + entropy); 
                 float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f); // 개선된 정규화 기준
                 float normalized = entropy / (maxEntropy + 1e-6f);
-                normalized = Mathf.Pow(normalized, 0.7f); // 값 분포 완화
+                if (float.IsNaN(normalized) || float.IsInfinity(normalized))
+                {
+                    normalized = 0f;
+                }
+                normalized = Mathf.Pow(normalized, 2.0f); // 값 분포 완화
 
                 float saliency = Mathf.Clamp01(normalized);
                 float weight = 1.0f / sigma;
@@ -214,7 +224,19 @@ public static class EntropySaliencyComputer
 
         return Vector3.zero;
     }
+    // 개선된 Spherical Quantization 방식
+    private static Vector3Int SphericalQuantizeNormal(Vector3 normal, int resolution)
+    {
+        normal.Normalize();
+        float theta = Mathf.Acos(Mathf.Clamp(normal.y, -1f, 1f)); // elevation
+        float phi = Mathf.Atan2(normal.z, normal.x);              // azimuth
+        if (phi < 0f) phi += 2f * Mathf.PI;
 
+        int thetaIndex = Mathf.FloorToInt(theta / Mathf.PI * resolution);
+        int phiIndex = Mathf.FloorToInt(phi / (2f * Mathf.PI) * resolution);
+
+        return new Vector3Int(thetaIndex, phiIndex, 0);
+    }
     private static Vector3Int QuantizeNormal(Vector3 normal, int scale)
     {
         return new Vector3Int(
