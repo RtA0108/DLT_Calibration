@@ -132,13 +132,58 @@ public class SaliencyMapVisualizer : MonoBehaviour
 
         Debug.Log($"[SaliencyMapVisualizer] σ = multi-scale 기반 saliency 계산 시작 (l = {l:F4})");
 
+        //smooth 없앨수도?
         Dictionary<Vector3, float> saliencyMap = EntropySaliencyComputer.Compute(meshFilter, allVertexList, l);
+        saliencyMap = SaliencyUtils.SmoothSaliency(saliencyMap, meshFilter.mesh, meshFilter.transform, depth: 2);
 
         LogSaliencyStatistics(saliencyMap);
         ApplyVertexColors(meshFilter.mesh, saliencyMap);
 
+        //Dictionary<Vector3, float> rawSaliency = EntropySaliencyComputer.Compute(meshFilter, allVertexList, l);
+        //Dictionary<Vector3, float> normalized = EntropySaliencyComputer.NormalizeSaliencyMap(rawSaliency);
+
+        //LogSaliencyStatistics(normalized);
+        //ApplySaliencyWithPercentileColorMap(meshFilter.mesh, normalized);
+
+
         Debug.Log("[SaliencyMapVisualizer] 시각화 완료.");
         yield return null;
+    }
+    private void ApplySaliencyWithPercentileColorMap(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
+    {
+        Vector3[] vertices = mesh.vertices;
+        Color[] colors = new Color[vertices.Length];
+
+        var grouped = EntropySaliencyComputer.GroupSaliencyByRoundedPosition(saliencyMap, 1000);
+        var values = saliencyMap.Values.OrderBy(v => v).ToArray();
+
+        float GetPercentile(float value)
+        {
+            int index = System.Array.FindLastIndex(values, v => v <= value);
+            return (float)index / Mathf.Max(1, values.Length - 1);
+        }
+
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
+            Vector3 rounded = new Vector3(
+                Mathf.Round(worldPos.x * 1000f) / 1000f,
+                Mathf.Round(worldPos.y * 1000f) / 1000f,
+                Mathf.Round(worldPos.z * 1000f) / 1000f
+            );
+
+            if (grouped.TryGetValue(rounded, out float saliency))
+            {
+                float percentile = GetPercentile(saliency);
+                colors[i] = EvaluateTurboColormap(percentile);
+            }
+            else
+            {
+                colors[i] = Color.black;
+            }
+        }
+
+        mesh.colors = colors;
     }
 
     //private void ApplyVertexColorsWithStretch(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
@@ -180,7 +225,7 @@ public class SaliencyMapVisualizer : MonoBehaviour
         // 1. Normalize and group saliency
         var normalized = EntropySaliencyComputer.NormalizeSaliencyMap(saliencyMap);
         var grouped = EntropySaliencyComputer.GroupSaliencyByRoundedPosition(normalized, 1000); // 소수점 3자리까지 그룹핑
-
+        Dictionary<Vector3, float> saliencyConsistencyCheck = new();
         for (int i = 0; i < vertices.Length; i++)
         {
             Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
@@ -192,7 +237,19 @@ public class SaliencyMapVisualizer : MonoBehaviour
             );
             if (grouped.TryGetValue(rounded, out float saliency))
             {
-                colors[i] = EvaluateTurboColormap(saliency);
+                //colors[i] = EvaluateTurboColormap(saliency);
+                colors[i] = EvaluateTurboColormap(Mathf.Pow(saliency, 0.8f));
+                if (saliencyConsistencyCheck.TryGetValue(rounded, out float existing))
+                {
+                    if (Mathf.Abs(existing - saliency) > 1e-4f)
+                    {
+                        Debug.LogWarning($"[Mismatch] Same position {rounded} has inconsistent saliency: {existing:F5} vs {saliency:F5}");
+                    }
+                }
+                else
+                {
+                    saliencyConsistencyCheck[rounded] = saliency;
+                }
             }
             else
             {
@@ -201,7 +258,6 @@ public class SaliencyMapVisualizer : MonoBehaviour
         }
         mesh.colors = colors;
     }
-
     private static readonly Color[] turboColors = new Color[]
     {
         new Color(0.18995f, 0.07176f, 0.23217f),
@@ -218,13 +274,13 @@ public class SaliencyMapVisualizer : MonoBehaviour
 
     private Color EvaluateTurboColormap(float t)
     {
-        t = Mathf.Clamp01(t);// ensure in [0, 1]
+        t = Mathf.Clamp01(t);
         float scaled = t * (turboColors.Length - 1);
-        int i = Mathf.Clamp(Mathf.FloorToInt(scaled), 0, turboColors.Length - 2); 
-        int j = i + 1;
+        int i = Mathf.Clamp(Mathf.FloorToInt(scaled), 0, turboColors.Length - 2);
         float f = scaled - i;
-        return Color.Lerp(turboColors[i], turboColors[j], f);
+        return Color.Lerp(turboColors[i], turboColors[i + 1], f);
     }
+
 }
 
 //using System.Collections.Generic;

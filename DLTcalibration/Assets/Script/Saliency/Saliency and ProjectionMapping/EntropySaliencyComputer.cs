@@ -1,17 +1,24 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-
+using System.Diagnostics;
 public static class EntropySaliencyComputer
 {
     public static Dictionary<Vector3, float> Compute(MeshFilter meshFilter, List<Vector3> visibleVertices, float l)
     {
+        // Stopwatch 시작
+        Stopwatch sw = new Stopwatch();
+        sw.Start();
+
         Dictionary<Vector3, float> entropyMap = new Dictionary<Vector3, float>();
         float[] entropyValues = ComputeVertexEntropy(visibleVertices, l, meshFilter);
 
         for (int i = 0; i < visibleVertices.Count; i++)
             entropyMap[visibleVertices[i]] = entropyValues[i];
         //Debug.Log($"[EntropySaliencyComputer] EntropyMap Generated: {entropyMap.Count} entries for {visibleVertices.Count} visible vertices.");
+        sw.Stop(); // Stopwatch 정지
+        UnityEngine.Debug.Log($"[Profile] EntropySaliencyComputer.Compute: {sw.Elapsed.TotalSeconds:F2} seconds");
+
         return entropyMap;
     }
 
@@ -84,9 +91,14 @@ public static class EntropySaliencyComputer
         float[] entropyValues = new float[visibleVertices.Count];
         Mesh mesh = meshFilter.sharedMesh;
         Dictionary<int, HashSet<int>> adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
+
         Vector3[] worldPositions = mesh.vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
         Vector3[] normals = mesh.normals;
         float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
+
+        //추가: 위치 → index 리스트 캐시 생성
+        Dictionary<Vector3, List<int>> positionToIndicesMap = SaliencyUtils.GetOrBuildPositionToIndicesMap(mesh, meshFilter.transform);
+
 
         for (int i = 0; i < visibleVertices.Count; i++)
         {
@@ -96,16 +108,41 @@ public static class EntropySaliencyComputer
             float aggregatedEntropy = 0f;
             float totalWeight = 0f;
 
+            HashSet<int> topologyNeighbors = SaliencyUtils.FindTopologyNeighbors(vIndex, adjacency, 2, mesh, meshFilter.transform);
+
             foreach (float sigma in sigmaScales)
             {
-                HashSet<int> neighbors = SaliencyUtils.FindTopologyNeighbors(vIndex, adjacency, 1, mesh, meshFilter.transform);
+
+
+                // 추가: 거리 기반 필터링 (sigma 적용)
+                Vector3 center = worldPositions[vIndex];
+                HashSet<int> neighbors = topologyNeighbors
+                    //.Where(idx => Vector3.Distance(worldPositions[idx], center) <= sigma)
+                    .Where(idx => (worldPositions[idx] - center).sqrMagnitude <= sigma * sigma)
+                    .ToHashSet();
+
                 if (neighbors.Count == 0) continue;
 
                 Dictionary<Vector3Int, int> normalHistogram = new();
+
                 foreach (int ni in neighbors)
                 {
-                    Vector3 normal = normals[ni];
-                    Vector3Int quantized = SphericalQuantizeNormal(normal, 10);
+                    //Vector3 normal = normals[ni];
+
+                    Vector3 neighborWorldPos = worldPositions[ni];
+
+                    if (!positionToIndicesMap.TryGetValue(neighborWorldPos, out var indices)) continue;
+                    // index가 하나만 있으면 바로 normal을 사용하고, 여러 개면 평균을 구함
+                    Vector3 avgNormal = (indices.Count == 1) ? normals[indices[0]] : indices.Aggregate(Vector3.zero, (acc, idx) => acc + normals[idx]).normalized;
+                    //Vector3 avgNormal = Vector3.zero;
+                    //foreach (int idx in indices)
+                        //avgNormal += normals[idx];
+
+                    //avgNormal.Normalize();
+                    // 평균 normal에 TransformDirection 적용 (world space 보정)
+                    Vector3 transformed = meshFilter.transform.TransformDirection(avgNormal);
+
+                    Vector3Int quantized = SphericalQuantizeNormal(transformed, 20);
                     if (!normalHistogram.TryAdd(quantized, 1))
                         normalHistogram[quantized]++;
                 }
@@ -136,7 +173,7 @@ public static class EntropySaliencyComputer
                 totalWeight += weight;
             }
 
-            entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 0f;
+            entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 1e-3f;
         }
 
         return entropyValues;
@@ -181,11 +218,11 @@ public static class EntropySaliencyComputer
             else
             {
                 unmatched++;
-                Debug.LogWarning($"[Filtered Vertex Missing in EntropyMap] Pos={v}");
+                UnityEngine.Debug.LogWarning($"[Filtered Vertex Missing in EntropyMap] Pos={v}");
             }
         }
 
-        Debug.Log($"[Entropy Map Match Check] Matched: {matched}, Unmatched: {unmatched}, Total Filtered: {filteredVertices.Count}");
+        UnityEngine.Debug.Log($"[Entropy Map Match Check] Matched: {matched}, Unmatched: {unmatched}, Total Filtered: {filteredVertices.Count}");
     }
 
     private static Dictionary<Vector3, Vector3> BuildNormalCache(MeshFilter meshFilter)

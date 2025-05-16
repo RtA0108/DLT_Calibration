@@ -376,6 +376,57 @@ public static class SaliencyUtils
         _positionMapCache[mesh] = dict;
         return dict;
     }
+    //가시화를 위한 smoothing
+    public static Dictionary<Vector3, float> SmoothSaliency(Dictionary<Vector3, float> saliencyMap, Mesh mesh, Transform transform, int depth = 1, float weightSelf = 0.5f)
+    {
+        var adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
+        var positionMap = SaliencyUtils.GetOrBuildPositionToIndicesMap(mesh, transform);
+
+        Vector3[] worldPositions = mesh.vertices
+            .Select(v => transform.TransformPoint(v)).ToArray();
+
+        Dictionary<Vector3, float> smoothed = new();
+
+        foreach (var kvp in saliencyMap)
+        {
+            Vector3 center = kvp.Key;
+            float centerValue = kvp.Value;
+
+            if (!positionMap.TryGetValue(center, out var indices)) continue;
+
+            HashSet<int> fullNeighbors = new();
+            foreach (int idx in indices)
+            {
+                var neighbors = SaliencyUtils.FindTopologyNeighbors(idx, adjacency, depth, mesh, transform);
+                foreach (int n in neighbors)
+                    fullNeighbors.Add(n);
+            }
+
+            float sum = centerValue * weightSelf;
+            float totalWeight = weightSelf;
+
+            foreach (int ni in fullNeighbors)
+            {
+                Vector3 neighborPos = worldPositions[ni];
+                Vector3 rounded = new Vector3(
+                    Mathf.Round(neighborPos.x * 1000f) / 1000f,
+                    Mathf.Round(neighborPos.y * 1000f) / 1000f,
+                    Mathf.Round(neighborPos.z * 1000f) / 1000f
+                );
+
+                if (saliencyMap.TryGetValue(rounded, out float neighborVal))
+                {
+                    sum += neighborVal;
+                    totalWeight += 1f;
+                }
+            }
+
+            float avg = sum / totalWeight;
+            smoothed[center] = avg;
+        }
+
+        return smoothed;
+    }
 }
 //public static List<Vector3> FilterVerticesForCalibration(
 //    Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
