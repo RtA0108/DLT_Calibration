@@ -22,37 +22,73 @@ public static class EntropySaliencyComputer
         return entropyMap;
     }
 
+    //-------------------------------------------------------------------------------------multi sigma ver----------------------------------------------
     //private static float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l, MeshFilter meshFilter)
     //{
     //    float[] entropyValues = new float[visibleVertices.Count];
-    //    Vector3[] allMeshVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
 
+    //    List<int> neighborCounts = new List<int>();
+
+    //    Mesh mesh = meshFilter.sharedMesh;
+    //    //Dictionary<int, HashSet<int>> adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
+
+    //    Vector3[] worldPositions = mesh.vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
+    //    Vector3[] normals = mesh.normals;
     //    float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
-    //    float sigma_max = sigmaScales.Max();
 
-    //    Dictionary<Vector3, Vector3> normalCache = BuildNormalCache(meshFilter);
+    //    //추가: 위치 → index 리스트 캐시 생성
+    //    Dictionary<Vector3, List<int>> positionToIndicesMap = SaliencyUtils.GetOrBuildPositionToIndicesMap(mesh, meshFilter.transform);
+
+
     //    for (int i = 0; i < visibleVertices.Count; i++)
     //    {
     //        Vector3 vertex = visibleVertices[i];
-    //        List<Vector3> allNeighbors = GetNeighborsByEuclideanDistance(visibleVertices[i], sigma_max, allMeshVertices);
+    //        int vIndex = SaliencyUtils.FindNearestVertexIndex(vertex, worldPositions);
 
     //        float aggregatedEntropy = 0f;
     //        float totalWeight = 0f;
 
+    //        //HashSet<int> topologyNeighbors = SaliencyUtils.FindTopologyNeighbors(vIndex, adjacency, 2, mesh, meshFilter.transform);
+
     //        foreach (float sigma in sigmaScales)
     //        {
-    //            var neighbors = allNeighbors.Where(v => (v - vertex).sqrMagnitude <= sigma * sigma).ToList();
+    //            //UnityEngine.Debug.Log($"[σ] sigma = {sigma:F5}, l = {l:F5}");
+
+    //            // 추가: 거리 기반 필터링 (sigma 적용)
+    //            Vector3 center = worldPositions[vIndex];
+    //            //HashSet<int> neighbors = topologyNeighbors
+    //            ////.Where(idx => Vector3.Distance(worldPositions[idx], center) <= sigma)
+    //            //.Where(idx => (worldPositions[idx] - center).sqrMagnitude <= sigma * sigma)
+    //            //.ToHashSet();
+    //            HashSet<int> neighbors = SaliencyUtils.FindEuclideanNeighbors(worldPositions, vIndex, sigma);
+
+    //            neighborCounts.Add(neighbors.Count);
     //            if (neighbors.Count == 0) continue;
 
     //            Dictionary<Vector3Int, int> normalHistogram = new();
-    //            foreach (var neighbor in neighbors)
+
+    //            foreach (int ni in neighbors)
     //            {
-    //                if (!normalCache.TryGetValue(neighbor, out Vector3 normal)) continue;
-    //                //Vector3Int quantizedNormal = QuantizeNormal(normal, 10); 
-    //                Vector3Int quantizedNormal = SphericalQuantizeNormal(normal, 10);
-    //                if (!normalHistogram.TryAdd(quantizedNormal, 1))
-    //                    normalHistogram[quantizedNormal]++;
+    //                //Vector3 normal = normals[ni];
+
+    //                Vector3 neighborWorldPos = worldPositions[ni];
+
+    //                if (!positionToIndicesMap.TryGetValue(neighborWorldPos, out var indices)) continue;
+    //                // index가 하나만 있으면 바로 normal을 사용하고, 여러 개면 평균을 구함
+    //                Vector3 avgNormal = (indices.Count == 1) ? normals[indices[0]] : indices.Aggregate(Vector3.zero, (acc, idx) => acc + normals[idx]).normalized;
+    //                //Vector3 avgNormal = Vector3.zero;
+    //                //foreach (int idx in indices)
+    //                    //avgNormal += normals[idx];
+
+    //                //avgNormal.Normalize();
+    //                // 평균 normal에 TransformDirection 적용 (world space 보정)
+    //                Vector3 transformed = meshFilter.transform.TransformDirection(avgNormal);
+
+    //                Vector3Int quantized = SphericalQuantizeNormal(transformed, 10); // 10으로 할지 20으로 할지 미정
+    //                if (!normalHistogram.TryAdd(quantized, 1))
+    //                    normalHistogram[quantized]++;
     //            }
+
     //            if (normalHistogram.Count == 0) continue;
 
     //            float entropy = 0f;
@@ -60,47 +96,97 @@ public static class EntropySaliencyComputer
 
     //            foreach (var count in normalHistogram.Values)
     //            {
-    //                float probability = (float)count / (totalNormals + 1e-6f);
-    //                if (probability > 0f && !float.IsNaN(probability))
-    //                    entropy -= probability * Mathf.Log(probability + 1e-6f);
+    //                float p = (float)count / (totalNormals + 1e-6f);
+    //                if (p > 0f && !float.IsNaN(p))
+    //                    entropy -= p * Mathf.Log(p + 1e-6f);
     //            }
-    //            if (float.IsNaN(entropy) || float.IsInfinity(entropy))
-    //                entropy = 0f;
 
-    //            float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f); // 개선된 정규화 기준
+    //            if (float.IsNaN(entropy) || float.IsInfinity(entropy)) entropy = 0f;
+
+    //            float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f);
     //            float normalized = entropy / (maxEntropy + 1e-6f);
-
     //            if (float.IsNaN(normalized) || float.IsInfinity(normalized)) normalized = 0f;
-    //            if (float.IsNaN(normalized) || float.IsInfinity(normalized))
 
-    //            normalized = Mathf.Pow(normalized, 2.0f); // 값 분포 완화
+    //            normalized = Mathf.Pow(normalized, 2.0f);
     //            float saliency = Mathf.Clamp01(normalized);
     //            float weight = 1.0f / sigma;
 
     //            aggregatedEntropy += saliency * weight;
     //            totalWeight += weight;
     //        }
-    //        entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 0f;
-    //    }
 
+    //        entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 1e-3f;
+    //    }
+    //    if (neighborCounts.Count > 0)
+    //    {
+    //        int min = neighborCounts.Min();
+    //        int max = neighborCounts.Max();
+    //        float avg = (float)neighborCounts.Average();
+    //        int under10 = neighborCounts.Count(n => n < 10);
+    //        int under5 = neighborCounts.Count(n => n < 5);
+
+    //        UnityEngine.Debug.Log($"[Entropy Neighbor Stat] Total={neighborCounts.Count}, Min={min}, Max={max}, Avg={avg:F2}, <10={under10}, <5={under5}");
+    //    }
     //    return entropyValues;
     //}
-
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------
     private static float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l, MeshFilter meshFilter)
     {
         float[] entropyValues = new float[visibleVertices.Count];
-
         List<int> neighborCounts = new List<int>();
 
         Mesh mesh = meshFilter.sharedMesh;
-        Dictionary<int, HashSet<int>> adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
-
         Vector3[] worldPositions = mesh.vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
         Vector3[] normals = mesh.normals;
-        float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
+        float sigma = 0.05f * l;
 
-        //추가: 위치 → index 리스트 캐시 생성
+        //sigma, Threshold 보정 코드(parameter)
+
+        //float initialSigma = 0.07f * l;
+        //float sigmaMin = 0.03f * l;
+        //float sigmaMax = 0.15f * l;
+
+        //// 메시 크기에 따라 적절한 sigma를 선택하기 위한 후보값들
+        //float[] sigmaCandidates = new float[]
+        //{
+        //0.04f * l,
+        //0.05f * l,
+        //0.06f * l,
+        //0.07f * l,
+        //0.08f * l,
+        //0.09f * l
+        //};
+
+        // 메시 크기에 따라 neighbor threshold를 자동 설정
+        //int vertexCount = mesh.vertexCount;
+        //int minNeighborThreshold = Mathf.Max(10, vertexCount / 1000); // 예: 16000 → 16
+        //int maxNeighborThreshold = Mathf.Clamp(vertexCount / 100, 50, 600); // 예: 16000 → 160
+        //UnityEngine.Debug.Log($"Min: {minNeighborThreshold}, Max: {maxNeighborThreshold}");
+        //----------
+
         Dictionary<Vector3, List<int>> positionToIndicesMap = SaliencyUtils.GetOrBuildPositionToIndicesMap(mesh, meshFilter.transform);
+
+        // [1] 가장 적절한 sigma 하나를 먼저 선택
+        //float selectedSigma = sigmaCandidates[0];
+        //int bestCoverage = 0;
+        //foreach (float s in sigmaCandidates)
+        //{
+        //    int validCount = 0;
+        //    foreach (Vector3 vertex in visibleVertices)
+        //    {
+        //        int index = SaliencyUtils.FindNearestVertexIndex(vertex, worldPositions);
+        //        var neighbors = SaliencyUtils.FindEuclideanNeighbors(worldPositions, index, s);
+        //        if (neighbors.Count >= minNeighborThreshold && neighbors.Count <= maxNeighborThreshold)
+        //            validCount++;
+        //    }
+        //    if (validCount > bestCoverage)
+        //    {
+        //        bestCoverage = validCount;
+        //        selectedSigma = s;
+        //    }
+        //}
+        //float sigma = selectedSigma;
+        //UnityEngine.Debug.Log($"[Selected Sigma] σ = {selectedSigma:F5} (Coverage: {bestCoverage}/{visibleVertices.Count})");
 
 
         for (int i = 0; i < visibleVertices.Count; i++)
@@ -108,76 +194,89 @@ public static class EntropySaliencyComputer
             Vector3 vertex = visibleVertices[i];
             int vIndex = SaliencyUtils.FindNearestVertexIndex(vertex, worldPositions);
 
-            float aggregatedEntropy = 0f;
-            float totalWeight = 0f;
+            //sigma 보정을 안사용하면 지우기
+            //float sigma = initialSigma;
 
-            HashSet<int> topologyNeighbors = SaliencyUtils.FindTopologyNeighbors(vIndex, adjacency, 2, mesh, meshFilter.transform);
+            HashSet<int> neighbors = SaliencyUtils.FindEuclideanNeighbors(worldPositions, vIndex, sigma);
 
-            foreach (float sigma in sigmaScales)
+
+            // adaptive sigma 조정
+            //if (neighborCount < minNeighborThreshold && sigma < sigmaMax)
+            //{
+            //    sigma *= 1.5f;
+            //    neighbors = SaliencyUtils.FindEuclideanNeighbors(worldPositions, vIndex, sigma);
+            //    neighborCount = neighbors.Count;
+            //}
+            //else if (neighborCount > maxNeighborThreshold && sigma > sigmaMin)
+            //{
+            //    sigma *= 0.7f;
+            //    neighbors = SaliencyUtils.FindEuclideanNeighbors(worldPositions, vIndex, sigma);
+            //    neighborCount = neighbors.Count;
+            //}
+
+            //int attempt = 0;
+            //while ((neighbors.Count < minNeighborThreshold || neighbors.Count > maxNeighborThreshold) && attempt < 10)
+            //{
+            //    if (neighbors.Count < minNeighborThreshold && sigma < sigmaMax)
+            //        sigma *= 1.5f;
+            //    else if (neighbors.Count > maxNeighborThreshold && sigma > sigmaMin)
+            //        sigma *= 0.7f;
+
+            //    neighbors = SaliencyUtils.FindEuclideanNeighbors(worldPositions, vIndex, sigma);
+            //    attempt++;
+            //}
+
+            int neighborCount = neighbors.Count;
+            neighborCounts.Add(neighborCount);
+            if (neighbors.Count == 0)
             {
-                UnityEngine.Debug.Log($"[σ] sigma = {sigma:F5}, l = {l:F5}");
-
-                // 추가: 거리 기반 필터링 (sigma 적용)
-                Vector3 center = worldPositions[vIndex];
-                HashSet<int> neighbors = topologyNeighbors
-                    //.Where(idx => Vector3.Distance(worldPositions[idx], center) <= sigma)
-                    .Where(idx => (worldPositions[idx] - center).sqrMagnitude <= sigma * sigma)
-                    .ToHashSet();
-                neighborCounts.Add(neighbors.Count);
-                if (neighbors.Count == 0) continue;
-
-                Dictionary<Vector3Int, int> normalHistogram = new();
-
-                foreach (int ni in neighbors)
-                {
-                    //Vector3 normal = normals[ni];
-
-                    Vector3 neighborWorldPos = worldPositions[ni];
-
-                    if (!positionToIndicesMap.TryGetValue(neighborWorldPos, out var indices)) continue;
-                    // index가 하나만 있으면 바로 normal을 사용하고, 여러 개면 평균을 구함
-                    Vector3 avgNormal = (indices.Count == 1) ? normals[indices[0]] : indices.Aggregate(Vector3.zero, (acc, idx) => acc + normals[idx]).normalized;
-                    //Vector3 avgNormal = Vector3.zero;
-                    //foreach (int idx in indices)
-                        //avgNormal += normals[idx];
-
-                    //avgNormal.Normalize();
-                    // 평균 normal에 TransformDirection 적용 (world space 보정)
-                    Vector3 transformed = meshFilter.transform.TransformDirection(avgNormal);
-
-                    Vector3Int quantized = SphericalQuantizeNormal(transformed, 20);
-                    if (!normalHistogram.TryAdd(quantized, 1))
-                        normalHistogram[quantized]++;
-                }
-
-                if (normalHistogram.Count == 0) continue;
-
-                float entropy = 0f;
-                int totalNormals = neighbors.Count;
-
-                foreach (var count in normalHistogram.Values)
-                {
-                    float p = (float)count / (totalNormals + 1e-6f);
-                    if (p > 0f && !float.IsNaN(p))
-                        entropy -= p * Mathf.Log(p + 1e-6f);
-                }
-
-                if (float.IsNaN(entropy) || float.IsInfinity(entropy)) entropy = 0f;
-
-                float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f);
-                float normalized = entropy / (maxEntropy + 1e-6f);
-                if (float.IsNaN(normalized) || float.IsInfinity(normalized)) normalized = 0f;
-
-                normalized = Mathf.Pow(normalized, 2.0f);
-                float saliency = Mathf.Clamp01(normalized);
-                float weight = 1.0f / sigma;
-
-                aggregatedEntropy += saliency * weight;
-                totalWeight += weight;
+                entropyValues[i] = 1e-3f;
+                continue;
             }
 
-            entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 1e-3f;
+            Dictionary<Vector3Int, int> normalHistogram = new();
+
+            foreach (int ni in neighbors)
+            {
+                Vector3 neighborWorldPos = worldPositions[ni];
+                if (!positionToIndicesMap.TryGetValue(neighborWorldPos, out var indices)) continue;
+
+                Vector3 avgNormal = (indices.Count == 1) ? normals[indices[0]] : indices.Aggregate(Vector3.zero, (acc, idx) => acc + normals[idx]).normalized;
+                Vector3 transformed = meshFilter.transform.TransformDirection(avgNormal);
+
+                Vector3Int quantized = SphericalQuantizeNormal(transformed, 10); // 정규화된 분포가 과하지 않게
+                if (!normalHistogram.TryAdd(quantized, 1))
+                    normalHistogram[quantized]++;
+            }
+
+            if (normalHistogram.Count == 0)
+            {
+                entropyValues[i] = 1e-3f;
+                continue;
+            }
+
+            float entropy = 0f;
+            int totalNormals = neighbors.Count;
+
+            foreach (var count in normalHistogram.Values)
+            {
+                float p = (float)count / (totalNormals + 1e-6f);
+                if (p > 0f && !float.IsNaN(p))
+                    entropy -= p * Mathf.Log(p + 1e-6f);
+            }
+
+            if (float.IsNaN(entropy) || float.IsInfinity(entropy)) entropy = 0f;
+
+            float maxEntropy = Mathf.Log(normalHistogram.Keys.Count + 1e-6f);
+            float normalized = entropy / (maxEntropy + 1e-6f);
+            if (float.IsNaN(normalized) || float.IsInfinity(normalized)) normalized = 0f;
+
+            normalized = Mathf.Pow(normalized, 2.0f);
+            float saliency = Mathf.Clamp01(normalized);
+
+            entropyValues[i] = saliency;
         }
+
         if (neighborCounts.Count > 0)
         {
             int min = neighborCounts.Min();
@@ -188,9 +287,9 @@ public static class EntropySaliencyComputer
 
             UnityEngine.Debug.Log($"[Entropy Neighbor Stat] Total={neighborCounts.Count}, Min={min}, Max={max}, Avg={avg:F2}, <10={under10}, <5={under5}");
         }
+
         return entropyValues;
     }
-
     public static Dictionary<Vector3, float> NormalizeSaliencyMap(Dictionary<Vector3, float> saliencyMap)
     {
         Dictionary<Vector3, float> normalized = new();

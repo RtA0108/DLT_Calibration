@@ -255,20 +255,94 @@ public static class SaliencyUtils
 
     //----------------------------------neighbor 탐색 수정 중-----------------------------------------------
 
-
-    private static Dictionary<Mesh, Dictionary<int, HashSet<int>>> _adjacencyCache = new();
-    private static Dictionary<Mesh, Dictionary<Vector3, List<int>>> _positionMapCache = new();
-
-    public static Dictionary<int, HashSet<int>> GetOrBuildAdjacency(Mesh mesh)
+    /// <summary>
+    /// Topology 기반의 이웃 탐색 (depth 제한)
+    /// </summary>
+    public static HashSet<int> FindTopologyNeighbors(int startIndex, Dictionary<int, HashSet<int>> adjacency, int maxDepth)
     {
-        if (_adjacencyCache.TryGetValue(mesh, out var cached))
-            return cached;
+        Queue<(int index, int depth)> queue = new();
+        HashSet<int> visited = new() { startIndex };
+        queue.Enqueue((startIndex, 0));
 
-        var built = BuildAdjacency(mesh);
-        _adjacencyCache[mesh] = built;
-        return built;
+        while (queue.Count > 0)
+        {
+            var (current, depth) = queue.Dequeue();
+            if (depth >= maxDepth) continue;
+
+            if (adjacency.TryGetValue(current, out var neighbors))
+            {
+                foreach (int neighbor in neighbors)
+                {
+                    if (visited.Add(neighbor))
+                        queue.Enqueue((neighbor, depth + 1));
+                }
+            }
+        }
+
+        visited.Remove(startIndex);
+        return visited;
     }
 
+    /// <summary>
+    /// Euclidean 거리 기반 이웃 탐색 (반경 내 정점 반환)
+    /// </summary>
+    public static HashSet<int> FindEuclideanNeighbors(Vector3[] worldPositions, int centerIndex, float radius)
+    {
+        HashSet<int> neighbors = new();
+        Vector3 center = worldPositions[centerIndex];
+        float rSqr = radius * radius;
+
+        for (int i = 0; i < worldPositions.Length; i++)
+        {
+            if (i == centerIndex) continue;
+            if ((worldPositions[i] - center).sqrMagnitude <= rSqr)
+                neighbors.Add(i);
+        }
+        return neighbors;
+    }
+
+    /// <summary>
+    /// Geodesic 기반 이웃 탐색 (Dijkstra 방식, 거리 제한)
+    /// </summary>
+    public static HashSet<int> FindGeodesicNeighbors(int startIndex, Mesh mesh, Transform transform, float maxDistance)
+    {
+        Vector3[] vertices = mesh.vertices;
+        Dictionary<int, HashSet<int>> adjacency = BuildAdjacency(mesh);
+        Vector3[] worldPositions = vertices.Select(v => transform.TransformPoint(v)).ToArray();
+
+        HashSet<int> result = new();
+        Dictionary<int, float> dist = new() { [startIndex] = 0f };
+        PriorityQueue<int> queue = new();
+        queue.Enqueue(startIndex, 0f);
+
+        while (queue.Count > 0)
+        {
+            int current = queue.Dequeue();
+            float currentDist = dist[current];
+
+            if (current != startIndex)
+                result.Add(current);
+
+            if (adjacency.TryGetValue(current, out var neighbors))
+            {
+                foreach (int neighbor in neighbors)
+                {
+                    float edgeLength = (worldPositions[current] - worldPositions[neighbor]).magnitude;
+                    float newDist = currentDist + edgeLength;
+
+                    if (newDist <= maxDistance && (!dist.ContainsKey(neighbor) || newDist < dist[neighbor]))
+                    {
+                        dist[neighbor] = newDist;
+                        queue.Enqueue(neighbor, newDist);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // 기존 adjacency 생성 함수 그대로 유지
     public static Dictionary<int, HashSet<int>> BuildAdjacency(Mesh mesh)
     {
         var adjacency = new Dictionary<int, HashSet<int>>();
@@ -283,7 +357,6 @@ public static class SaliencyUtils
             AddEdge(adjacency, v1, v2);
             AddEdge(adjacency, v2, v0);
         }
-
         return adjacency;
     }
 
@@ -294,6 +367,50 @@ public static class SaliencyUtils
         adj[a].Add(b);
         adj[b].Add(a);
     }
+
+
+
+
+    //기존에 수정중이던 neighbor 탐색 방법들 (사용 여부 확인 예정)
+
+    private static Dictionary<Mesh, Dictionary<int, HashSet<int>>> _adjacencyCache = new();
+    private static Dictionary<Mesh, Dictionary<Vector3, List<int>>> _positionMapCache = new();
+
+    public static Dictionary<int, HashSet<int>> GetOrBuildAdjacency(Mesh mesh)
+    {
+        if (_adjacencyCache.TryGetValue(mesh, out var cached))
+            return cached;
+
+        var built = BuildAdjacency(mesh);
+        _adjacencyCache[mesh] = built;
+        return built;
+    }
+
+    //public static Dictionary<int, HashSet<int>> BuildAdjacency(Mesh mesh)
+    //{
+    //    var adjacency = new Dictionary<int, HashSet<int>>();
+    //    int[] triangles = mesh.triangles;
+
+    //    for (int i = 0; i < triangles.Length; i += 3)
+    //    {
+    //        int v0 = triangles[i];
+    //        int v1 = triangles[i + 1];
+    //        int v2 = triangles[i + 2];
+    //        AddEdge(adjacency, v0, v1);
+    //        AddEdge(adjacency, v1, v2);
+    //        AddEdge(adjacency, v2, v0);
+    //    }
+
+    //    return adjacency;
+    //}
+
+    //private static void AddEdge(Dictionary<int, HashSet<int>> adj, int a, int b)
+    //{
+    //    if (!adj.ContainsKey(a)) adj[a] = new HashSet<int>();
+    //    if (!adj.ContainsKey(b)) adj[b] = new HashSet<int>();
+    //    adj[a].Add(b);
+    //    adj[b].Add(a);
+    //}
 
     /// <summary>
     /// 중복 위치를 가진 vertex index들을 포함하여 topology neighbor 확장 (depth 제한 적용)
@@ -376,6 +493,7 @@ public static class SaliencyUtils
         _positionMapCache[mesh] = dict;
         return dict;
     }
+
     //가시화를 위한 smoothing
     public static Dictionary<Vector3, float> SmoothSaliency(Dictionary<Vector3, float> saliencyMap, Mesh mesh, Transform transform, int depth = 1, float weightSelf = 0.5f)
     {
@@ -427,7 +545,34 @@ public static class SaliencyUtils
 
         return smoothed;
     }
+
 }
+public class PriorityQueue<T>
+{
+    private readonly SortedDictionary<float, Queue<T>> _dict = new();
+
+    public void Enqueue(T item, float priority)
+    {
+        if (!_dict.TryGetValue(priority, out var queue))
+        {
+            queue = new Queue<T>();
+            _dict[priority] = queue;
+        }
+        queue.Enqueue(item);
+    }
+
+    public T Dequeue()
+    {
+        var first = _dict.First();
+        var item = first.Value.Dequeue();
+        if (first.Value.Count == 0)
+            _dict.Remove(first.Key);
+        return item;
+    }
+
+    public int Count => _dict.Sum(p => p.Value.Count);
+}
+
 //public static List<Vector3> FilterVerticesForCalibration(
 //    Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
 //    float sigma,

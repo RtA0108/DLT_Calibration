@@ -125,16 +125,17 @@ public class SaliencyMapVisualizer : MonoBehaviour
 
         Vector3[] allVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
         List<Vector3> allVertexList = new List<Vector3>(allVertices);
-
         Bounds bounds = meshFilter.mesh.bounds;
-        Vector3 scaled = Vector3.Scale(bounds.size, meshFilter.transform.lossyScale);
-        float l = scaled.magnitude;
+        Vector3 scale = meshFilter.transform.lossyScale;
+        Vector3 scaledMin = Vector3.Scale(bounds.min, scale);
+        Vector3 scaledMax = Vector3.Scale(bounds.max, scale);
+        float l = Vector3.Distance(scaledMin, scaledMax);
 
         Debug.Log($"[SaliencyMapVisualizer] σ = multi-scale 기반 saliency 계산 시작 (l = {l:F4})");
 
         //smooth 없앨수도?
         Dictionary<Vector3, float> saliencyMap = EntropySaliencyComputer.Compute(meshFilter, allVertexList, l);
-        saliencyMap = SaliencyUtils.SmoothSaliency(saliencyMap, meshFilter.mesh, meshFilter.transform, depth: 2);
+        //saliencyMap = SaliencyUtils.SmoothSaliency(saliencyMap, meshFilter.mesh, meshFilter.transform, depth: 2);
 
         LogSaliencyStatistics(saliencyMap);
         ApplyVertexColors(meshFilter.mesh, saliencyMap);
