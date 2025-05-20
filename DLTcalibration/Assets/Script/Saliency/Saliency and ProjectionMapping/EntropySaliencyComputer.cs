@@ -89,12 +89,15 @@ public static class EntropySaliencyComputer
     private static float[] ComputeVertexEntropy(List<Vector3> visibleVertices, float l, MeshFilter meshFilter)
     {
         float[] entropyValues = new float[visibleVertices.Count];
+
+        List<int> neighborCounts = new List<int>();
+
         Mesh mesh = meshFilter.sharedMesh;
         Dictionary<int, HashSet<int>> adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
 
         Vector3[] worldPositions = mesh.vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
         Vector3[] normals = mesh.normals;
-        float[] sigmaScales = new float[] { 0.07f * l, 0.075f * l, 0.08f * l };
+        float[] sigmaScales = new float[] { 0.05f * l, 0.1f * l, 0.2f * l };
 
         //추가: 위치 → index 리스트 캐시 생성
         Dictionary<Vector3, List<int>> positionToIndicesMap = SaliencyUtils.GetOrBuildPositionToIndicesMap(mesh, meshFilter.transform);
@@ -112,7 +115,7 @@ public static class EntropySaliencyComputer
 
             foreach (float sigma in sigmaScales)
             {
-
+                UnityEngine.Debug.Log($"[σ] sigma = {sigma:F5}, l = {l:F5}");
 
                 // 추가: 거리 기반 필터링 (sigma 적용)
                 Vector3 center = worldPositions[vIndex];
@@ -120,7 +123,7 @@ public static class EntropySaliencyComputer
                     //.Where(idx => Vector3.Distance(worldPositions[idx], center) <= sigma)
                     .Where(idx => (worldPositions[idx] - center).sqrMagnitude <= sigma * sigma)
                     .ToHashSet();
-
+                neighborCounts.Add(neighbors.Count);
                 if (neighbors.Count == 0) continue;
 
                 Dictionary<Vector3Int, int> normalHistogram = new();
@@ -175,7 +178,16 @@ public static class EntropySaliencyComputer
 
             entropyValues[i] = (totalWeight > 0f) ? aggregatedEntropy / totalWeight : 1e-3f;
         }
+        if (neighborCounts.Count > 0)
+        {
+            int min = neighborCounts.Min();
+            int max = neighborCounts.Max();
+            float avg = (float)neighborCounts.Average();
+            int under10 = neighborCounts.Count(n => n < 10);
+            int under5 = neighborCounts.Count(n => n < 5);
 
+            UnityEngine.Debug.Log($"[Entropy Neighbor Stat] Total={neighborCounts.Count}, Min={min}, Max={max}, Avg={avg:F2}, <10={under10}, <5={under5}");
+        }
         return entropyValues;
     }
 
