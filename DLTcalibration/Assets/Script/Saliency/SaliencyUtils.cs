@@ -223,22 +223,8 @@ public static class SaliencyUtils
             .Select(g => g.First())
             .ToArray();
     }
-    //기존 이웃 탐지 방식 -> 거리 기반이라 걍 쓰레기
-    private static List<Vector3> GetNeighborsByEuclideanDistance(Vector3 position, float sigma, Vector3[] vertices)
-    {
-        List<Vector3> neighbors = new List<Vector3>();
-        float sigmaSquared = sigma * sigma; // 거리 계산을 제곱 비교로 최적화
-
-        foreach (Vector3 vertex in vertices)
-        {
-            float distSqr = (position - vertex).sqrMagnitude; // 거리 제곱값 계산
-            if (distSqr > 0f && distSqr <= sigmaSquared)
-                neighbors.Add(vertex);
-        }
-
-        return neighbors;
-    }
-    // 이건 어디에 사용중?
+   
+    // 필터에서 사용중
     private static Vector3 GetVertexNormal(MeshFilter meshFilter, Vector3 vertexPosition)
     {
         Vector3[] positions = meshFilter.mesh.vertices;
@@ -256,12 +242,12 @@ public static class SaliencyUtils
     //----------------------------------neighbor 탐색 수정 중-----------------------------------------------
 
     /// <summary>
-    /// Topology 기반의 이웃 탐색 (depth 제한)
+    /// 중복 위치를 가진 vertex index들을 포함하여 topology neighbor 확장 (depth 제한 적용)
     /// </summary>
-    public static HashSet<int> FindTopologyNeighbors(int startIndex, Dictionary<int, HashSet<int>> adjacency, int maxDepth)
+    public static HashSet<int> FindTopologyNeighbors(int startIndex, Dictionary<int, HashSet<int>> adjacency, int maxDepth, Mesh mesh, Transform transform)
     {
-        Queue<(int index, int depth)> queue = new();
-        HashSet<int> visited = new() { startIndex };
+        Queue<(int, int)> queue = new Queue<(int, int)>();
+        HashSet<int> visited = new HashSet<int> { startIndex };
         queue.Enqueue((startIndex, 0));
 
         while (queue.Count > 0)
@@ -269,19 +255,30 @@ public static class SaliencyUtils
             var (current, depth) = queue.Dequeue();
             if (depth >= maxDepth) continue;
 
-            if (adjacency.TryGetValue(current, out var neighbors))
+            foreach (int neighbor in adjacency[current])
             {
-                foreach (int neighbor in neighbors)
-                {
-                    if (visited.Add(neighbor))
-                        queue.Enqueue((neighbor, depth + 1));
-                }
+                if (visited.Add(neighbor))
+                    queue.Enqueue((neighbor, depth + 1));
             }
         }
 
-        visited.Remove(startIndex);
-        return visited;
+        // 중복 위치 정점 보정 포함
+        Dictionary<Vector3, List<int>> positionMap = GetOrBuildPositionToIndicesMap(mesh, transform);
+        HashSet<int> expanded = new HashSet<int>(visited);
+        foreach (int idx in visited)
+        {
+            Vector3 wp = transform.TransformPoint(mesh.vertices[idx]);
+            if (positionMap.TryGetValue(wp, out var dupList))
+            {
+                foreach (var dupIdx in dupList)
+                    expanded.Add(dupIdx);
+            }
+        }
+
+        expanded.Remove(startIndex);
+        return expanded;
     }
+
 
     /// <summary>
     /// Euclidean 거리 기반 이웃 탐색 (반경 내 정점 반환)
@@ -302,7 +299,7 @@ public static class SaliencyUtils
     }
 
     /// <summary>
-    /// Geodesic 기반 이웃 탐색 (Dijkstra 방식, 거리 제한)
+    /// Geodesic 기반 이웃 탐색 (Dijkstra 방식, 거리 제한) -> 아직은 미사용
     /// </summary>
     public static HashSet<int> FindGeodesicNeighbors(int startIndex, Mesh mesh, Transform transform, float maxDistance)
     {
@@ -386,69 +383,7 @@ public static class SaliencyUtils
         return built;
     }
 
-    //public static Dictionary<int, HashSet<int>> BuildAdjacency(Mesh mesh)
-    //{
-    //    var adjacency = new Dictionary<int, HashSet<int>>();
-    //    int[] triangles = mesh.triangles;
-
-    //    for (int i = 0; i < triangles.Length; i += 3)
-    //    {
-    //        int v0 = triangles[i];
-    //        int v1 = triangles[i + 1];
-    //        int v2 = triangles[i + 2];
-    //        AddEdge(adjacency, v0, v1);
-    //        AddEdge(adjacency, v1, v2);
-    //        AddEdge(adjacency, v2, v0);
-    //    }
-
-    //    return adjacency;
-    //}
-
-    //private static void AddEdge(Dictionary<int, HashSet<int>> adj, int a, int b)
-    //{
-    //    if (!adj.ContainsKey(a)) adj[a] = new HashSet<int>();
-    //    if (!adj.ContainsKey(b)) adj[b] = new HashSet<int>();
-    //    adj[a].Add(b);
-    //    adj[b].Add(a);
-    //}
-
-    /// <summary>
-    /// 중복 위치를 가진 vertex index들을 포함하여 topology neighbor 확장 (depth 제한 적용)
-    /// </summary>
-    public static HashSet<int> FindTopologyNeighbors(int startIndex, Dictionary<int, HashSet<int>> adjacency, int maxDepth, Mesh mesh, Transform transform)
-    {
-        Queue<(int, int)> queue = new Queue<(int, int)>();
-        HashSet<int> visited = new HashSet<int> { startIndex };
-        queue.Enqueue((startIndex, 0));
-
-        while (queue.Count > 0)
-        {
-            var (current, depth) = queue.Dequeue();
-            if (depth >= maxDepth) continue;
-
-            foreach (int neighbor in adjacency[current])
-            {
-                if (visited.Add(neighbor))
-                    queue.Enqueue((neighbor, depth + 1));
-            }
-        }
-
-        // 중복 위치 정점 보정 포함
-        Dictionary<Vector3, List<int>> positionMap = GetOrBuildPositionToIndicesMap(mesh, transform);
-        HashSet<int> expanded = new HashSet<int>(visited);
-        foreach (int idx in visited)
-        {
-            Vector3 wp = transform.TransformPoint(mesh.vertices[idx]);
-            if (positionMap.TryGetValue(wp, out var dupList))
-            {
-                foreach (var dupIdx in dupList)
-                    expanded.Add(dupIdx);
-            }
-        }
-
-        expanded.Remove(startIndex);
-        return expanded;
-    }
+   
 
     /// <summary>
     /// worldPos에 가장 가까운 정점 index 반환
@@ -493,59 +428,28 @@ public static class SaliencyUtils
         _positionMapCache[mesh] = dict;
         return dict;
     }
-
-    //가시화를 위한 smoothing
-    public static Dictionary<Vector3, float> SmoothSaliency(Dictionary<Vector3, float> saliencyMap, Mesh mesh, Transform transform, int depth = 1, float weightSelf = 0.5f)
+    public static Dictionary<Vector3, float> NormalizeSaliencyMap(Dictionary<Vector3, float> saliencyMap)
     {
-        var adjacency = SaliencyUtils.GetOrBuildAdjacency(mesh);
-        var positionMap = SaliencyUtils.GetOrBuildPositionToIndicesMap(mesh, transform);
-
-        Vector3[] worldPositions = mesh.vertices
-            .Select(v => transform.TransformPoint(v)).ToArray();
-
-        Dictionary<Vector3, float> smoothed = new();
-
-        foreach (var kvp in saliencyMap)
+        Dictionary<Vector3, float> normalized = new();
+        float min = saliencyMap.Values.Min();
+        float max = saliencyMap.Values.Max();
+        foreach (var kv in saliencyMap)
         {
-            Vector3 center = kvp.Key;
-            float centerValue = kvp.Value;
-
-            if (!positionMap.TryGetValue(center, out var indices)) continue;
-
-            HashSet<int> fullNeighbors = new();
-            foreach (int idx in indices)
-            {
-                var neighbors = SaliencyUtils.FindTopologyNeighbors(idx, adjacency, depth, mesh, transform);
-                foreach (int n in neighbors)
-                    fullNeighbors.Add(n);
-            }
-
-            float sum = centerValue * weightSelf;
-            float totalWeight = weightSelf;
-
-            foreach (int ni in fullNeighbors)
-            {
-                Vector3 neighborPos = worldPositions[ni];
-                Vector3 rounded = new Vector3(
-                    Mathf.Round(neighborPos.x * 1000f) / 1000f,
-                    Mathf.Round(neighborPos.y * 1000f) / 1000f,
-                    Mathf.Round(neighborPos.z * 1000f) / 1000f
-                );
-
-                if (saliencyMap.TryGetValue(rounded, out float neighborVal))
-                {
-                    sum += neighborVal;
-                    totalWeight += 1f;
-                }
-            }
-
-            float avg = sum / totalWeight;
-            smoothed[center] = avg;
+            float t = Mathf.Clamp01((kv.Value - min) / (max - min));
+            normalized[kv.Key] = t;
         }
-
-        return smoothed;
+        return normalized;
     }
 
+    public static Dictionary<Vector3, float> GroupSaliencyByRoundedPosition(Dictionary<Vector3, float> saliencyMap, int precision = 1000)
+    {
+        return saliencyMap
+            .GroupBy(kv => new Vector3(
+                Mathf.Round(kv.Key.x * precision) / precision,
+                Mathf.Round(kv.Key.y * precision) / precision,
+                Mathf.Round(kv.Key.z * precision) / precision))
+            .ToDictionary(g => g.Key, g => g.First().Value);
+    }
 }
 public class PriorityQueue<T>
 {

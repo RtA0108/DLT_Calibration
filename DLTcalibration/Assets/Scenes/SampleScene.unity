@@ -200,6 +200,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
+  saliencyMode: 0
 --- !u!114 &191060647
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -404,6 +405,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
+  saliencyMode: 0
 --- !u!4 &216437378 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 1360333739a15394db381ce0d9b764af,
@@ -868,6 +870,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
+  saliencyMode: 1
 --- !u!4 &606410057 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 281f5836f0d54084bb78b941ba86cacc,
@@ -1430,7 +1433,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
@@ -1533,7 +1536,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
@@ -1808,6 +1811,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
+  saliencyMode: 1
 --- !u!114 &1687685521
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1934,6 +1938,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
+  saliencyMode: 1
 --- !u!114 &1813008719
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2461,6 +2466,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
+  saliencyMode: 0
 --- !u!4 &2105277079 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 7d35611d4d9a9e343a86c7048b3199f8,

@@ -3,12 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+//public enum SaliencyMode { Entropy, Curvature }
+
 public class SaliencyMapVisualizer : MonoBehaviour
 {
     public MeshFilter meshFilter;
     public Camera mainCamera;
     public LayerMask visibilityLayerMask;
     public bool runOnStart = true;
+    public SaliencyMode saliencyMode = SaliencyMode.Entropy;
     Material[] originalMaterials;
 
     private void Start()
@@ -88,7 +91,7 @@ public class SaliencyMapVisualizer : MonoBehaviour
         Material[] materials = Enumerable.Repeat(material, slotCount).ToArray();
         renderer.materials = materials;
 
-        Debug.Log("[SaliencyMapVisualizer] 런타임에 VertexColorLitS 셰이더 적용 완료");
+        //Debug.Log("[SaliencyMapVisualizer] 런타임에 VertexColorLitS 셰이더 적용 완료");
 
         // 디버깅: vertex color 존재 여부 확인
         var mesh = meshFilter.sharedMesh;
@@ -96,22 +99,14 @@ public class SaliencyMapVisualizer : MonoBehaviour
         Debug.Log($"[VC Check] VertexCount: {mesh.vertexCount}, ColorCount: {colorCount}, VC 존재 여부: {(colorCount > 0 ? "있음" : "없음")}");
 
         // vertex color가 없으면 임의 색상이라도 채워야 셰이더가 동작함
+
         if (colorCount == 0)
         {
             Color[] colors = new Color[mesh.vertexCount];
             for (int i = 0; i < colors.Length; i++)
-            {
-                colors[i] = Color.gray; // 또는 테스트용 단색
-            }
+                colors[i] = Color.gray;
             mesh.colors = colors;
             Debug.Log("[SaliencyMapVisualizer] vertex color가 비어있어 기본 회색으로 채움");
-        }
-        else if (colorCount > 0)
-        {
-            var distinctColors = mesh.colors.Distinct().ToList();
-            Debug.Log($"[VC Check] Color Count: {colorCount}, Distinct Colors: {distinctColors.Count}");
-            foreach (var c in distinctColors)
-                Debug.Log($"[VC Sample] {c}");
         }
     }
 
@@ -133,100 +128,34 @@ public class SaliencyMapVisualizer : MonoBehaviour
 
         Debug.Log($"[SaliencyMapVisualizer] σ = multi-scale 기반 saliency 계산 시작 (l = {l:F4})");
 
-        //smooth 없앨수도?
-        Dictionary<Vector3, float> saliencyMap = EntropySaliencyComputer.Compute(meshFilter, allVertexList, l);
-        //saliencyMap = SaliencyUtils.SmoothSaliency(saliencyMap, meshFilter.mesh, meshFilter.transform, depth: 2);
+        Dictionary<Vector3, float> saliencyMap = saliencyMode switch
+        {
+            SaliencyMode.Entropy => EntropySaliencyComputer.Compute(meshFilter, allVertexList, l),
+            SaliencyMode.Curvature => MeshSaliencyComputer.Compute(meshFilter, allVertexList, l),
+            _ => throw new System.Exception("Unknown saliency mode")
+        };
 
-        LogSaliencyStatistics(saliencyMap);
-        ApplyVertexColors(meshFilter.mesh, saliencyMap);
+        var normalized = SaliencyUtils.NormalizeSaliencyMap(saliencyMap);
+        var grouped = SaliencyUtils.GroupSaliencyByRoundedPosition(normalized, 1000); // 소수점 3자리까지 그룹핑
 
-        //Dictionary<Vector3, float> rawSaliency = EntropySaliencyComputer.Compute(meshFilter, allVertexList, l);
-        //Dictionary<Vector3, float> normalized = EntropySaliencyComputer.NormalizeSaliencyMap(rawSaliency);
-
-        //LogSaliencyStatistics(normalized);
-        //ApplySaliencyWithPercentileColorMap(meshFilter.mesh, normalized);
+        LogSaliencyStatistics(grouped);
+        ApplyVertexColors(meshFilter.mesh, grouped);
 
 
         Debug.Log("[SaliencyMapVisualizer] 시각화 완료.");
         yield return null;
     }
-    private void ApplySaliencyWithPercentileColorMap(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
+    private void ApplyVertexColors(Mesh mesh, Dictionary<Vector3, float> groupedSaliency)
     {
         Vector3[] vertices = mesh.vertices;
         Color[] colors = new Color[vertices.Length];
-
-        var grouped = EntropySaliencyComputer.GroupSaliencyByRoundedPosition(saliencyMap, 1000);
-        var values = saliencyMap.Values.OrderBy(v => v).ToArray();
-
-        float GetPercentile(float value)
-        {
-            int index = System.Array.FindLastIndex(values, v => v <= value);
-            return (float)index / Mathf.Max(1, values.Length - 1);
-        }
-
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
-            Vector3 rounded = new Vector3(
-                Mathf.Round(worldPos.x * 1000f) / 1000f,
-                Mathf.Round(worldPos.y * 1000f) / 1000f,
-                Mathf.Round(worldPos.z * 1000f) / 1000f
-            );
-
-            if (grouped.TryGetValue(rounded, out float saliency))
-            {
-                float percentile = GetPercentile(saliency);
-                colors[i] = EvaluateTurboColormap(percentile);
-            }
-            else
-            {
-                colors[i] = Color.black;
-            }
-        }
-
-        mesh.colors = colors;
-    }
-
-    //private void ApplyVertexColorsWithStretch(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
-    //{
-    //    Vector3[] vertices = mesh.vertices;
-    //    Color[] colors = new Color[vertices.Length];
-
-    //    var values = saliencyMap.Values.OrderBy(v => v).ToList();
-    //    //float min = values[values.Count / 10];             // 하위 10% 컷
-    //    //float max = values[values.Count * 18 / 20];         // 상위 90% 컷
-
-    //    float min = values.Min(); // 진짜 최소값
-    //    float max = values.Max(); // 진짜 최대값
-    //    for (int i = 0; i < vertices.Length; i++)
-    //    {
-    //        Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
-    //        Vector3 nearest = saliencyMap.Keys.OrderBy(v => Vector3.Distance(v, worldPos)).FirstOrDefault();
-
-    //        if (saliencyMap.TryGetValue(nearest, out float saliency))
-    //        {
-    //            float t = Mathf.Clamp01((saliency - min) / (max - min));
-    //            //t = Mathf.Sqrt(t); // 밝은 영역 덜 침투하게
-    //            //colors[i] = Color.Lerp(Color.blue, Color.red, t);
-    //            colors[i] = EvaluateTurboColormap(t);
-    //        }
-    //        else
-    //        {
-    //            colors[i] = Color.black;
-    //        }
-    //    }
-
-    //    mesh.colors = colors;
-    //}
-    private void ApplyVertexColors(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
-    {
-        Vector3[] vertices = mesh.vertices;
-        Color[] colors = new Color[vertices.Length];
-
-        // 1. Normalize and group saliency
-        var normalized = EntropySaliencyComputer.NormalizeSaliencyMap(saliencyMap);
-        var grouped = EntropySaliencyComputer.GroupSaliencyByRoundedPosition(normalized, 1000); // 소수점 3자리까지 그룹핑
         Dictionary<Vector3, float> saliencyConsistencyCheck = new();
+
+        // Percentile 기준 계산
+        var sorted = groupedSaliency.Values.OrderBy(v => v).ToList();
+        float p5 = sorted[(int)(0.95f * sorted.Count)];
+        float p20 = sorted[(int)(0.80f * sorted.Count)];
+
         for (int i = 0; i < vertices.Length; i++)
         {
             Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
@@ -236,10 +165,17 @@ public class SaliencyMapVisualizer : MonoBehaviour
                 Mathf.Round(worldPos.y * 1000f) / 1000f,
                 Mathf.Round(worldPos.z * 1000f) / 1000f
             );
-            if (grouped.TryGetValue(rounded, out float saliency))
+            if (groupedSaliency.TryGetValue(rounded, out float saliency))
             {
-                //colors[i] = EvaluateTurboColormap(saliency);
                 colors[i] = EvaluateTurboColormap(Mathf.Pow(saliency, 0.8f));
+                //  색상 매핑 (범위 구분)
+                //if (saliency >= p5)
+                //    colors[i] = Color.red;
+                //else if (saliency >= p20)
+                //    colors[i] = new Color(1f, 0.65f, 0f); // 주황색
+                //else
+                //    colors[i] = Color.blue;
+
                 if (saliencyConsistencyCheck.TryGetValue(rounded, out float existing))
                 {
                     if (Mathf.Abs(existing - saliency) > 1e-4f)
@@ -283,108 +219,3 @@ public class SaliencyMapVisualizer : MonoBehaviour
     }
 
 }
-
-//using System.Collections.Generic;
-//using System.Linq;
-//using UnityEngine;
-
-//public enum SaliencyModeChanger
-//{
-//    Entropy,
-//    // 추후: Curvature 등 추가 가능
-//}
-
-//public class SaliencyMapVisualizer : MonoBehaviour
-//{
-//    public SaliencyModeChanger saliencyMode = SaliencyModeChanger.Entropy;
-//    public MeshFilter meshFilter;
-//    public Camera mainCamera;
-//    public LayerMask visibilityLayerMask;
-
-//    public bool visualizeOnStart = true;
-
-//    void Start()
-//    {
-//        if (visualizeOnStart)
-//            GenerateAndVisualizeSaliency();
-//    }
-
-//    public void GenerateAndVisualizeSaliency()
-//    {
-//        if (meshFilter == null || mainCamera == null)
-//        {
-//            Debug.LogError("[SaliencyMapVisualizer] MeshFilter 또는 Camera가 설정되지 않았습니다.");
-//            return;
-//        }
-
-//        Mesh mesh = meshFilter.mesh;
-
-//        // [1] Get unique visible vertices
-//        Vector3[] allVertices = SaliencyUtils.GetUniqueWorldVertices(meshFilter);
-//        List<Vector3> allVertexList = new List<Vector3>(allVertices);
-
-//        if (allVertexList.Count == 0)
-//        {
-//            Debug.LogWarning("[SaliencyMapVisualizer] 카메라에 보이는 정점이 없습니다.");
-//            return;
-//        }
-
-//        // [2] 자동으로 characteristic length 계산
-//        float l = ComputeCharacteristicLength();
-
-//        // [3] Saliency 계산
-//        Dictionary<Vector3, float> saliencyMap = ComputeSaliency(meshFilter, allVertexList, l);
-
-//        // [4] 시각화 (vertex color)
-//        ApplyVertexColors(meshFilter.mesh, saliencyMap);
-//    }
-
-//    private float ComputeCharacteristicLength()
-//    {
-//        Bounds bounds = meshFilter.mesh.bounds;
-//        return bounds.size.magnitude; // 또는 평균/최댓값으로 교체 가능
-//    }
-
-//    private Dictionary<Vector3, float> ComputeSaliency(MeshFilter meshFilter, List<Vector3> visibleVertices, float l)
-//    {
-//        switch (saliencyMode)
-//        {
-//            case SaliencyModeChanger.Entropy:
-//                return EntropySaliencyComputer.Compute(meshFilter, visibleVertices, l);
-//            default:
-//                Debug.LogError("Saliency mode not implemented.");
-//                return new Dictionary<Vector3, float>();
-//        }
-//    }
-
-//    private void ApplyVertexColors(Mesh mesh, Dictionary<Vector3, float> saliencyMap)
-//    {
-//        Vector3[] vertices = mesh.vertices;
-//        Color[] colors = new Color[vertices.Length];
-
-//        float min = saliencyMap.Values.Min();
-//        float max = saliencyMap.Values.Max();
-
-//        for (int i = 0; i < vertices.Length; i++)
-//        {
-//            Vector3 worldPos = meshFilter.transform.TransformPoint(vertices[i]);
-
-//            // 가장 가까운 키 매칭 (distance 기준)
-//            Vector3 matched = saliencyMap.Keys
-//                .OrderBy(v => Vector3.Distance(v, worldPos))
-//                .FirstOrDefault();
-
-//            if (saliencyMap.TryGetValue(matched, out float saliency))
-//            {
-//                float t = Mathf.Clamp01((saliency - min) / (max - min));
-//                colors[i] = Color.Lerp(Color.blue, Color.red, t);
-//            }
-//            else
-//            {
-//                colors[i] = Color.black;
-//            }
-//        }
-
-//        mesh.colors = colors;
-//    }
-//}
