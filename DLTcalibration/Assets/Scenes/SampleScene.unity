@@ -218,6 +218,8 @@ MonoBehaviour:
   meshFilter: {fileID: 191060650}
   recommendedVertexCount: 6
   visualized: 1
+  edgeMaskRenderer: {fileID: 0}
+  debugRenderer: {fileID: 0}
   topSaliencyPercentage: 0.5
 --- !u!64 &191060648
 MeshCollider:
@@ -386,6 +388,8 @@ MonoBehaviour:
   meshFilter: {fileID: 216437366}
   recommendedVertexCount: 6
   visualized: 0
+  edgeMaskRenderer: {fileID: 0}
+  debugRenderer: {fileID: 0}
   topSaliencyPercentage: 0.5
 --- !u!114 &216437377
 MonoBehaviour:
@@ -823,6 +827,8 @@ MonoBehaviour:
   meshFilter: {fileID: 606410052}
   recommendedVertexCount: 6
   visualized: 1
+  edgeMaskRenderer: {fileID: 0}
+  debugRenderer: {fileID: 0}
   topSaliencyPercentage: 0.5
 --- !u!64 &606410050
 MeshCollider:
@@ -987,6 +993,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
+        type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
@@ -1097,6 +1108,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
+        type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
@@ -1138,6 +1154,11 @@ PrefabInstance:
     - target: {fileID: 1151388028547126963, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 1360333739a15394db381ce0d9b764af,
+        type: 3}
+      propertyPath: m_Layer
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -1215,6 +1236,7 @@ GameObject:
   - component: {fileID: 808022740}
   - component: {fileID: 808022739}
   - component: {fileID: 808022738}
+  - component: {fileID: 808022741}
   - component: {fileID: 808022737}
   m_Layer: 0
   m_Name: Project Camera
@@ -1341,6 +1363,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 15, y: 0, z: 0}
+--- !u!114 &808022741
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 808022736}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 918bab0ba37e2ed40a92b67e3aab9a87, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  depthEdgeShader: {fileID: 4800000, guid: dde8f3d3dd47b184083d4d51d82441dd, type: 3}
+  edgeMask: {fileID: 0}
 --- !u!1001 &941179534
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1432,6 +1468,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
+        type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
@@ -1443,6 +1484,16 @@ PrefabInstance:
     - target: {fileID: 1151388028547126963, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
       propertyPath: m_ConstrainProportionsScale
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 82baf0284168c7a4dabc98a1e8486973,
+        type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 82baf0284168c7a4dabc98a1e8486973,
+        type: 3}
+      propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -1535,6 +1586,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
+        type: 3}
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
@@ -1542,6 +1598,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_TagString
       value: something
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 1360333739a15394db381ce0d9b764af,
+        type: 3}
+      propertyPath: m_Layer
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1633,6 +1694,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
+        type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
@@ -1640,6 +1706,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_TagString
       value: Project Mesh
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 27b702340b53f2047a470c5c6cc188df,
+        type: 3}
+      propertyPath: m_Layer
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1829,6 +1900,8 @@ MonoBehaviour:
   meshFilter: {fileID: 1687685523}
   recommendedVertexCount: 6
   visualized: 1
+  edgeMaskRenderer: {fileID: 808022741}
+  debugRenderer: {fileID: 1809700479}
   topSaliencyPercentage: 0.5
 --- !u!23 &1687685522
 MeshRenderer:
@@ -1908,6 +1981,51 @@ Transform:
     type: 3}
   m_PrefabInstance: {fileID: 957866346}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1809700478
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1809700480}
+  - component: {fileID: 1809700479}
+  m_Layer: 0
+  m_Name: EdgeMaskDebugger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1809700479
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1809700478}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8da2f410bc156545bab4acc221161cd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  edgeMask: {fileID: 0}
+--- !u!4 &1809700480
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1809700478}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -151.37001, y: -78.46302, z: 141.69943}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1813008716 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
@@ -1956,6 +2074,8 @@ MonoBehaviour:
   meshFilter: {fileID: 1813008722}
   recommendedVertexCount: 6
   visualized: 1
+  edgeMaskRenderer: {fileID: 808022741}
+  debugRenderer: {fileID: 1809700479}
   topSaliencyPercentage: 0.5
 --- !u!64 &1813008720
 MeshCollider:
@@ -2165,7 +2285,17 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
+        type: 3}
       propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
+        type: 3}
+      propertyPath: m_Layer
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -2371,6 +2501,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
+        type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
@@ -2447,6 +2582,8 @@ MonoBehaviour:
   meshFilter: {fileID: 2105277075}
   recommendedVertexCount: 6
   visualized: 1
+  edgeMaskRenderer: {fileID: 0}
+  debugRenderer: {fileID: 0}
   topSaliencyPercentage: 0.5
 --- !u!114 &2105277077
 MonoBehaviour:
@@ -2523,6 +2660,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
+      propertyPath: m_Layer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
+        type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
@@ -2530,6 +2672,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_TagString
       value: something
+      objectReference: {fileID: 0}
+    - target: {fileID: 8164078558771037576, guid: 27b702340b53f2047a470c5c6cc188df,
+        type: 3}
+      propertyPath: m_Layer
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2553,3 +2700,4 @@ SceneRoots:
   - {fileID: 1487993646}
   - {fileID: 182688490}
   - {fileID: 753156186}
+  - {fileID: 1809700480}

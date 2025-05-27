@@ -13,7 +13,7 @@ public static class SaliencyUtils
         Vector3 camPos = camera.transform.position;
         Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
 
-        float dotThreshold = 0.7f; // ← 더 정면을 향한 정점만 raycast 시도
+        float dotThreshold = 0.5f; // ← 더 정면을 향한 정점만 raycast 시도
         float hitTolerance = 0.005f; // 거리 기반 (너무 뒤에 있어서 잘 안보이는 vertex 제외)
 
         foreach (var kvp in vertexPositions)
@@ -49,6 +49,62 @@ public static class SaliencyUtils
         }
 
         return visibleVertices;
+    }
+
+    //Silhouette 기반 필터 진행중
+    public static List<Vector3> FilterVerticesByDepthEdgeMask(List<Vector3> candidates, Camera cam, RenderTexture edgeMask)
+    {
+        List<Vector3> result = new List<Vector3>();
+
+        Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
+        RenderTexture.active = edgeMask;
+        edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
+        edgeTex.Apply();
+        RenderTexture.active = null;
+
+        foreach (var worldPos in candidates)
+        {
+            Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
+            if (screenPos.z < 0) continue; // 카메라 뒤에 있는 점 제외
+
+            int px = Mathf.RoundToInt(screenPos.x);
+            int py = Mathf.RoundToInt(screenPos.y);
+
+            // Unity의 Texture는 (0,0)이 bottom-left 기준이므로 그대로 사용 가능
+            if (px >= 0 && px < edgeTex.width && py >= 0 && py < edgeTex.height)
+            {
+                Color c = edgeTex.GetPixel(px, py);
+                if (c.grayscale < 0.5f) // edge 주변이 아닐 때만 통과
+                    result.Add(worldPos);
+            }
+        }
+
+        return result;
+    }
+    //----------------------------------
+    public static List<Vector3> FilterVerticesByEdgeMask(
+    List<Vector3> visibleVertices, Camera cam, RenderTexture edgeMask, float threshold = 0.01f)
+    {
+        Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
+        RenderTexture.active = edgeMask;
+        edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
+        edgeTex.Apply();
+
+        List<Vector3> result = new();
+        foreach (var v in visibleVertices)
+        {
+            Vector3 screenPos = cam.WorldToScreenPoint(v);
+            if (screenPos.z < 0) continue;
+
+            int x = Mathf.RoundToInt(screenPos.x);
+            int y = Mathf.RoundToInt(screenPos.y);
+            if (x < 0 || y < 0 || x >= edgeTex.width || y >= edgeTex.height) continue;
+
+            Color pixel = edgeTex.GetPixel(x, y);
+            if (pixel.r < threshold) result.Add(v); // 실루엣이 아닌 경우 유지
+        }
+
+        return result;
     }
     /// <summary>
     /// 시점 기반 + 메시 기하학 기반 실루엣 정점 제거 필터

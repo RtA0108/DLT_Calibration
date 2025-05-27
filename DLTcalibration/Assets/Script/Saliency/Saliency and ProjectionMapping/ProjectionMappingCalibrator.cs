@@ -11,6 +11,8 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     public MeshFilter meshFilter;
     public int recommendedVertexCount = 6;
     public bool visualized = true;
+    public EdgeMaskRenderer edgeMaskRenderer;
+    public DebugEdgeMaskRenderer debugRenderer;
     [Range(0f, 1f)] public float topSaliencyPercentage = 0.5f;
 
     private Dictionary<int, Vector3> vertexPositions;
@@ -46,6 +48,10 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     }
     void Run()
     {
+
+        edgeMaskRenderer.RenderDepthEdgeMask();
+        debugRenderer.edgeMask = edgeMaskRenderer.edgeMask; // 디버그용 연결
+
         var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
         if (visualized)
         {
@@ -53,7 +59,9 @@ public class ProjectionMappingCalibrator : MonoBehaviour
                 SaliencyUtils.HighlightVertex(v, Color.blue, 5.5f, false);
         }
 
-        var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
+        var filtered = SaliencyUtils.FilterVerticesByDepthEdgeMask(visible, mainCamera, edgeMaskRenderer.edgeMask);
+
+        //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 
             foreach (var vertex in filtered)
                 SaliencyUtils.HighlightVertex(vertex, Color.green, 6f, false);
