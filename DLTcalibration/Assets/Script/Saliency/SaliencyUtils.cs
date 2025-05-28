@@ -52,60 +52,139 @@ public static class SaliencyUtils
     }
 
     //Silhouette 기반 필터 진행중
-    public static List<Vector3> FilterVerticesByDepthEdgeMask(List<Vector3> candidates, Camera cam, RenderTexture edgeMask)
+    public static List<Vector3> FilterVerticesByEdge(RenderTexture edgeMask, List<Vector3> vertices, Camera camera, float distanceThresholdPixels = 1.5f)
     {
-        List<Vector3> result = new List<Vector3>();
+        List<Vector3> filtered = new List<Vector3>();
 
+        // edgeMask 읽기
         Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
         RenderTexture.active = edgeMask;
         edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
         edgeTex.Apply();
         RenderTexture.active = null;
 
-        foreach (var worldPos in candidates)
+        int w = edgeMask.width;
+        int h = edgeMask.height;
+
+        foreach (var vertex in vertices)
         {
-            Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
-            if (screenPos.z < 0) continue; // 카메라 뒤에 있는 점 제외
-
-            int px = Mathf.RoundToInt(screenPos.x);
-            int py = Mathf.RoundToInt(screenPos.y);
-
-            // Unity의 Texture는 (0,0)이 bottom-left 기준이므로 그대로 사용 가능
-            if (px >= 0 && px < edgeTex.width && py >= 0 && py < edgeTex.height)
-            {
-                Color c = edgeTex.GetPixel(px, py);
-                if (c.grayscale < 0.5f) // edge 주변이 아닐 때만 통과
-                    result.Add(worldPos);
-            }
-        }
-
-        return result;
-    }
-    //----------------------------------
-    public static List<Vector3> FilterVerticesByEdgeMask(
-    List<Vector3> visibleVertices, Camera cam, RenderTexture edgeMask, float threshold = 0.01f)
-    {
-        Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
-        RenderTexture.active = edgeMask;
-        edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
-        edgeTex.Apply();
-
-        List<Vector3> result = new();
-        foreach (var v in visibleVertices)
-        {
-            Vector3 screenPos = cam.WorldToScreenPoint(v);
-            if (screenPos.z < 0) continue;
+            Vector3 screenPos = camera.WorldToScreenPoint(vertex);
+            if (screenPos.z < 0) continue; // 카메라 뒤
 
             int x = Mathf.RoundToInt(screenPos.x);
             int y = Mathf.RoundToInt(screenPos.y);
-            if (x < 0 || y < 0 || x >= edgeTex.width || y >= edgeTex.height) continue;
 
-            Color pixel = edgeTex.GetPixel(x, y);
-            if (pixel.r < threshold) result.Add(v); // 실루엣이 아닌 경우 유지
+            bool isNearEdge = false;
+            for (int dx = -Mathf.CeilToInt(distanceThresholdPixels); dx <= Mathf.CeilToInt(distanceThresholdPixels); dx++)
+            {
+                for (int dy = -Mathf.CeilToInt(distanceThresholdPixels); dy <= Mathf.CeilToInt(distanceThresholdPixels); dy++)
+                {
+                    int px = x + dx;
+                    int py = y + dy;
+                    if (px >= 0 && px < w && py >= 0 && py < h)
+                    {
+                        Color c = edgeTex.GetPixel(px, py);
+                        if (c.r > 0.5f || c.g > 0.5f || c.b > 0.5f)
+                        {
+                            isNearEdge = true;
+                            break;
+                        }
+                    }
+                }
+                if (isNearEdge) break;
+            }
+
+            if (!isNearEdge)
+                filtered.Add(vertex);
         }
 
-        return result;
+        return filtered;
     }
+    //----------------
+    //public static List<Vector3> FilterVerticesByEdgeDistance(
+    //List<Vector3> vertices, Camera cam, RenderTexture edgeMask, float intensityThreshold = 0.8f, int distancePixels = 1)
+    //{
+    //    List<Vector3> result = new();
+    //    Texture2D tex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
+
+    //    RenderTexture.active = edgeMask;
+    //    tex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
+    //    tex.Apply();
+    //    RenderTexture.active = null;
+
+    //    // 1. 실루엣 edge 픽셀 좌표 수집
+    //    List<Vector2Int> edgePixels = new();
+    //    for (int y = 0; y < tex.height; y++)
+    //    {
+    //        for (int x = 0; x < tex.width; x++)
+    //        {
+    //            if (tex.GetPixel(x, y).grayscale > intensityThreshold)
+    //            {
+    //                edgePixels.Add(new Vector2Int(x, y));
+    //            }
+    //        }
+    //    }
+
+    //    foreach (Vector3 worldPos in vertices)
+    //    {
+    //        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
+    //        if (screenPos.z < 0) continue;
+
+    //        int x = Mathf.FloorToInt(screenPos.x);
+    //        int y = Mathf.FloorToInt(screenPos.y);
+    //        if (x < 0 || x >= tex.width || y < 0 || y >= tex.height) continue;
+
+    //        bool nearEdge = false;
+    //        foreach (var edge in edgePixels)
+    //        {
+    //            if (Mathf.Abs(edge.x - x) <= distancePixels && Mathf.Abs(edge.y - y) <= distancePixels)
+    //            {
+    //                nearEdge = true;
+    //                break;
+    //            }
+    //        }
+
+    //        if (!nearEdge)
+    //        {
+    //            result.Add(worldPos); // edge로부터 일정 거리 이상인 정점만 통과
+    //        }
+    //    }
+
+    //    return result;
+    //}
+
+    //public static List<Vector3> FilterVerticesByEdgeMask(
+    //    List<Vector3> vertices, Camera cam, RenderTexture edgeMask, float intensityThreshold = 0.7f)
+    //{
+    //    List<Vector3> result = new();
+    //    Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
+
+    //    RenderTexture.active = edgeMask;
+    //    edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
+    //    edgeTex.Apply();
+    //    RenderTexture.active = null;
+
+    //    foreach (Vector3 worldPos in vertices)
+    //    {
+    //        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
+    //        if (screenPos.z < 0) continue;
+
+    //        int x = Mathf.FloorToInt(screenPos.x);
+    //        int y = Mathf.FloorToInt(screenPos.y);
+    //        if (x < 0 || x >= edgeTex.width || y < 0 || y >= edgeTex.height) continue;
+
+    //        Color c = edgeTex.GetPixel(x, y);
+    //        float gray = c.grayscale;
+
+    //        if (gray < intensityThreshold) // Soft한 edge → 실루엣만 걸러냄
+    //        {
+    //            result.Add(worldPos);
+    //        }
+    //    }
+
+    //    return result;
+    //}
+    
     /// <summary>
     /// 시점 기반 + 메시 기하학 기반 실루엣 정점 제거 필터
     /// </summary>

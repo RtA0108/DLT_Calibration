@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
 
@@ -11,7 +12,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     public MeshFilter meshFilter;
     public int recommendedVertexCount = 6;
     public bool visualized = true;
-    public EdgeMaskRenderer edgeMaskRenderer;
+    public SilhouetteEdgeMaskRenderer silhouetteRenderer;
     public DebugEdgeMaskRenderer debugRenderer;
     [Range(0f, 1f)] public float topSaliencyPercentage = 0.5f;
 
@@ -22,6 +23,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     void Start()
     {
         Prepare();
+        silhouetteRenderer.Render();
         Run();
     }
 
@@ -48,9 +50,10 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     }
     void Run()
     {
-
-        edgeMaskRenderer.RenderDepthEdgeMask();
-        debugRenderer.edgeMask = edgeMaskRenderer.edgeMask; // 디버그용 연결
+        var edgeMask = silhouetteRenderer.GetEdgeMask();
+        silhouetteRenderer.SaveSilhouetteMaskToPNG();
+        silhouetteRenderer.SaveEdgeMaskToPNG("SavedSilhouette.png");
+        debugRenderer.edgeMask = edgeMask; // 디버그용 연결
 
         var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
         if (visualized)
@@ -59,7 +62,8 @@ public class ProjectionMappingCalibrator : MonoBehaviour
                 SaliencyUtils.HighlightVertex(v, Color.blue, 5.5f, false);
         }
 
-        var filtered = SaliencyUtils.FilterVerticesByDepthEdgeMask(visible, mainCamera, edgeMaskRenderer.edgeMask);
+        var filtered = SaliencyUtils.FilterVerticesByEdge(edgeMask, visible, mainCamera, distanceThresholdPixels: 1.5f);
+
 
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 
