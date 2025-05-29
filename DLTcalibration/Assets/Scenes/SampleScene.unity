@@ -827,7 +827,7 @@ MonoBehaviour:
   meshFilter: {fileID: 606410052}
   recommendedVertexCount: 6
   visualized: 1
-  silhouetteRenderer: {fileID: 0}
+  silhouetteRenderer: {fileID: 808022743}
   debugRenderer: {fileID: 1809700479}
   topSaliencyPercentage: 0.5
 --- !u!64 &606410050
@@ -994,7 +994,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
@@ -1109,7 +1109,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
@@ -1159,7 +1159,7 @@ PrefabInstance:
     - target: {fileID: 8164078558771037576, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1195,7 +1195,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 753156186}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: Meshes
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1337,7 +1337,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 55
+    m_Bits: 119
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 1
@@ -1393,6 +1393,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   solidColorShader: {fileID: 4800000, guid: 0fe1a49c9f8c87447ac9f97d08d3cfe6, type: 3}
   edgeDetectShader: {fileID: 4800000, guid: 44df74de36ea5fe4bbb1c1beb1155b58, type: 3}
+  meshFilter: {fileID: 1687685523}
   silhouetteMask: {fileID: 0}
   edgeMask: {fileID: 0}
   edgeThreshold: 0.1
@@ -1488,7 +1489,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
@@ -1508,7 +1509,7 @@ PrefabInstance:
     - target: {fileID: 8164078558771037576, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 8164078558771037576, guid: 82baf0284168c7a4dabc98a1e8486973,
         type: 3}
@@ -1606,7 +1607,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
@@ -1621,7 +1622,7 @@ PrefabInstance:
     - target: {fileID: 8164078558771037576, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1714,7 +1715,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
@@ -1729,7 +1730,7 @@ PrefabInstance:
     - target: {fileID: 8164078558771037576, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2093,7 +2094,7 @@ MonoBehaviour:
   meshFilter: {fileID: 1813008722}
   recommendedVertexCount: 6
   visualized: 1
-  silhouetteRenderer: {fileID: 0}
+  silhouetteRenderer: {fileID: 808022743}
   debugRenderer: {fileID: 1809700479}
   topSaliencyPercentage: 0.5
 --- !u!64 &1813008720
@@ -2305,7 +2306,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
         type: 3}
@@ -2320,7 +2321,7 @@ PrefabInstance:
     - target: {fileID: 8164078558771037576, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2526,7 +2527,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
         type: 3}
@@ -2685,7 +2686,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
@@ -2700,7 +2701,7 @@ PrefabInstance:
     - target: {fileID: 8164078558771037576, guid: 27b702340b53f2047a470c5c6cc188df,
         type: 3}
       propertyPath: m_Layer
-      value: 0
+      value: 6
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

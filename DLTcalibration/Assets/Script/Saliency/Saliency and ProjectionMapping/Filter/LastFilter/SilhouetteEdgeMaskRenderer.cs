@@ -1,10 +1,12 @@
 using UnityEngine;
+using System.IO;
 
 [RequireComponent(typeof(Camera))]
 public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 {
     public Shader solidColorShader; // SilhouetteSolidColor.shader
     public Shader edgeDetectShader; // SilhouetteEdgeShader
+    public MeshFilter meshFilter;   // 타겟 메쉬
 
     [HideInInspector] public RenderTexture silhouetteMask;
     [HideInInspector] public RenderTexture edgeMask;
@@ -20,7 +22,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
         cam = GetComponent<Camera>();
         cam.depthTextureMode = DepthTextureMode.None;
 
-        // 준비
+        // Shader가 비어있다면 기본 할당
         if (solidColorShader == null)
             solidColorShader = Shader.Find("Hidden/SilhouetteSolidColor");
         if (edgeDetectShader == null)
@@ -28,7 +30,6 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
         solidMat = new Material(solidColorShader);
         edgeMat = new Material(edgeDetectShader);
-
         edgeMat.SetFloat("_EdgeThreshold", edgeThreshold);
     }
 
@@ -37,71 +38,68 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
         int w = Screen.width;
         int h = Screen.height;
 
+        // RenderTexture 생성 및 크기 체크
         if (silhouetteMask == null || silhouetteMask.width != w || silhouetteMask.height != h)
         {
-            silhouetteMask = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32);
-            silhouetteMask.name = "SilhouetteMask";
+            if (silhouetteMask != null) silhouetteMask.Release();
+            silhouetteMask = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32) { name = "SilhouetteMask" };
         }
 
         if (edgeMask == null || edgeMask.width != w || edgeMask.height != h)
         {
-            edgeMask = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32);
-            edgeMask.name = "EdgeMask";
+            if (edgeMask != null) edgeMask.Release();
+            edgeMask = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32) { name = "EdgeMask" };
         }
 
-        // 1. 실루엣 마스크 렌더링
-        cam.targetTexture = silhouetteMask;
-        cam.RenderWithShader(solidColorShader, "RenderType");
-        cam.targetTexture = null;
+        // ---------- DrawMesh 방식으로 직접 렌더링 ----------
+        var oldRT = RenderTexture.active;
+        RenderTexture.active = silhouetteMask;
+        GL.Clear(true, true, Color.black);
 
-        // 2. 에지 필터 적용
+        GL.PushMatrix();
+        Matrix4x4 vp = cam.projectionMatrix * cam.worldToCameraMatrix;
+        GL.LoadProjectionMatrix(vp);
+        //GL.LoadProjectionMatrix(cam.projectionMatrix);
+        solidMat.SetPass(0);
+        Graphics.DrawMeshNow(meshFilter.sharedMesh, meshFilter.transform.localToWorldMatrix);
+        GL.PopMatrix();
+
+        RenderTexture.active = oldRT;
+
+        // ---------- Edge Shader 적용 ----------
         Graphics.Blit(silhouetteMask, edgeMask, edgeMat);
     }
 
-    public RenderTexture GetEdgeMask()
+    public RenderTexture GetEdgeMask() => edgeMask;
+    public RenderTexture GetSilhouetteMask() => silhouetteMask;
+
+    public void SaveRenderTextureToPNG(RenderTexture rt, string filename)
     {
-        return edgeMask;
+        if (rt == null)
+        {
+            Debug.LogError($"[SaveRenderTextureToPNG] {filename} 저장 실패: RenderTexture가 null입니다.");
+            return;
+        }
+
+        RenderTexture.active = rt;
+        Texture2D tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        tex.Apply();
+        RenderTexture.active = null;
+
+        byte[] bytes = tex.EncodeToPNG();
+        string path = Path.Combine(Application.dataPath, filename);
+        File.WriteAllBytes(path, bytes);
+        Debug.Log($"[SaveRenderTextureToPNG] 저장 완료: {path}");
     }
+
     public void SaveEdgeMaskToPNG(string filename = "EdgeMaskSnapshot.png")
     {
-        if (edgeMask == null)
-        {
-            Debug.LogError("[SaveEdgeMaskToPNG] edgeMask가 비어 있습니다.");
-            return;
-        }
-
-        // edgeMask 내용을 Texture2D로 복사
-        RenderTexture.active = edgeMask;
-        Texture2D tex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
-        tex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
-        tex.Apply();
-        RenderTexture.active = null;
-
-        // 바이트로 인코딩해서 저장
-        byte[] bytes = tex.EncodeToPNG();
-        string path = System.IO.Path.Combine(Application.dataPath, filename);
-        System.IO.File.WriteAllBytes(path, bytes);
-        Debug.Log($"[SaveEdgeMaskToPNG] edgeMask 저장됨: {path}");
+        SaveRenderTextureToPNG(edgeMask, filename);
     }
+
     public void SaveSilhouetteMaskToPNG(string filename = "SilhouetteMaskSnapshot.png")
     {
-        if (silhouetteMask == null)
-        {
-            Debug.LogError("[SaveSilhouetteMaskToPNG] silhouetteMask가 비어 있습니다.");
-            return;
-        }
-
-        // silhouetteMask 내용을 Texture2D로 복사
-        RenderTexture.active = silhouetteMask;
-        Texture2D tex = new Texture2D(silhouetteMask.width, silhouetteMask.height, TextureFormat.RGB24, false);
-        tex.ReadPixels(new Rect(0, 0, silhouetteMask.width, silhouetteMask.height), 0, 0);
-        tex.Apply();
-        RenderTexture.active = null;
-
-        // 바이트로 인코딩해서 저장
-        byte[] bytes = tex.EncodeToPNG();
-        string path = System.IO.Path.Combine(Application.dataPath, filename);
-        System.IO.File.WriteAllBytes(path, bytes);
-        Debug.Log($"[SaveSilhouetteMaskToPNG] silhouetteMask 저장됨: {path}");
+        SaveRenderTextureToPNG(silhouetteMask, filename);
     }
 }
