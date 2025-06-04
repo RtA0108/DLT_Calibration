@@ -63,7 +63,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         }
 
         var filtered = SaliencyUtils.FilterVerticesByEdge(edgeMask, visible, mainCamera, distanceThresholdPixels: 1.5f);
-
+        filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.2f);
 
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 

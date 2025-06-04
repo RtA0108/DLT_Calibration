@@ -14,7 +14,7 @@ public static class SaliencyUtils
         Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
 
         float dotThreshold = 0.5f; // ← 더 정면을 향한 정점만 raycast 시도
-        float hitTolerance = 0.005f; // 거리 기반 (너무 뒤에 있어서 잘 안보이는 vertex 제외)
+        //float hitTolerance = 0.005f; // 거리 기반 (너무 뒤에 있어서 잘 안보이는 vertex 제외)
 
         foreach (var kvp in vertexPositions)
         {
@@ -37,7 +37,7 @@ public static class SaliencyUtils
             //Mathf.Infinity를 고정된 수치로 변경할지 고민
             if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
             {
-                 if (Vector3.Distance(hit.point, vertexWorldPos) < hitTolerance)
+                 //if (Vector3.Distance(hit.point, vertexWorldPos) < hitTolerance)
                  {
                     if (!uniquePositions.ContainsKey(roundedVertex))
                     {
@@ -100,302 +100,79 @@ public static class SaliencyUtils
 
         return filtered;
     }
-    //----------------
-    //public static List<Vector3> FilterVerticesByEdgeDistance(
-    //List<Vector3> vertices, Camera cam, RenderTexture edgeMask, float intensityThreshold = 0.8f, int distancePixels = 1)
-    //{
-    //    List<Vector3> result = new();
-    //    Texture2D tex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
-
-    //    RenderTexture.active = edgeMask;
-    //    tex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
-    //    tex.Apply();
-    //    RenderTexture.active = null;
-
-    //    // 1. 실루엣 edge 픽셀 좌표 수집
-    //    List<Vector2Int> edgePixels = new();
-    //    for (int y = 0; y < tex.height; y++)
-    //    {
-    //        for (int x = 0; x < tex.width; x++)
-    //        {
-    //            if (tex.GetPixel(x, y).grayscale > intensityThreshold)
-    //            {
-    //                edgePixels.Add(new Vector2Int(x, y));
-    //            }
-    //        }
-    //    }
-
-    //    foreach (Vector3 worldPos in vertices)
-    //    {
-    //        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
-    //        if (screenPos.z < 0) continue;
-
-    //        int x = Mathf.FloorToInt(screenPos.x);
-    //        int y = Mathf.FloorToInt(screenPos.y);
-    //        if (x < 0 || x >= tex.width || y < 0 || y >= tex.height) continue;
-
-    //        bool nearEdge = false;
-    //        foreach (var edge in edgePixels)
-    //        {
-    //            if (Mathf.Abs(edge.x - x) <= distancePixels && Mathf.Abs(edge.y - y) <= distancePixels)
-    //            {
-    //                nearEdge = true;
-    //                break;
-    //            }
-    //        }
-
-    //        if (!nearEdge)
-    //        {
-    //            result.Add(worldPos); // edge로부터 일정 거리 이상인 정점만 통과
-    //        }
-    //    }
-
-    //    return result;
-    //}
-
-    //public static List<Vector3> FilterVerticesByEdgeMask(
-    //    List<Vector3> vertices, Camera cam, RenderTexture edgeMask, float intensityThreshold = 0.7f)
-    //{
-    //    List<Vector3> result = new();
-    //    Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
-
-    //    RenderTexture.active = edgeMask;
-    //    edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
-    //    edgeTex.Apply();
-    //    RenderTexture.active = null;
-
-    //    foreach (Vector3 worldPos in vertices)
-    //    {
-    //        Vector3 screenPos = cam.WorldToScreenPoint(worldPos);
-    //        if (screenPos.z < 0) continue;
-
-    //        int x = Mathf.FloorToInt(screenPos.x);
-    //        int y = Mathf.FloorToInt(screenPos.y);
-    //        if (x < 0 || x >= edgeTex.width || y < 0 || y >= edgeTex.height) continue;
-
-    //        Color c = edgeTex.GetPixel(x, y);
-    //        float gray = c.grayscale;
-
-    //        if (gray < intensityThreshold) // Soft한 edge → 실루엣만 걸러냄
-    //        {
-    //            result.Add(worldPos);
-    //        }
-    //    }
-
-    //    return result;
-    //}
-    
-    /// <summary>
-    /// 시점 기반 + 메시 기하학 기반 실루엣 정점 제거 필터
-    /// </summary>
-    public static List<Vector3> FilterVerticesForCalibration(
-        Camera cam, MeshFilter meshFilter, List<Vector3> visibleVertices,
-        float silhouetteDotThreshold = 0.2f,
-        float edgeProximityThreshold = 0.01f)
+    // triangle normal filter
+    public static List<Vector3> BuildTriangleNormals(Mesh mesh, Transform transform)
     {
-        List<Vector3> filtered = new List<Vector3>();
-        Mesh mesh = meshFilter.sharedMesh;
-        Vector3[] meshNormals = mesh.normals;
-        Vector3[] meshVertices = mesh.vertices;
-        Vector3[] worldVertices = meshVertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
-
-        // [1] dot 기반 필터링 후보 등록
-        HashSet<Vector3> dotSilhouetteVertices = new();
-        foreach (var v in visibleVertices)
-        {
-            Vector3 normal = meshFilter.transform.TransformDirection(GetVertexNormalA(meshFilter, v));
-            Vector3 viewDir = (cam.transform.position - v).normalized;
-            float dot = Mathf.Abs(Vector3.Dot(normal.normalized, viewDir));
-            if (dot < silhouetteDotThreshold)
-                dotSilhouetteVertices.Add(v);
-        }
-
-        // [2] geometry 기반 edge 실루엣 정점 탐색
-        HashSet<int> edgeSilhouetteIndices = new();
+        Vector3[] vertices = mesh.vertices;
         int[] triangles = mesh.triangles;
-        Vector3[] triangleNormals = new Vector3[triangles.Length / 3];
+
+        List<Vector3> triangleNormals = new();
+
         for (int i = 0; i < triangles.Length; i += 3)
         {
-            Vector3 v0 = worldVertices[triangles[i]];
-            Vector3 v1 = worldVertices[triangles[i + 1]];
-            Vector3 v2 = worldVertices[triangles[i + 2]];
-            Vector3 normal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
-            triangleNormals[i / 3] = normal;
+            Vector3 p0 = transform.TransformPoint(vertices[triangles[i]]);
+            Vector3 p1 = transform.TransformPoint(vertices[triangles[i + 1]]);
+            Vector3 p2 = transform.TransformPoint(vertices[triangles[i + 2]]);
+
+            Vector3 normal = Vector3.Cross(p1 - p0, p2 - p0).normalized;
+            triangleNormals.Add(normal);
         }
 
-        Dictionary<(int, int), List<int>> edgeToTriangle = new();
-        for (int i = 0; i < triangles.Length; i += 3)
-        {
-            int tIndex = i / 3;
-            int[] tri = { triangles[i], triangles[i + 1], triangles[i + 2] };
-            for (int j = 0; j < 3; j++)
-            {
-                int a = tri[j];
-                int b = tri[(j + 1) % 3];
-                var edge = (Mathf.Min(a, b), Mathf.Max(a, b));
-                if (!edgeToTriangle.ContainsKey(edge)) edgeToTriangle[edge] = new List<int>();
-                edgeToTriangle[edge].Add(tIndex);
-            }
-        }
-
-        Vector3 camPos = cam.transform.position;
-        foreach (var kv in edgeToTriangle)
-        {
-            if (kv.Value.Count != 2) continue;
-            int t0 = kv.Value[0];
-            int t1 = kv.Value[1];
-            Vector3 n0 = triangleNormals[t0];
-            Vector3 n1 = triangleNormals[t1];
-
-            int vi0 = kv.Key.Item1;
-            int vi1 = kv.Key.Item2;
-            Vector3 edgeCenter = (worldVertices[vi0] + worldVertices[vi1]) * 0.5f;
-            Vector3 viewDir = (camPos - edgeCenter).normalized;
-            float d0 = Vector3.Dot(n0, viewDir);
-            float d1 = Vector3.Dot(n1, viewDir);
-
-            if ((d0 > 0 && d1 < 0) || (d0 < 0 && d1 > 0))
-            {
-                edgeSilhouetteIndices.Add(vi0);
-                edgeSilhouetteIndices.Add(vi1);
-            }
-        }
-
-        HashSet<Vector3> edgeSilhouettePositions = new();
-        foreach (int i in edgeSilhouetteIndices)
-        {
-            edgeSilhouettePositions.Add(worldVertices[i]);
-        }
-
-        // [3] 최종 제거
-        foreach (var v in visibleVertices)
-        {
-            bool isDotSilhouette = dotSilhouetteVertices.Contains(v);
-            bool isEdgeNear = edgeSilhouettePositions.Any(s => (s - v).sqrMagnitude < edgeProximityThreshold * edgeProximityThreshold);
-
-            if (!isDotSilhouette && !isEdgeNear)
-                filtered.Add(v);
-        }
-
-        return filtered;
+        return triangleNormals;
     }
 
-    private static Vector3 GetVertexNormalA(MeshFilter meshFilter, Vector3 vertexWorldPos)
+    public static List<Vector3> FilterVerticesByTriangleNormals(List<Vector3> filtered, MeshFilter meshFilter, Camera camera, float dotThreshold = 0.5f)
     {
-        Vector3[] localVertices = meshFilter.sharedMesh.vertices;
-        Vector3[] normals = meshFilter.sharedMesh.normals;
+        HashSet<Vector3> removeSet = new();
+        Dictionary<Vector3, Vector3> normalMap = new();
 
-        for (int i = 0; i < localVertices.Length; i++)
+        Mesh mesh = meshFilter.sharedMesh;
+        Vector3[] verts = mesh.vertices;
+        int[] tris = mesh.triangles;
+        HashSet<Vector3> filteredSet = new(filtered);
+
+        for (int i = 0; i < tris.Length; i += 3)
         {
-            Vector3 worldPos = meshFilter.transform.TransformPoint(localVertices[i]);
-            if (Vector3.Distance(worldPos, vertexWorldPos) < 0.0005f)
-                return normals[i];
+            Vector3 v0 = meshFilter.transform.TransformPoint(verts[tris[i]]);
+            Vector3 v1 = meshFilter.transform.TransformPoint(verts[tris[i + 1]]);
+            Vector3 v2 = meshFilter.transform.TransformPoint(verts[tris[i + 2]]);
+
+            bool in0 = filteredSet.Contains(v0);
+            bool in1 = filteredSet.Contains(v1);
+            bool in2 = filteredSet.Contains(v2);
+
+            if (in0 && in1 && in2)
+            {
+                Vector3 normal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
+                if (!normalMap.ContainsKey(v0)) normalMap[v0] = Vector3.zero;
+                if (!normalMap.ContainsKey(v1)) normalMap[v1] = Vector3.zero;
+                if (!normalMap.ContainsKey(v2)) normalMap[v2] = Vector3.zero;
+                normalMap[v0] += normal;
+                normalMap[v1] += normal;
+                normalMap[v2] += normal;
+            }
+
+            if (in0 && !in1 && !in2) removeSet.Add(v0);
+            if (in1 && !in0 && !in2) removeSet.Add(v1);
+            if (in2 && !in0 && !in1) removeSet.Add(v2);
         }
 
-        return Vector3.up; // fallback
+        // 카메라를 향하지 않는 normal 제거
+        Vector3 camPos = camera.transform.position;
+        foreach (var kv in normalMap)
+        {
+            Vector3 avgNormal = kv.Value.normalized;
+            Vector3 toCam = (camPos - kv.Key).normalized;
+            float dot = Vector3.Dot(avgNormal, toCam);
+            if (dot < dotThreshold)
+                removeSet.Add(kv.Key);
+        }
+
+        return filtered.Where(v => !removeSet.Contains(v)).ToList();
     }
-    //필터 정리 (없앨 가능성 많음)
-    //public static List<Vector3> FilterVerticesForCalibration(
-    //    Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
-    //    float viewportEdgeMarginRatio = 0.1f // 메시 화면 투영 기준 가장자리 비율
-    //)
-    //{
-    //    List<Vector3> filtered = new List<Vector3>();
-    //    Vector3 cameraPos = cam.transform.position;
-    //    Vector3 cameraRight = cam.transform.right;
-
-    //    //float minViewDot = 0.2f; - 1에서 쓰지만, 현재 무의미
-
-    //    int total = vertices.Count;
-    //    //int edgeRemoved = 0,  userFacingRemoved = 0;//viewDotRemoved = 0,
-
-    //    // 중복 제거된 전체 mesh vertex
-    //    Vector3[] allMeshVertices = GetUniqueWorldVertices(meshFilter);
-
-    //    // === [0] Viewport Box Edge Filter ===
-    //    //화면 좌표계로 변환
-    //    List<Vector3> vpPositions = new List<Vector3>();
-    //    foreach (var v in vertices)
-    //    {
-    //        Vector3 vp = cam.WorldToViewportPoint(v);
-    //        vpPositions.Add(vp); 
-    //    }
-
-    //    //if (vpPositions.Count == 0)
-    //    //{
-    //    //    Debug.LogWarning("[Calibration Filter] No visible vertex in Viewport.");
-    //    //    return new List<Vector3>();
-    //    //}
-
-    //    //mesh가 화면상에 차지하는 box 찾기
-    //    float vpMinX = vpPositions.Min(vp => vp.x);
-    //    float vpMaxX = vpPositions.Max(vp => vp.x);
-    //    float vpMinY = vpPositions.Min(vp => vp.y);
-    //    float vpMaxY = vpPositions.Max(vp => vp.y);
-    //    //box의 Margin 계산
-    //    float marginX = (vpMaxX - vpMinX) * viewportEdgeMarginRatio;
-    //    float marginY = (vpMaxY - vpMinY) * viewportEdgeMarginRatio;
-
-    //    List<Vector3> prefiltered = new List<Vector3>();
-    //    foreach (var v in vertices)
-    //    {
-    //        Vector3 vp = cam.WorldToViewportPoint(v);
-    //        if (vp.z < 0f) continue;
-
-    //        bool isEdge =
-    //            vp.x < vpMinX + marginX || vp.x > vpMaxX - marginX ||
-    //            vp.y < vpMinY + marginY || vp.y > vpMaxY - marginY;
-
-    //        if (isEdge)
-    //        {
-    //            //edgeRemoved++;
-    //            //HighlightVertex(v, new Color(1f, 0.4f, 1f), 6f, false); // 핑크색
-    //            continue;
-    //        }
-
-    //        prefiltered.Add(v);
-    //    }
-
-    //    foreach (Vector3 v in prefiltered)
-    //    {
-    //        Vector3 worldNormal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, v)).normalized;
-    //        Vector3 toCamera = (cameraPos - v).normalized;
-
-    //        //float sideViewAmount = Mathf.Abs(Vector3.Dot(toCamera, cameraRight));
-
-    //        // === [1] ViewDot Filter -> 현재는 occlusion에서 조건이 강력하여 큰 의미 없음.
-    //        //float dot = Vector3.Dot(worldNormal, toCamera);
-    //        //if (dot < minViewDot)
-    //        //{
-    //        //    viewDotRemoved++;
-    //        //    //Debug.Log($"[ViewDot Removed] Dot={dot:F3}, Pos={v}");
-
-    //        //    continue;
-    //        //}
-
-    //        // === [2] UserNormal (시점 무관)
-    //        //카메라 공간에서 normal vector 변환
-    //        Vector3 camSpaceNormal = cam.transform.InverseTransformDirection(worldNormal);
-    //        //float minYNorm = -0.5f;
-    //        //float maxYNorm = 1.0f;
-    //        //float userNormalXMaxAbs = 0.9f;
-
-    //        //if (camSpaceNormal.y < minYNorm || camSpaceNormal.y > maxYNorm || Mathf.Abs(camSpaceNormal.x) > userNormalXMaxAbs)
-    //        // 카메라 좌표계 기준으로 재판단
-    //        if (Mathf.Abs(camSpaceNormal.y) > 0.9f || Mathf.Abs(camSpaceNormal.x) > 0.9f)
-    //        {
-    //            //userFacingRemoved++;
-
-    //            continue;
-    //        }
 
 
-    //        filtered.Add(v);
-    //    }
 
-
-    //    return filtered;
-    //}
     // 분산 + saliency score 비율 변경하며 vertex 추천
     public static List<Vector3> SelectHybridDistributedVertices(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float l, int selectionCount, float alpha = 0.5f)
     {
@@ -720,153 +497,109 @@ public class PriorityQueue<T>
 
     public int Count => _dict.Sum(p => p.Value.Count);
 }
-
 //public static List<Vector3> FilterVerticesForCalibration(
-//    Camera cam, MeshFilter meshFilter, List<Vector3> vertices,
-//    float sigma,
-//    float viewportEdgeMarginRatio = 0.1f // 메시 화면 투영 기준 가장자리 비율
-//)
+//      Camera cam, MeshFilter meshFilter, List<Vector3> visibleVertices,
+//      float silhouetteDotThreshold = 0.2f,
+//      float edgeProximityThreshold = 0.01f)
 //{
 //    List<Vector3> filtered = new List<Vector3>();
-//    Vector3 cameraPos = cam.transform.position;
-//    Vector3 cameraRight = cam.transform.right;
+//    Mesh mesh = meshFilter.sharedMesh;
+//    Vector3[] meshNormals = mesh.normals;
+//    Vector3[] meshVertices = mesh.vertices;
+//    Vector3[] worldVertices = meshVertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
 
-//    float minViewDot = 0.2f;
-//    //float maxSideViewAmount = 0.25f;
-
-//    int total = vertices.Count;
-//    int edgeRemoved = 0, viewDotRemoved = 0, userFacingRemoved = 0;//, sideViewRemoved = 0, accessibilityRemoved = 0;
-
-//    // 중복 제거된 전체 mesh vertex
-//    Vector3[] allMeshVertices = GetUniqueWorldVertices(meshFilter);
-
-//    // === [0] Viewport Box Edge Filter ===
-//    List<Vector3> vpPositions = vertices
-//        .Select(v => cam.WorldToViewportPoint(v))
-//        .Where(vp => vp.z > 0f)
-//        .ToList();
-
-//    if (vpPositions.Count == 0)
+//    // [1] dot 기반 필터링 후보 등록
+//    HashSet<Vector3> dotSilhouetteVertices = new();
+//    foreach (var v in visibleVertices)
 //    {
-//        Debug.LogWarning("[Calibration Filter] No visible vertex in Viewport.");
-//        return new List<Vector3>();
+//        Vector3 normal = meshFilter.transform.TransformDirection(GetVertexNormalA(meshFilter, v));
+//        Vector3 viewDir = (cam.transform.position - v).normalized;
+//        float dot = Mathf.Abs(Vector3.Dot(normal.normalized, viewDir));
+//        if (dot < silhouetteDotThreshold)
+//            dotSilhouetteVertices.Add(v);
 //    }
 
-//    float vpMinX = vpPositions.Min(vp => vp.x);
-//    float vpMaxX = vpPositions.Max(vp => vp.x);
-//    float vpMinY = vpPositions.Min(vp => vp.y);
-//    float vpMaxY = vpPositions.Max(vp => vp.y);
-//    float marginX = (vpMaxX - vpMinX) * viewportEdgeMarginRatio;
-//    float marginY = (vpMaxY - vpMinY) * viewportEdgeMarginRatio;
-
-//    List<Vector3> prefiltered = new List<Vector3>();
-//    foreach (var v in vertices)
+//    // [2] geometry 기반 edge 실루엣 정점 탐색
+//    HashSet<int> edgeSilhouetteIndices = new();
+//    int[] triangles = mesh.triangles;
+//    Vector3[] triangleNormals = new Vector3[triangles.Length / 3];
+//    for (int i = 0; i < triangles.Length; i += 3)
 //    {
-//        Vector3 vp = cam.WorldToViewportPoint(v);
-//        if (vp.z < 0f) continue;
-
-//        bool isEdge =
-//            vp.x < vpMinX + marginX || vp.x > vpMaxX - marginX ||
-//            vp.y < vpMinY + marginY || vp.y > vpMaxY - marginY;
-
-//        if (isEdge)
-//        {
-//            edgeRemoved++;
-//            //HighlightVertex(v, new Color(1f, 0.4f, 1f), 6f, false); // 핑크색
-//            continue;
-//        }
-
-//        prefiltered.Add(v);
+//        Vector3 v0 = worldVertices[triangles[i]];
+//        Vector3 v1 = worldVertices[triangles[i + 1]];
+//        Vector3 v2 = worldVertices[triangles[i + 2]];
+//        Vector3 normal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
+//        triangleNormals[i / 3] = normal;
 //    }
 
-//    foreach (Vector3 v in prefiltered)
+//    Dictionary<(int, int), List<int>> edgeToTriangle = new();
+//    for (int i = 0; i < triangles.Length; i += 3)
 //    {
-//        Vector3 worldNormal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, v)).normalized;
-//        Vector3 toCamera = (cameraPos - v).normalized;
-//        float dot = Vector3.Dot(worldNormal, toCamera);
-//        float sideViewAmount = Mathf.Abs(Vector3.Dot(toCamera, cameraRight));
-
-//        // === [1] ViewDot Filter
-//        if (dot < minViewDot)
+//        int tIndex = i / 3;
+//        int[] tri = { triangles[i], triangles[i + 1], triangles[i + 2] };
+//        for (int j = 0; j < 3; j++)
 //        {
-//            viewDotRemoved++;
-//            Debug.Log($"[ViewDot Removed] Dot={dot:F3}, Pos={v}");
-
-//            continue;
+//            int a = tri[j];
+//            int b = tri[(j + 1) % 3];
+//            var edge = (Mathf.Min(a, b), Mathf.Max(a, b));
+//            if (!edgeToTriangle.ContainsKey(edge)) edgeToTriangle[edge] = new List<int>();
+//            edgeToTriangle[edge].Add(tIndex);
 //        }
-
-//        // === [2] UserNormal (시점 무관)
-//        Vector3 camSpaceNormal = cam.transform.InverseTransformDirection(worldNormal);
-//        float minYNorm = -0.5f;
-//        float maxYNorm = 1.0f;
-//        float userNormalXMaxAbs = 0.9f;
-
-//        if (camSpaceNormal.y < minYNorm || camSpaceNormal.y > maxYNorm ||
-//            Mathf.Abs(camSpaceNormal.x) > userNormalXMaxAbs)
-//        {
-//            userFacingRemoved++;
-
-//            continue;
-//        }
-
-//        // === [3] Accessibility Filter (시점 무관)
-//        //float normalVertical = Mathf.Abs(worldNormal.y);
-//        //float steepnessThreshold = 0.98f;
-//        //float normalToCameraDot = Vector3.Dot(worldNormal, toCamera);
-
-//        //if (normalVertical < (1f - steepnessThreshold)) // y < 0.02
-//        //{
-//        //    accessibilityRemoved++;
-
-//        //    Debug.Log($"[Accessibility Removed - Steep Normal] y={normalVertical:F2}, Pos={v}");
-//        //    continue;
-//        //}
-
-//        //if (normalToCameraDot < 0.1f)
-//        //{
-//        //    accessibilityRemoved++;
-//        //    Debug.Log($"[Accessibility Removed - Facing Away] Dot={normalToCameraDot:F2}, Pos={v}");
-//        //    continue;
-//        //}
-
-//        //List<Vector3> neighbors = GetNeighborsByEuclideanDistance(v, sigma, allMeshVertices);
-//        //if (neighbors.Count > 0)
-//        //{
-//        //    float normalVariance = neighbors.Sum(n =>
-//        //    {
-//        //        Vector3 neighborNormal = meshFilter.transform.TransformDirection(GetVertexNormal(meshFilter, n)).normalized;
-//        //        return (1f - Vector3.Dot(worldNormal, neighborNormal));
-//        //    }) / neighbors.Count;
-
-//        //    if (normalVariance > 0.6f)
-//        //    {
-//        //        accessibilityRemoved++;
-//        //        HighlightVertex(v, new Color(1f, 0.4f, 1f), 6f, false);
-//        //        Debug.Log($"[Accessibility Removed - High Curvature] Var={normalVariance:F2}, Pos={v}");
-//        //        continue;
-//        //    }
-//        //}
-
-//        // === [4] SideView (주석 상태 유지)
-//        /*
-//        if (sideViewAmount > maxSideViewAmount)
-//        {
-//            sideViewRemoved++;
-//            continue;
-//        }
-//        */
-
-//        filtered.Add(v);
 //    }
 
-//    Debug.Log($"[Calibration Filter]");
-//    Debug.Log($"Total input: {total}");
-//    Debug.Log($"Edge removed: {edgeRemoved}");
-//    Debug.Log($"ViewDot removed: {viewDotRemoved}");
-//    Debug.Log($"UserNormal removed: {userFacingRemoved}");
-//    // Debug.Log($"Accessibility removed: {accessibilityRemoved}");
-//    // Debug.Log($"SideView removed: {sideViewRemoved}");
-//    Debug.Log($"Filtered kept: {filtered.Count}");
+//    Vector3 camPos = cam.transform.position;
+//    foreach (var kv in edgeToTriangle)
+//    {
+//        if (kv.Value.Count != 2) continue;
+//        int t0 = kv.Value[0];
+//        int t1 = kv.Value[1];
+//        Vector3 n0 = triangleNormals[t0];
+//        Vector3 n1 = triangleNormals[t1];
+
+//        int vi0 = kv.Key.Item1;
+//        int vi1 = kv.Key.Item2;
+//        Vector3 edgeCenter = (worldVertices[vi0] + worldVertices[vi1]) * 0.5f;
+//        Vector3 viewDir = (camPos - edgeCenter).normalized;
+//        float d0 = Vector3.Dot(n0, viewDir);
+//        float d1 = Vector3.Dot(n1, viewDir);
+
+//        if ((d0 > 0 && d1 < 0) || (d0 < 0 && d1 > 0))
+//        {
+//            edgeSilhouetteIndices.Add(vi0);
+//            edgeSilhouetteIndices.Add(vi1);
+//        }
+//    }
+
+//    HashSet<Vector3> edgeSilhouettePositions = new();
+//    foreach (int i in edgeSilhouetteIndices)
+//    {
+//        edgeSilhouettePositions.Add(worldVertices[i]);
+//    }
+
+//    // [3] 최종 제거
+//    foreach (var v in visibleVertices)
+//    {
+//        bool isDotSilhouette = dotSilhouetteVertices.Contains(v);
+//        bool isEdgeNear = edgeSilhouettePositions.Any(s => (s - v).sqrMagnitude < edgeProximityThreshold * edgeProximityThreshold);
+
+//        if (!isDotSilhouette && !isEdgeNear)
+//            filtered.Add(v);
+//    }
 
 //    return filtered;
+//}
+
+//private static Vector3 GetVertexNormalA(MeshFilter meshFilter, Vector3 vertexWorldPos)
+//{
+//    Vector3[] localVertices = meshFilter.sharedMesh.vertices;
+//    Vector3[] normals = meshFilter.sharedMesh.normals;
+
+//    for (int i = 0; i < localVertices.Length; i++)
+//    {
+//        Vector3 worldPos = meshFilter.transform.TransformPoint(localVertices[i]);
+//        if (Vector3.Distance(worldPos, vertexWorldPos) < 0.0005f)
+//            return normals[i];
+//    }
+
+//    return Vector3.up; // fallback
 //}

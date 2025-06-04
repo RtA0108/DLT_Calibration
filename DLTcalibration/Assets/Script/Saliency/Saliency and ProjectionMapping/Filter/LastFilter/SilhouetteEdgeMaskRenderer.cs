@@ -21,7 +21,13 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
     {
         cam = GetComponent<Camera>();
         cam.depthTextureMode = DepthTextureMode.None;
+        AutoAssignMeshFilter();
 
+        if (meshFilter == null || meshFilter.sharedMesh == null)
+        {
+            Debug.LogError("[Silhouette] meshFilter가 설정되지 않았습니다.");
+            return;
+        }
         // Shader가 비어있다면 기본 할당
         if (solidColorShader == null)
             solidColorShader = Shader.Find("Hidden/SilhouetteSolidColor");
@@ -35,6 +41,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
     public void Render()
     {
+
         int w = Screen.width;
         int h = Screen.height;
 
@@ -101,5 +108,39 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
     public void SaveSilhouetteMaskToPNG(string filename = "SilhouetteMaskSnapshot.png")
     {
         SaveRenderTextureToPNG(silhouetteMask, filename);
+    }
+    private void AutoAssignMeshFilter()
+    {
+        int excludedLayer = LayerMask.NameToLayer("Vertex in 3D");
+
+        MeshFilter[] candidates = FindObjectsOfType<MeshFilter>();
+        float minDist = float.MaxValue;
+        MeshFilter selected = null;
+
+        foreach (var mf in candidates)
+        {
+            GameObject go = mf.gameObject;
+
+            if (!go.activeInHierarchy) continue;                    // 비활성화된 오브젝트 제외
+            if (go.layer == excludedLayer) continue;                // 제외 Layer이면 스킵
+
+            Vector3 toMesh = go.transform.position - cam.transform.position;
+            float dot = Vector3.Dot(cam.transform.forward, toMesh); // 카메라 앞에 있는지 확인
+            if (dot > 0 && dot < minDist)
+            {
+                minDist = dot;
+                selected = mf;
+            }
+        }
+
+        if (selected != null)
+        {
+            meshFilter = selected;
+            Debug.Log($"[Silhouette] 자동 선택된 Mesh: {meshFilter.name}");
+        }
+        else
+        {
+            Debug.LogWarning("[Silhouette] 활성화된 대상 Mesh를 찾지 못했습니다.");
+        }
     }
 }

@@ -36,18 +36,7 @@ Shader "Hidden/NormalsEdgeMask"
 
             float4 frag(Varyings i) : SV_Target
             {
-                // float2 texelSize = 1.0 / _ScreenParams.xy;
 
-                // float3 nC = SAMPLE_TEXTURE2D(_CameraNormalsTexture, sampler_CameraNormalsTexture, i.uv).xyz;
-                // float3 nR = SAMPLE_TEXTURE2D(_CameraNormalsTexture, sampler_CameraNormalsTexture, i.uv + float2(texelSize.x, 0)).xyz;
-                // float3 nU = SAMPLE_TEXTURE2D(_CameraNormalsTexture, sampler_CameraNormalsTexture, i.uv + float2(0, texelSize.y)).xyz;
-
-                // float dx = length(nC - nR);
-                // float dy = length(nC - nU);
-
-                // float edge = dx + dy;
-
-                // return edge > 0.1 ? float4(1, 1, 1, 1) : float4(0, 0, 0, 1);
                 float2 texelSize = 1.0 / _ScreenParams.xy;
 
                 float3 nC = SAMPLE_TEXTURE2D(_CameraNormalsTexture, sampler_CameraNormalsTexture, i.uv).xyz;
