@@ -30,9 +30,9 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     void Prepare()
     {
         // Layer 설정 복원
-        int vertexLayer = LayerMask.NameToLayer("Vertex In 3D");
+        int vertexLayer = LayerMask.NameToLayer("Meshes");
         if (vertexLayer != -1)
-            visibilityLayerMask = ~(1 << vertexLayer);
+            visibilityLayerMask = (1 << vertexLayer);
         else
             visibilityLayerMask = Physics.DefaultRaycastLayers;
 
@@ -63,7 +63,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         }
 
         var filtered = SaliencyUtils.FilterVerticesByEdge(edgeMask, visible, mainCamera, distanceThresholdPixels: 1.5f);
-        filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.2f);
+        filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.3f);
 
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 

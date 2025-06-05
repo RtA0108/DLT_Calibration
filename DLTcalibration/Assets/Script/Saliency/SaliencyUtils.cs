@@ -14,7 +14,7 @@ public static class SaliencyUtils
         Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
 
         float dotThreshold = 0.5f; // ← 더 정면을 향한 정점만 raycast 시도
-        //float hitTolerance = 0.005f; // 거리 기반 (너무 뒤에 있어서 잘 안보이는 vertex 제외)
+        float hitTolerance = 0.005f; // 거리 기반 (너무 뒤에 있어서 잘 안보이는 vertex 제외)
 
         foreach (var kvp in vertexPositions)
         {
@@ -35,9 +35,11 @@ public static class SaliencyUtils
 
             Ray ray = new Ray(camPos, (vertexWorldPos - camPos).normalized);
             //Mathf.Infinity를 고정된 수치로 변경할지 고민
-            if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
+            float rayDistance = Vector3.Distance(camPos, vertexWorldPos) * 1.1f;
+            if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, visibilityLayerMask))
+                //if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
             {
-                 //if (Vector3.Distance(hit.point, vertexWorldPos) < hitTolerance)
+                 if (Vector3.Distance(hit.point, vertexWorldPos) < hitTolerance)
                  {
                     if (!uniquePositions.ContainsKey(roundedVertex))
                     {
@@ -101,74 +103,46 @@ public static class SaliencyUtils
         return filtered;
     }
     // triangle normal filter
-    public static List<Vector3> BuildTriangleNormals(Mesh mesh, Transform transform)
+
+    public static List<Vector3> FilterVerticesByTriangleNormals(List<Vector3> filtered, MeshFilter meshFilter, Camera camera, float dotThreshold = 0.2f)
     {
-        Vector3[] vertices = mesh.vertices;
-        int[] triangles = mesh.triangles;
-
-        List<Vector3> triangleNormals = new();
-
-        for (int i = 0; i < triangles.Length; i += 3)
-        {
-            Vector3 p0 = transform.TransformPoint(vertices[triangles[i]]);
-            Vector3 p1 = transform.TransformPoint(vertices[triangles[i + 1]]);
-            Vector3 p2 = transform.TransformPoint(vertices[triangles[i + 2]]);
-
-            Vector3 normal = Vector3.Cross(p1 - p0, p2 - p0).normalized;
-            triangleNormals.Add(normal);
-        }
-
-        return triangleNormals;
-    }
-
-    public static List<Vector3> FilterVerticesByTriangleNormals(List<Vector3> filtered, MeshFilter meshFilter, Camera camera, float dotThreshold = 0.5f)
-    {
-        HashSet<Vector3> removeSet = new();
         Dictionary<Vector3, Vector3> normalMap = new();
-
+        HashSet<Vector3> filteredSet = new(filtered);
         Mesh mesh = meshFilter.sharedMesh;
         Vector3[] verts = mesh.vertices;
         int[] tris = mesh.triangles;
-        HashSet<Vector3> filteredSet = new(filtered);
+        Vector3 camPos = camera.transform.position;
 
+        // triangle normal 평균 계산
         for (int i = 0; i < tris.Length; i += 3)
         {
             Vector3 v0 = meshFilter.transform.TransformPoint(verts[tris[i]]);
             Vector3 v1 = meshFilter.transform.TransformPoint(verts[tris[i + 1]]);
             Vector3 v2 = meshFilter.transform.TransformPoint(verts[tris[i + 2]]);
 
-            bool in0 = filteredSet.Contains(v0);
-            bool in1 = filteredSet.Contains(v1);
-            bool in2 = filteredSet.Contains(v2);
-
-            if (in0 && in1 && in2)
+            if (filteredSet.Contains(v0) && filteredSet.Contains(v1) && filteredSet.Contains(v2))
             {
-                Vector3 normal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
+                Vector3 triNormal = Vector3.Cross(v1 - v0, v2 - v0).normalized;
                 if (!normalMap.ContainsKey(v0)) normalMap[v0] = Vector3.zero;
                 if (!normalMap.ContainsKey(v1)) normalMap[v1] = Vector3.zero;
                 if (!normalMap.ContainsKey(v2)) normalMap[v2] = Vector3.zero;
-                normalMap[v0] += normal;
-                normalMap[v1] += normal;
-                normalMap[v2] += normal;
+                normalMap[v0] += triNormal;
+                normalMap[v1] += triNormal;
+                normalMap[v2] += triNormal;
             }
-
-            if (in0 && !in1 && !in2) removeSet.Add(v0);
-            if (in1 && !in0 && !in2) removeSet.Add(v1);
-            if (in2 && !in0 && !in1) removeSet.Add(v2);
         }
 
-        // 카메라를 향하지 않는 normal 제거
-        Vector3 camPos = camera.transform.position;
-        foreach (var kv in normalMap)
+        List<Vector3> final = new();
+        foreach (var v in filtered)
         {
-            Vector3 avgNormal = kv.Value.normalized;
-            Vector3 toCam = (camPos - kv.Key).normalized;
-            float dot = Vector3.Dot(avgNormal, toCam);
-            if (dot < dotThreshold)
-                removeSet.Add(kv.Key);
+            if (normalMap.TryGetValue(v, out var normal))
+            {
+                Vector3 viewDir = (camPos - v).normalized;
+                if (Vector3.Dot(normal.normalized, viewDir) >= dotThreshold)
+                    final.Add(v);
+            }
         }
-
-        return filtered.Where(v => !removeSet.Contains(v)).ToList();
+        return final;
     }
 
 
