@@ -55,7 +55,7 @@ public class CreateSphereAtVertex : MonoBehaviour
 
 
                         GameObject sphere = Instantiate(vertexSphere, vertexPosition, Quaternion.identity);
-                        sphere.transform.localScale = new Vector3(5.0f, 5.0f, 5.0f);
+                        sphere.transform.localScale = new Vector3(2.5f, 2.5f, 2.5f);
                         sphere.name = "vertex" + indexNumber;
 
                         // Assign layer to **IGNORE** it for raycasting

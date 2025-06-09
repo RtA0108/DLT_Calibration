@@ -59,7 +59,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         if (visualized)
         {
             foreach (var v in visible)
-                SaliencyUtils.HighlightVertex(v, Color.blue, 5.5f, false);
+                SaliencyUtils.HighlightVertex(v, Color.blue, 3.0f, false);
         }
 
         var filtered = SaliencyUtils.FilterVerticesByEdge(edgeMask, visible, mainCamera, distanceThresholdPixels: 1.5f);
@@ -68,7 +68,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 
             foreach (var vertex in filtered)
-                SaliencyUtils.HighlightVertex(vertex, Color.green, 6f, false);
+                SaliencyUtils.HighlightVertex(vertex, Color.green, 4.0f, false);
         }
         // Saliency °è»ê
         Dictionary<Vector3, float> saliencyMap = saliencyMode switch
@@ -89,7 +89,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         Debug.Log($"[Final Recommended] {final.Count} vertices selected.");
 
         for (int i = 0; i < final.Count; i++)
-            SaliencyUtils.HighlightVertex(final[i], Color.red, 7f, true, i);
+            SaliencyUtils.HighlightVertex(final[i], Color.red, 5.0f, true, i);
 
         Debug.Log("Calibration Complete");
     }
