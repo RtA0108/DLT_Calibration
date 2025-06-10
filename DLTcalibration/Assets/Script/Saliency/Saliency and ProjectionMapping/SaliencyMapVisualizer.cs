@@ -132,6 +132,7 @@ public class SaliencyMapVisualizer : MonoBehaviour
         {
             SaliencyMode.Entropy => EntropySaliencyComputer.Compute(meshFilter, allVertexList, l),
             SaliencyMode.Curvature => MeshSaliencyComputer.Compute(meshFilter, allVertexList, l),
+            SaliencyMode.Spectral => SpectralSaliencyComputer.Compute(meshFilter, allVertexList, l),
             _ => throw new System.Exception("Unknown saliency mode")
         };
 

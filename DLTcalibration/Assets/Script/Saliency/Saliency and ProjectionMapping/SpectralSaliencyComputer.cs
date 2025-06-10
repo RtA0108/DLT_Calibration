@@ -4,67 +4,78 @@ using System.Linq;
 using UnityEngine;
 using MathNet.Numerics.LinearAlgebra;
 
-public class SpectralSaliencyComputer : MonoBehaviour
+public static class SpectralSaliencyComputer
 {
-    public MeshFilter meshFilter;
-    public Dictionary<int, float> vertexSaliency = new Dictionary<int, float>();
-
-    public void ComputeSaliency()
+    public static Dictionary<Vector3, float> Compute(MeshFilter meshFilter, List<Vector3> filtered, float l)
     {
         Mesh mesh = meshFilter.sharedMesh;
-        Vector3[] vertices = mesh.vertices;
+        Vector3[] localVertices = mesh.vertices;
+        Vector3[] worldVertices = localVertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
 
-        // 1. Build adjacency list (as HashSet)
+        // 1. Build adjacency list
         Dictionary<int, HashSet<int>> neighbors = SaliencyUtils.BuildAdjacency(mesh);
 
-        // 2. Build geometric Laplacian matrix (distance-weighted)
-        var L = BuildGeometricLaplacian(vertices, neighbors);
+        // 2. Build geometric Laplacian
+        var L = BuildGeometricLaplacian(localVertices, neighbors);
 
         // 3. Eigen decomposition
         var evd = L.Evd();
         var eigenVectors = evd.EigenVectors;
         var eigenValues = evd.EigenValues.Select(c => c.Real).ToArray();
 
-        // 4. Log-Laplacian Spectrum
-        float[] logSpectrum = eigenValues.Select(lambda => Mathf.Log(Mathf.Abs((float)lambda) + 1e-6f)).ToArray();
+        // 4. Multi-scale saliency computation (Section 3)
+        int[] scales = new int[] { 3, 5, 7, 9, 11 };
+        int n = eigenValues.Length;
+        float[][] multiScaleDeviations = new float[scales.Length][];
 
-        // 5. Local average and deviation (spectral irregularity)
-        float[] avgSpectrum = LocalAverage(logSpectrum, 9);
-        float[] spectralDeviation = logSpectrum.Zip(avgSpectrum, (l, a) => Mathf.Abs(l - a)).ToArray();
+        for (int s = 0; s < scales.Length; s++)
+        {
+            float[] logSpectrum = eigenValues.Select(lambda => Mathf.Log(Mathf.Abs((float)lambda) + 1e-6f)).ToArray();
+            float[] avgSpectrum = LocalAverage(logSpectrum, scales[s]);
+            float[] spectralDeviation = logSpectrum.Zip(avgSpectrum, (lval, avg) => Mathf.Abs(lval - avg)).ToArray();
+            multiScaleDeviations[s] = spectralDeviation;
+        }
 
-        // 6. Transform back to spatial domain
-        int n = spectralDeviation.Length;
-
-        // 6-1. exp(deviation) 미리 계산
-        float[] diagonalValues = spectralDeviation.Select(x => Mathf.Exp(x)).ToArray();
-
-        // 6-2. 빈 행렬 만들기
-        var R = Matrix<float>.Build.Dense(n, n, 0f);
-
-        // 6-3. 대각 원소만 직접 채우기
+        // 5. Combine multiscale saliency via sum of exp deviations
+        float[] combinedDeviation = new float[n];
         for (int i = 0; i < n; i++)
         {
-            R[i, i] = diagonalValues[i];
+            float sum = 0f;
+            for (int s = 0; s < scales.Length; s++)
+                sum += Mathf.Exp(multiScaleDeviations[s][i]);
+            combinedDeviation[i] = Mathf.Log(sum + 1e-6f);
         }
+
+        // 6. Back project to spatial domain
+        var R = Matrix<float>.Build.Dense(n, n, 0f);
+        for (int i = 0; i < n; i++)
+            R[i, i] = combinedDeviation[i];
         var S = eigenVectors * R * eigenVectors.Transpose();
 
         // 7. Vertex-wise saliency from row sums
+        Dictionary<Vector3, float> saliencyMap = new();
         for (int i = 0; i < S.RowCount; i++)
+            saliencyMap[worldVertices[i]] = S.Row(i).Sum();
+
+        // 8. 필터링된 vertex만 추림
+        Dictionary<Vector3, float> filteredMap = new();
+        foreach (var v in filtered)
         {
-            vertexSaliency[i] = S.Row(i).Sum();
+            if (saliencyMap.TryGetValue(v, out float s))
+                filteredMap[v] = s;
         }
+
+        return filteredMap;
     }
 
-    private Matrix<float> BuildGeometricLaplacian(Vector3[] vertices, Dictionary<int, HashSet<int>> neighbors)
+    private static Matrix<float> BuildGeometricLaplacian(Vector3[] vertices, Dictionary<int, HashSet<int>> neighbors)
     {
         int n = vertices.Length;
         var W = Matrix<float>.Build.Dense(n, n, 0f);
 
-        // 1. Weight matrix W 구성 (distance-based)
         for (int i = 0; i < n; i++)
         {
             if (!neighbors.ContainsKey(i)) continue;
-
             foreach (int j in neighbors[i])
             {
                 float distSq = (vertices[i] - vertices[j]).sqrMagnitude + 1e-6f;
@@ -72,7 +83,6 @@ public class SpectralSaliencyComputer : MonoBehaviour
             }
         }
 
-        // 2. Row 정규화 (W의 각 row의 합이 1이 되도록)
         for (int i = 0; i < n; i++)
         {
             float rowSum = W.Row(i).Sum();
@@ -83,16 +93,14 @@ public class SpectralSaliencyComputer : MonoBehaviour
             }
         }
 
-        // 3. Diagonal matrix D 구성 (W의 row sum)
         var D = Matrix<float>.Build.Dense(n, n, 0f);
         for (int i = 0; i < n; i++)
             D[i, i] = W.Row(i).Sum();
 
-        // 4. Laplacian L = W - D
         return W - D;
     }
 
-    private float[] LocalAverage(float[] spectrum, int window)
+    private static float[] LocalAverage(float[] spectrum, int window)
     {
         int n = spectrum.Length;
         float[] avg = new float[n];

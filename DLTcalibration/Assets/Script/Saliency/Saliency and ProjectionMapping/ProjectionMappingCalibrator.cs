@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 
-public enum SaliencyMode { Entropy, Curvature }
+public enum SaliencyMode { Entropy, Curvature, Spectral }
 
 public class ProjectionMappingCalibrator : MonoBehaviour
 {
@@ -63,7 +63,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         }
 
         var filtered = SaliencyUtils.FilterVerticesByEdge(edgeMask, visible, mainCamera, distanceThresholdPixels: 1.5f);
-        filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.3f);
+        //filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.3f);
 
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 
@@ -75,6 +75,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         {
             SaliencyMode.Entropy => EntropySaliencyComputer.Compute(meshFilter, filtered, l),
             SaliencyMode.Curvature => MeshSaliencyComputer.Compute(meshFilter, filtered, l),
+            SaliencyMode.Spectral => SpectralSaliencyComputer.Compute(meshFilter, filtered, l),
             _ => throw new System.Exception("Unknown mode")
         };
 
