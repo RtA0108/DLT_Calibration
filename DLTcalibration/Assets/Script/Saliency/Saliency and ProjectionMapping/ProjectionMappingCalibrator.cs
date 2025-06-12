@@ -13,7 +13,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     public int recommendedVertexCount = 6;
     public bool visualized = true;
     public SilhouetteEdgeMaskRenderer silhouetteRenderer;
-    public DebugEdgeMaskRenderer debugRenderer;
+    //public DebugEdgeMaskRenderer debugRenderer;
     [Range(0f, 1f)] public float topSaliencyPercentage = 0.5f;
 
     private Dictionary<int, Vector3> vertexPositions;
@@ -53,7 +53,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         var edgeMask = silhouetteRenderer.GetEdgeMask();
         silhouetteRenderer.SaveSilhouetteMaskToPNG();
         silhouetteRenderer.SaveEdgeMaskToPNG("SavedSilhouette.png");
-        debugRenderer.edgeMask = edgeMask; // 디버그용 연결
+        //debugRenderer.edgeMask = edgeMask; // 디버그용 연결
 
         var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
         if (visualized)
@@ -63,7 +63,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         }
 
         var filtered = SaliencyUtils.FilterVerticesByEdge(edgeMask, visible, mainCamera, distanceThresholdPixels: 1.5f);
-        //filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.3f);
+        filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.3f);
 
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
         if (visualized) { 

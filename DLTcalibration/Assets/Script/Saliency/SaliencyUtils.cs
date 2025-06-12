@@ -54,7 +54,7 @@ public static class SaliencyUtils
     }
 
     //Silhouette 기반 필터 진행중
-    public static List<Vector3> FilterVerticesByEdge(RenderTexture edgeMask, List<Vector3> vertices, Camera camera, float distanceThresholdPixels = 1.5f)
+    public static List<Vector3> FilterVerticesByEdge(RenderTexture edgeMask, List<Vector3> vertices, Camera camera, float distanceThresholdPixels = 5.0f)
     {
         List<Vector3> filtered = new List<Vector3>();
 
@@ -95,13 +95,20 @@ public static class SaliencyUtils
                 }
                 if (isNearEdge) break;
             }
-
             if (!isNearEdge)
+            {
                 filtered.Add(vertex);
+               // Debug.Log($"[EdgeFilter] PASS: vertex screen ({x}, {y}) → retained");
+            }
+            //else
+            //{
+            //    Debug.Log($"[EdgeFilter] REMOVED: vertex screen ({x}, {y}) is near edge");
+            //}
         }
 
         return filtered;
     }
+
     // triangle normal filter
 
     public static List<Vector3> FilterVerticesByTriangleNormals(List<Vector3> filtered, MeshFilter meshFilter, Camera camera, float dotThreshold = 0.2f)

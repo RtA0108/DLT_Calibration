@@ -42,10 +42,8 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
     public void Render()
     {
 
-        //int w = Screen.width;
-        //int h = Screen.height;
-        int w = cam.pixelWidth;
-        int h = cam.pixelHeight;
+        int w = Screen.width;
+        int h = Screen.height;
         // RenderTexture 积己 棺 农扁 眉农
         if (silhouetteMask == null || silhouetteMask.width != w || silhouetteMask.height != h)
         {
@@ -67,7 +65,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
         GL.PushMatrix();
         Matrix4x4 vp = cam.projectionMatrix * cam.worldToCameraMatrix;
         GL.LoadProjectionMatrix(vp);
-        //GL.LoadProjectionMatrix(cam.projectionMatrix);
+
         solidMat.SetPass(0);
         Graphics.DrawMeshNow(meshFilter.sharedMesh, meshFilter.transform.localToWorldMatrix);
         GL.PopMatrix();
