@@ -1,3 +1,4 @@
+
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -66,7 +67,8 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, mainCamera, dotThreshold: 0.3f);
 
         //var filtered = SaliencyUtils.FilterVerticesForCalibration(mainCamera, meshFilter, visible);
-        if (visualized) { 
+        if (visualized)
+        {
             foreach (var vertex in filtered)
                 SaliencyUtils.HighlightVertex(vertex, Color.green, 4.0f, false);
         }

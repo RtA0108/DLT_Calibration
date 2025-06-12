@@ -98,7 +98,7 @@ public static class SaliencyUtils
             if (!isNearEdge)
             {
                 filtered.Add(vertex);
-               // Debug.Log($"[EdgeFilter] PASS: vertex screen ({x}, {y}) ¡æ retained");
+            //    Debug.Log($"[EdgeFilter] PASS: vertex screen ({x}, {y}) ¡æ retained");
             }
             //else
             //{

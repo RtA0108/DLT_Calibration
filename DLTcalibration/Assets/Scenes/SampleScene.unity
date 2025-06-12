@@ -214,7 +214,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   saliencyMode: 0
-  mainCamera: {fileID: 330585545}
+  mainCamera: {fileID: 808022739}
   meshFilter: {fileID: 191060650}
   recommendedVertexCount: 6
   visualized: 1
@@ -821,7 +821,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   saliencyMode: 0
-  mainCamera: {fileID: 330585545}
+  mainCamera: {fileID: 808022739}
   meshFilter: {fileID: 606410052}
   recommendedVertexCount: 6
   visualized: 1
@@ -996,7 +996,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
@@ -1014,11 +1014,11 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 606410055}
+      addedObject: {fileID: 606410049}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 281f5836f0d54084bb78b941ba86cacc,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 606410049}
+      addedObject: {fileID: 606410055}
   m_SourcePrefab: {fileID: 100100000, guid: 281f5836f0d54084bb78b941ba86cacc, type: 3}
 --- !u!1001 &666739377
 PrefabInstance:
@@ -1390,7 +1390,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   solidColorShader: {fileID: 4800000, guid: 0fe1a49c9f8c87447ac9f97d08d3cfe6, type: 3}
   edgeDetectShader: {fileID: 4800000, guid: 44df74de36ea5fe4bbb1c1beb1155b58, type: 3}
-  meshFilter: {fileID: 1687685523}
+  meshFilter: {fileID: 0}
   silhouetteMask: {fileID: 0}
   edgeMask: {fileID: 0}
   edgeThreshold: 0.1
@@ -1609,7 +1609,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
@@ -1913,7 +1913,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   saliencyMode: 0
-  mainCamera: {fileID: 330585545}
+  mainCamera: {fileID: 808022739}
   meshFilter: {fileID: 1687685523}
   recommendedVertexCount: 6
   visualized: 1
@@ -2086,7 +2086,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   saliencyMode: 0
-  mainCamera: {fileID: 330585545}
+  mainCamera: {fileID: 808022739}
   meshFilter: {fileID: 1813008722}
   recommendedVertexCount: 6
   visualized: 1
@@ -2541,11 +2541,11 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 2105277077}
+      addedObject: {fileID: 2105277076}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
         type: 3}
       insertIndex: -1
-      addedObject: {fileID: 2105277076}
+      addedObject: {fileID: 2105277077}
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7d35611d4d9a9e343a86c7048b3199f8,
         type: 3}
       insertIndex: -1
@@ -2598,7 +2598,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   saliencyMode: 0
-  mainCamera: {fileID: 330585545}
+  mainCamera: {fileID: 808022739}
   meshFilter: {fileID: 2105277075}
   recommendedVertexCount: 6
   visualized: 1
