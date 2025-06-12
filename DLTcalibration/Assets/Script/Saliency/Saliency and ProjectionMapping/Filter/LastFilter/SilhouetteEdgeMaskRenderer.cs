@@ -42,9 +42,10 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
     public void Render()
     {
 
-        int w = Screen.width;
-        int h = Screen.height;
-
+        //int w = Screen.width;
+        //int h = Screen.height;
+        int w = cam.pixelWidth;
+        int h = cam.pixelHeight;
         // RenderTexture 积己 棺 农扁 眉农
         if (silhouetteMask == null || silhouetteMask.width != w || silhouetteMask.height != h)
         {
