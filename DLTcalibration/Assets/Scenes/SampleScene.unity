@@ -189,7 +189,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 191060644}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6397f77ae81310e468d1b9b1155b4744, type: 3}
   m_Name: 
@@ -200,7 +200,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
-  saliencyMode: 0
+  saliencyMode: 1
 --- !u!114 &191060647
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -208,7 +208,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 191060644}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27d3e1ecf162e914d80bb07d6c9b63ce, type: 3}
   m_Name: 
@@ -820,7 +820,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 27d3e1ecf162e914d80bb07d6c9b63ce, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  saliencyMode: 0
+  saliencyMode: 1
   mainCamera: {fileID: 808022739}
   meshFilter: {fileID: 606410052}
   recommendedVertexCount: 6
@@ -873,7 +873,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
-  saliencyMode: 0
+  saliencyMode: 1
 --- !u!4 &606410057 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 281f5836f0d54084bb78b941ba86cacc,
@@ -1609,7 +1609,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 1360333739a15394db381ce0d9b764af,
         type: 3}
@@ -1899,7 +1899,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
-  saliencyMode: 0
+  saliencyMode: 1
 --- !u!114 &1687685521
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1907,7 +1907,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1687685519}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27d3e1ecf162e914d80bb07d6c9b63ce, type: 3}
   m_Name: 
@@ -2061,7 +2061,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1813008716}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6397f77ae81310e468d1b9b1155b4744, type: 3}
   m_Name: 
@@ -2072,7 +2072,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
-  saliencyMode: 0
+  saliencyMode: 1
 --- !u!114 &1813008719
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2080,7 +2080,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1813008716}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 27d3e1ecf162e914d80bb07d6c9b63ce, type: 3}
   m_Name: 
@@ -2306,7 +2306,7 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
         type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 6d8473ce5d520b6428d255d7bf9cfd32,
         type: 3}
@@ -2622,7 +2622,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   runOnStart: 1
-  saliencyMode: 0
+  saliencyMode: 1
 --- !u!4 &2105277079 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 7d35611d4d9a9e343a86c7048b3199f8,

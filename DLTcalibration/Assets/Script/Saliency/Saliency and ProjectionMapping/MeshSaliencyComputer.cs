@@ -6,37 +6,144 @@ public static class MeshSaliencyComputer
 {
     public static Dictionary<Vector3, float> Compute(MeshFilter meshFilter, List<Vector3> targetVertices, float l)
     {
-        var mesh = meshFilter.sharedMesh;
-        var vertices = mesh.vertices;
-        var worldVertices = vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
+        Mesh mesh = meshFilter.sharedMesh;
+        Vector3[] localVertices = mesh.vertices;
+        Vector3[] worldVertices = localVertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
 
-        // 1. Mean Curvature 계산 + Log 변환
-        var meanCurvature = ComputeMeanCurvatures(meshFilter);
-        var hLog = meanCurvature.ToDictionary(kv => kv.Key, kv => Mathf.Log(kv.Value + 1e-4f));
-
-        // 2. Multi-scale Gaussian smoothing & DoG
-        float epsilon = 0.01f * l;
+        float epsilon = 0.003f * l;
         float[] sigmas = new float[] { 2f, 3f, 4f, 5f, 6f }.Select(s => s * epsilon).ToArray();
 
-        Dictionary<Vector3, float[]> multiScaleSaliency = new();
+        // 1. 중복 위치 제거: 대표 인덱스 하나만 추출
+        Dictionary<Vector3, int> uniqueVertexMap = new(); // 위치 → 대표 인덱스
+        for (int i = 0; i < worldVertices.Length; i++)
+        {
+            Vector3 pos = worldVertices[i];
+            if (!uniqueVertexMap.ContainsKey(pos))
+                uniqueVertexMap[pos] = i;
+        }
 
+        // 2. targetVertices 중에서 실제로 존재하는 고유 위치만 추출
+        HashSet<Vector3> validTargetPositions = new HashSet<Vector3>(targetVertices.Where(uniqueVertexMap.ContainsKey));
+
+        // 3. mean curvature 계산 (Taubin 기반) → log 변환
+        Dictionary<int, float> meanCurvatures = ComputeMeanCurvatures_Taubin(meshFilter);
+        Dictionary<int, float> hLog = meanCurvatures.ToDictionary(kv => kv.Key, kv => Mathf.Log(kv.Value + 1e-4f));
+
+        // 4. Multi-scale saliency 계산
+        Dictionary<Vector3, float[]> multiScale = new();
         foreach (float sigma in sigmas)
         {
-            foreach (var v in targetVertices)
+            int sigmaIndex = System.Array.IndexOf(sigmas, sigma);
+
+            foreach (Vector3 pos in validTargetPositions)
             {
-                int index = SaliencyUtils.FindNearestVertexIndex(v, worldVertices);
+                int index = uniqueVertexMap[pos];
                 float g1 = GaussianSmooth(index, worldVertices, hLog, sigma);
                 float g2 = GaussianSmooth(index, worldVertices, hLog, 2f * sigma);
 
                 float saliency = Mathf.Abs(g1 - g2);
-                if (!multiScaleSaliency.ContainsKey(v))
-                    multiScaleSaliency[v] = new float[sigmas.Length];
+                if (!multiScale.ContainsKey(pos))
+                    multiScale[pos] = new float[sigmas.Length];
 
-                multiScaleSaliency[v][System.Array.IndexOf(sigmas, sigma)] = saliency;
+                multiScale[pos][sigmaIndex] = saliency;
             }
         }
 
-        return NormalizeSaliency(multiScaleSaliency);
+        return NormalizeSaliency(multiScale);
+    }
+    private static Dictionary<int, float> ComputeMeanCurvatures_Taubin(MeshFilter meshFilter)
+    {
+        Mesh mesh = meshFilter.sharedMesh;
+        Vector3[] vertices = mesh.vertices;
+        Vector3[] worldVertices = vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
+        int[] triangles = mesh.triangles;
+
+        // 1. Face normals and areas
+        Dictionary<int, List<int>> vertexFaces = new();
+        Dictionary<int, Vector3> vertexNormals = new();
+        Dictionary<int, float> areaSum = new();
+        Dictionary<int, List<int>> neighbors = new();
+
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            vertexFaces[i] = new List<int>();
+            neighbors[i] = new List<int>();
+            areaSum[i] = 0f;
+        }
+
+        Vector3[] faceNormals = new Vector3[triangles.Length / 3];
+        float[] faceAreas = new float[triangles.Length / 3];
+
+        for (int i = 0; i < triangles.Length; i += 3)
+        {
+            int i0 = triangles[i];
+            int i1 = triangles[i + 1];
+            int i2 = triangles[i + 2];
+
+            Vector3 v0 = worldVertices[i0];
+            Vector3 v1 = worldVertices[i1];
+            Vector3 v2 = worldVertices[i2];
+
+            Vector3 normal = Vector3.Cross(v1 - v0, v2 - v0);
+            float area = normal.magnitude / 2f;
+            normal.Normalize();
+
+            int faceIdx = i / 3;
+            faceNormals[faceIdx] = normal;
+            faceAreas[faceIdx] = area;
+
+            vertexFaces[i0].Add(faceIdx);
+            vertexFaces[i1].Add(faceIdx);
+            vertexFaces[i2].Add(faceIdx);
+
+            neighbors[i0].Add(i1); neighbors[i0].Add(i2);
+            neighbors[i1].Add(i0); neighbors[i1].Add(i2);
+            neighbors[i2].Add(i0); neighbors[i2].Add(i1);
+
+            areaSum[i0] += area / 3f;
+            areaSum[i1] += area / 3f;
+            areaSum[i2] += area / 3f;
+        }
+
+        foreach (int vi in vertexFaces.Keys)
+        {
+            Vector3 normalSum = Vector3.zero;
+            foreach (int faceIdx in vertexFaces[vi])
+                normalSum += faceNormals[faceIdx] * faceAreas[faceIdx];
+            vertexNormals[vi] = normalSum.normalized;
+        }
+
+        // 2. Mean curvature estimation
+        Dictionary<int, float> meanCurvature = new();
+
+        foreach (int i in neighbors.Keys)
+        {
+            Vector3 ni = vertexNormals[i];
+            Vector3 pi = worldVertices[i];
+
+            Vector3 sum = Vector3.zero;
+            float totalWeight = 0f;
+
+            HashSet<int> uniqueNeighbors = new HashSet<int>(neighbors[i]);
+            foreach (int j in uniqueNeighbors)
+            {
+                Vector3 pj = worldVertices[j];
+                Vector3 dir = pj - pi;
+                Vector3 t = dir - Vector3.Dot(dir, ni) * ni;
+                t.Normalize();
+
+                float kappa = 2f * Vector3.Dot(ni, pj - pi) / (Vector3.SqrMagnitude(pj - pi) + 1e-6f);
+
+                // Weight by shared area (uniform for now)
+                sum += kappa * t;
+                totalWeight += 1f;
+            }
+
+            float A = areaSum[i] > 1e-6f ? areaSum[i] : 1f;
+            meanCurvature[i] = sum.magnitude / (2f * A);
+        }
+
+        return meanCurvature;
     }
 
     private static float GaussianSmooth(int centerIdx, Vector3[] positions, Dictionary<int, float> hLog, float sigma)
@@ -78,72 +185,6 @@ public static class MeshSaliencyComputer
         }
 
         return finalSaliency;
-    }
-
-    private static Dictionary<int, float> ComputeMeanCurvatures(MeshFilter meshFilter)
-    {
-        Mesh mesh = meshFilter.sharedMesh;
-        Vector3[] vertices = mesh.vertices;
-        Vector3[] worldVertices = vertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
-        int[] triangles = mesh.triangles;
-
-        Dictionary<int, List<(int j, float weight)>> cotangentWeights = new();
-        Dictionary<int, float> areaSum = new();
-        Dictionary<int, float> curvature = new();
-
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            cotangentWeights[i] = new List<(int, float)>();
-            areaSum[i] = 0f;
-        }
-
-        for (int i = 0; i < triangles.Length; i += 3)
-        {
-            int i0 = triangles[i];
-            int i1 = triangles[i + 1];
-            int i2 = triangles[i + 2];
-
-            Vector3 v0 = worldVertices[i0];
-            Vector3 v1 = worldVertices[i1];
-            Vector3 v2 = worldVertices[i2];
-
-            float area = Vector3.Cross(v1 - v0, v2 - v0).magnitude / 6f;
-            areaSum[i0] += area;
-            areaSum[i1] += area;
-            areaSum[i2] += area;
-
-            AddCotangent(i0, i1, i2, v0, v1, v2, cotangentWeights);
-            AddCotangent(i1, i2, i0, v1, v2, v0, cotangentWeights);
-            AddCotangent(i2, i0, i1, v2, v0, v1, cotangentWeights);
-        }
-
-        foreach (int i in cotangentWeights.Keys)
-        {
-            Vector3 sum = Vector3.zero;
-            foreach (var (j, weight) in cotangentWeights[i])
-            {
-                sum += weight * (worldVertices[j] - worldVertices[i]);
-            }
-
-            float A = areaSum[i] > 1e-6f ? areaSum[i] : 1f;
-            curvature[i] = sum.magnitude / (2f * A);
-        }
-
-        return curvature;
-    }
-
-    private static void AddCotangent(int i0, int i1, int i2, Vector3 v0, Vector3 v1, Vector3 v2,
-                                     Dictionary<int, List<(int j, float weight)>> cotangentWeights)
-    {
-        Vector3 a = v1 - v0;
-        Vector3 b = v2 - v0;
-        float cot = Vector3.Dot(a, b) / Vector3.Cross(a, b).magnitude;
-
-        if (!float.IsNaN(cot) && !float.IsInfinity(cot))
-        {
-            cotangentWeights[i0].Add((i1, cot));
-            cotangentWeights[i1].Add((i0, cot));
-        }
     }
     //public static Dictionary<Vector3, float> Compute(MeshFilter meshFilter, List<Vector3> vertices, float l)
     //{
