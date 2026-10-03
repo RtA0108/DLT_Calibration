@@ -1,0 +1,100 @@
+{
+    "entries": [
+        {
+            "id": "Chick",
+            "displayName": "Chick",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Bird_v1_L3/Chick", 
+            "cfsDataPath": "CfSCNN/Chick_Tri_saliency_1",
+            "texDataPath": "TexMesh/Chick_vertex_saliency"
+        },
+        {
+            "id": "Horse",
+            "displayName": "Horse",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Horse_v01_L3/Horse_v01-it2",
+            "cfsDataPath": "CfSCNN/horse_saliency_matlab",
+            "texDataPath": "TexMesh/Horse_vertex_saliency"
+        },
+        {
+            "id": "Kangaroo",
+            "displayName": "Kangaroo",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Kangaroo_v1_L3/Kangaroo_v1_L3",
+            "cfsDataPath": "CfSCNN/Kangaroo_v1_L3_saliency",
+            "texDataPath": "TexMesh/Kangaroo_v1_L3_vertex_saliency"
+        },
+        {
+            "id": "King_Cake",
+            "displayName": "King_Cake",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/King_Cake_v2_L2/King_Cake_v2_L2",
+            "cfsDataPath": "CfSCNN/King_Cake_v2_L2_saliency",
+            "texDataPath": "TexMesh/King_Cake_v2_L2_vertex_saliency"
+        },
+        {
+            "id": "Laser_Pistol",
+            "displayName": "Laser_Pistol",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Laser_Pistol_v2_L3/Laser_Pistol_v2_l3",
+            "cfsDataPath": "CfSCNN/Laser_Pistol_v2_l3_saliency",
+            "texDataPath": "TexMesh/Laser_Pistol_v2_l3_vertex_saliency"
+        },
+        {
+            "id": "Mango",
+            "displayName": "Mango",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Mango_L3/Mango-L3",
+            "cfsDataPath": "CfSCNN/Mango-L3_saliency",
+            "texDataPath": "TexMesh/Mango-L3_vertex_saliency"
+        },
+        {
+            "id": "Marco_Polo_Sheep",
+            "displayName": "Marco_Polo_Sheep",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Marco_Polo_Sheep_v1_L3/Marco_Polo_Sheep_v1_L3",
+            "cfsDataPath": "CfSCNN/Marco_Polo_Sheep_v1_L3_saliency",
+            "texDataPath": "TexMesh/Marco_Polo_Sheep_v1_L3_vertex_saliency"
+        },
+        {
+            "id": "Moai",
+            "displayName": "Moai",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Moai_v3_L3/Moai_L3",
+            "cfsDataPath": "CfSCNN/Moai_L3_saliency",
+            "texDataPath": "TexMesh/Moai_L3_vertex_saliency"
+        },
+        {
+            "id": "Radio",
+            "displayName": "Radio",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/modern_tabletop_radio_v1_L1/modern_tabletop_radio_v1_NEW",
+            "cfsDataPath": "CfSCNN/modern_tabletop_radio_v1_NEW_saliency",
+            "texDataPath": "TexMesh/modern_tabletop_radio_v1_NEW_vertex_saliency"
+        },
+        {
+            "id": "Robot",
+            "displayName": "Robot",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/robot_v1_L3/robot_v1_L3",
+            "cfsDataPath": "CfSCNN/robot_v1_L3_saliency",
+            "texDataPath": "TexMesh/robot_v1_L3_vertex_saliency"
+        },
+        {
+            "id": "Venus",
+            "displayName": "Venus",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/Statue_v1_L2_Venus/Statue_v1_L2_Venus",
+            "cfsDataPath": "CfSCNN/Statue_v1_L2_Venus_saliency",
+            "texDataPath": "TexMesh/Statue_v1_L2_Venus_vertex_saliency"
+        },
+	{
+	    "id": "MyExternalModel",
+	    "displayName": "Test External OBJ",
+      	    "isBuiltIn": false,
+      	    "meshPath": "C:/Test/Mango-L3.obj", 
+      	    "cfsDataPath": "", 
+      	    "texDataPath": ""
+    }
+    ]
+}

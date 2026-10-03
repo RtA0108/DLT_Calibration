@@ -196,7 +196,129 @@ public static class SaliencyUtils
 
         return selected;
     }
+    //-------------새로운 추천 알고리즘들-----------------------------
 
+    public static List<Vector3> SelectVerticesWithAdaptiveNMS(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float objectSizeL, int targetCount)
+    {
+        // 1. 초기 설정
+        // 물체 크기의 20% 거리부터 시작 (너무 좁으면 0.1f 등으로 수정 가능)
+        float currentRadiusRatio = 0.2f;
+
+        // 무한 루프 방지용 최대 시도 횟수
+        int maxRetries = 20;
+
+        // 원본 데이터를 Saliency 높은 순으로 미리 정렬 (매번 정렬하지 않도록 최적화)
+        var sortedCandidates = candidates.OrderByDescending(v => saliencyMap[v]).ToList();
+
+        for (int i = 0; i < maxRetries; i++)
+        {
+            float currentRadius = objectSizeL * currentRadiusRatio;
+
+            // NMS 실행
+            List<Vector3> result = RunNMS(sortedCandidates, currentRadius, targetCount);
+
+            // 성공 조건: 목표 개수를 채웠으면 반환
+            if (result.Count >= targetCount)
+            {
+                if (i > 0)
+                    Debug.Log($"[Saliency] {i}번 재시도 끝에 반경 {currentRadiusRatio:F3}L 에서 {targetCount}개 선택 성공.");
+
+                return result;
+            }
+
+            // 실패 시: 반경을 80% 수준으로 줄여서 다시 시도
+            currentRadiusRatio *= 0.8f;
+        }
+
+        // 2. [최후의 안전장치] 
+        // 아무리 반경을 줄여도 안 되면(거의 없겠지만), 그냥 Saliency 1등부터 6등까지 짤라서 리턴
+        Debug.LogWarning($"[Saliency] 적절한 분산 점을 찾지 못했습니다. 단순히 점수가 높은 상위 {targetCount}개를 반환합니다.");
+        return sortedCandidates.Take(targetCount).ToList();
+    }
+
+    /// <summary>
+    /// 실제 NMS 로직을 수행하는 내부 함수
+    /// </summary>
+    private static List<Vector3> RunNMS(List<Vector3> sortedCandidates, float radius, int targetCount)
+    {
+        List<Vector3> selected = new List<Vector3>();
+        // 원본 리스트를 훼손하지 않기 위해 복사해서 사용 (검사 대상들)
+        List<Vector3> pool = new List<Vector3>(sortedCandidates);
+
+        float sqrRadius = radius * radius; // 거리 비교 최적화 (Sqrt 연산 방지)
+
+        while (selected.Count < targetCount && pool.Count > 0)
+        {
+            // 1. 현재 풀에서 Saliency가 가장 높은 점 선택
+            Vector3 best = pool[0];
+            selected.Add(best);
+
+            // 2. 선택된 점과 그 주변 반경(radius) 내에 있는 점들을 모두 제거 (억제)
+            // 거리 비교 시 Vector3.Distance 대신 sqrMagnitude 사용이 더 빠름
+            pool.RemoveAll(candidate => (candidate - best).sqrMagnitude < sqrRadius);
+        }
+
+        return selected;
+    }
+
+    //------------
+    public static List<Vector3> SelectVerticesWithMultiplicativeFPS(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float l, int selectionCount)
+    {
+        List<Vector3> selected = new List<Vector3>();
+
+        // 원본 리스트 보호를 위해 복사본 사용
+        List<Vector3> pool = new List<Vector3>(candidates);
+
+        if (pool.Count <= selectionCount)
+            return pool; // 후보가 목표보다 적으면 그냥 다 반환
+
+        // --- Step 1: 첫 번째 점은 무조건 Saliency 1등 선택 ---
+        // (기준점이 확실해야 이후 분산이 잘 됩니다)
+        Vector3 first = pool.OrderByDescending(v => saliencyMap[v]).First();
+        selected.Add(first);
+        pool.Remove(first);
+
+        // --- Step 2: 목표 개수(6개) 채울 때까지 반복 ---
+        while (selected.Count < selectionCount && pool.Count > 0)
+        {
+            Vector3 bestCandidate = Vector3.zero;
+            float bestScore = float.MinValue;
+
+            foreach (var candidate in pool)
+            {
+                // 1. 이미 선택된 점들과의 거리 중 '최소 거리' 계산 (가장 가까운 선택된 점과의 거리)
+                float minDistanceToSelected = float.MaxValue;
+                foreach (var s in selected)
+                {
+                    float d = Vector3.Distance(candidate, s);
+                    if (d < minDistanceToSelected) minDistanceToSelected = d;
+                }
+
+                // 2. 점수 계산 (핵심: 곱셈 방식)
+                // Saliency(중요도) x NormalizedDistance(희소성)
+                // 거리를 l(전체크기)로 나누어 0~1 사이로 정규화 -> 스케일 영향 제거
+                float normalizedDist = minDistanceToSelected / l;
+                float saliency = saliencyMap[candidate];
+
+                // *거리 가중치를 더 주고 싶으면 Math.Pow(normalizedDist, 0.5f) 등으로 조절 가능하지만,
+                // 기본 곱셈이 가장 밸런스가 좋습니다.
+                float score = saliency * normalizedDist;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestCandidate = candidate;
+                }
+            }
+
+            // 이번 라운드 1등을 선택 목록에 추가하고 후보군에서 제거
+            selected.Add(bestCandidate);
+            pool.Remove(bestCandidate);
+        }
+
+        return selected;
+    }
+    //
     public static void HighlightVertex(Vector3 position, Color color, float scale, bool isSaliencyHighlight, int index = -1)
     {
         GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
