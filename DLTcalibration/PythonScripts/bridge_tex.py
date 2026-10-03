@@ -35,38 +35,71 @@ def find_neighbor(faces, faces_contain_this_vertex, vf1, vf2, except_face):
         if i != except_face: return i
     return except_face
 
-def get_texture_from_mtl(obj_path, target_size=1024):
+IMAGE_EXTS = ('.jpg', '.jpeg', '.png')
+
+def _find_in_folder(folder, name):
+    """folder 안에서 name과 대소문자만 다른 파일까지 찾는다 (Linux는 대소문자를 구분함)."""
+    exact = folder / name
+    if exact.is_file(): return exact
+    for p in folder.iterdir():
+        if p.is_file() and p.name.lower() == name.lower(): return p
+    return None
+
+def find_texture_path(obj_path):
+    """OBJ에 맞는 텍스처 이미지 경로. 없으면 None.
+
+    1) OBJ의 mtllib가 가리키는 MTL (없으면 <이름>.mtl, <이름>.obj.mtl)의 map_Kd
+    2) 같은 폴더의 <이름>.jpg/.jpeg/.png (대소문자 무관)
+    3) 같은 폴더에 이미지가 하나뿐이면 그 이미지
+
+    예전에는 <이름>.mtl만 찾았고(이 프로젝트의 MTL은 <이름>.obj.mtl), 폴백도 '<이름>.*'에
+    .obj/.meta 같은 파일이 걸리면 이미지가 없어도 거기서 멈춰서, 대부분의 모델이 빈 텍스처로 계산됐음.
+    """
     obj_path = Path(obj_path)
-    mtl_path = obj_path.with_suffix('.mtl')
-    texture_path = None
+    folder = obj_path.parent
 
-    # 1. MTL 파일에서 찾기
-    if mtl_path.exists():
-        try:
-            with open(mtl_path, 'r', errors='ignore') as f:
-                for line in f:
-                    if line.strip().startswith('map_Kd'):
-                        parts = line.strip().split()
-                        if len(parts) > 1:
-                            potential_path = obj_path.parent / parts[-1]
-                            if potential_path.exists(): texture_path = potential_path; break
-        except: pass
+    mtl_candidates = []
+    try:
+        with open(obj_path, 'r', errors='ignore') as f:
+            for line in f:
+                if line.startswith('mtllib'):
+                    mtl_candidates.append(line[len('mtllib'):].strip())
+    except OSError:
+        pass
+    mtl_candidates += [obj_path.stem + '.mtl', obj_path.name + '.mtl']
 
-    # 2. 같은 폴더 내 이미지 파일로 폴백(Fallback)
-    if texture_path is None:
-        candidates = list(obj_path.parent.glob(f"{obj_path.stem}.*"))
-        if not candidates: candidates = list(obj_path.parent.glob("*.[jp][pn][g]"))
-        valid = [p for p in candidates if p.suffix.lower() in ['.jpg', '.png', '.jpeg']]
-        if valid: texture_path = valid[0]
+    for mtl_name in mtl_candidates:
+        mtl_path = _find_in_folder(folder, mtl_name)
+        if mtl_path is None: continue
+        with open(mtl_path, 'r', errors='ignore') as f:
+            for line in f:
+                s = line.strip()
+                if not s.startswith('map_Kd'): continue
+                rest = s[len('map_Kd'):].strip()
+                # 파일 이름에 공백이 있을 수 있어 줄 전체를 먼저, 옵션이 붙은 경우를 위해 마지막 토큰을 다음으로 시도
+                for name in (rest, rest.split()[-1] if rest else ''):
+                    tex = _find_in_folder(folder, name) if name else None
+                    if tex is not None: return tex
 
-    if texture_path and texture_path.exists():
+    images = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS)
+    for p in images:
+        if p.stem.lower() == obj_path.stem.lower(): return p
+    if len(images) == 1: return images[0]
+    return None
+
+def get_texture_from_mtl(obj_path, target_size=1024):
+    texture_path = find_texture_path(obj_path)
+
+    if texture_path is not None:
         try:
             img = Image.open(texture_path).convert('RGB')
             img_resized = img.resize((target_size, target_size), Image.Resampling.LANCZOS)
             img_np = np.array(img_resized, dtype=np.float32) / 255.0
+            print(f"[Bridge] 텍스처 사용: {texture_path.name}")
             return np.transpose(img_np, (2, 0, 1)) # (3, H, W)
-        except: pass
-    
+        except Exception as e:
+            print(f"[Bridge Warning] 텍스처를 읽지 못했습니다 ({texture_path.name}): {e}")
+
     print("[Bridge Warning] 텍스처를 찾지 못해 빈(Zero) 텍스처로 대체합니다.")
     return np.zeros((3, target_size, target_size), dtype=np.float32)
 
