@@ -16,6 +16,10 @@ public static class SaliencyUtils
         float dotThreshold = 0.5f; // ← 더 정면을 향한 정점만 raycast 시도
         float hitTolerance = 0.005f; // 거리 기반 (너무 뒤에 있어서 잘 안보이는 vertex 제외)
 
+        // normals 프로퍼티는 접근할 때마다 배열 전체를 복사하므로 한 번만 읽는다.
+        // (vertexPositions의 인덱스는 sharedMesh.vertices 기준)
+        Vector3[] normals = meshFilter.sharedMesh.normals;
+
         foreach (var kvp in vertexPositions)
         {
             int vertexIndex = kvp.Key;
@@ -28,7 +32,7 @@ public static class SaliencyUtils
                 Mathf.Round(vertexWorldPos.z * 1000f) / 1000f
             );
 
-            Vector3 worldNormal = meshFilter.transform.TransformDirection(meshFilter.mesh.normals[vertexIndex]);
+            Vector3 worldNormal = meshFilter.transform.TransformDirection(normals[vertexIndex]);
             Vector3 toCamera = (camPos - vertexWorldPos).normalized;
 
             if (Vector3.Dot(worldNormal, toCamera) <= dotThreshold) continue;
@@ -106,6 +110,8 @@ public static class SaliencyUtils
             //}
         }
 
+        // 호출마다 새로 만들므로 정리
+        if (Application.isPlaying) Object.Destroy(edgeTex); else Object.DestroyImmediate(edgeTex);
         return filtered;
     }
 

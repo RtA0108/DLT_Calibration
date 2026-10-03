@@ -60,8 +60,11 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
             return;
         }
 
-        int w = Screen.width;
-        int h = Screen.height;
+        // 마스크는 이 카메라의 픽셀 해상도로 만든다. 마스크 조회(SaliencyUtils.FilterVerticesByEdge)가
+        // camera.WorldToScreenPoint 픽셀 좌표를 그대로 쓰기 때문.
+        // (예전에는 Screen 크기, 즉 Display 1 해상도로 만들어서 프로젝터 픽셀과 전혀 맞지 않았음)
+        int w = mainCamera.pixelWidth;
+        int h = mainCamera.pixelHeight;
 
         if (silhouetteMask == null || silhouetteMask.width != w || silhouetteMask.height != h)
         {

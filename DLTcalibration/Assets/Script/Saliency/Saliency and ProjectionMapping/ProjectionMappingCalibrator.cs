@@ -205,7 +205,12 @@ public class ProjectionMappingCalibrator : MonoBehaviour
                     break;
             }
         }
-        catch { }
+        catch (System.Exception e)
+        {
+            // 예전에는 에러를 그냥 삼켜서, 추천점이 0개가 되어도 이유를 알 수 없었음
+            Debug.LogError($"[Calibrator] {saliencyMode} saliency 계산 실패: {e.Message}");
+            Debug.LogException(e);
+        }
         finally
         {
             transform.localPosition = originalPos;
