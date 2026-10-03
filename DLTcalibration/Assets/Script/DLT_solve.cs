@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -21,13 +21,13 @@ public class DLT_solve : MonoBehaviour
     private static extern void projectPoints(double[] worldPoints, double[] projectionMatrix, double[] rtMatrix, double[] resultPoints, float camPos);
     #endregion
     [Header("References")]
-    public VertexClickTest vertexClickTest;      // Å¬¸¯ µ¥ÀÌÅÍ
-    public CreateSphereAtVertex createSphereAtVertex; // ÀüÃ¼ ¹öÅØ½º Á¤º¸ (focal length º¸Á¤¿¡ ÇÊ¿äÇÏ´Ù¸é »ç¿ë)
-    public Camera projCam;                       // ÇÁ·ÎÁ§¼Ç ¸ÊÇÎ¿¡ »ç¿ëÇÒ Ä«¸Ş¶ó
+    public VertexClickTest vertexClickTest;      // í´ë¦­ ë°ì´í„°
+    public CreateSphereAtVertex createSphereAtVertex; // ì „ì²´ ë²„í…ìŠ¤ ì •ë³´ (focal length ë³´ì •ì— í•„ìš”í•˜ë‹¤ë©´ ì‚¬ìš©)
+    public Camera projCam;                       // í”„ë¡œì ì…˜ ë§µí•‘ì— ì‚¬ìš©í•  ì¹´ë©”ë¼
 
     private void Awake()
     {
-        // ¾ÈÀüÀåÄ¡: Ä«¸Ş¶ó°¡ ¿¬°á ¾È µÇ¾î ÀÖÀ¸¸é ÅÂ±×·Î Ã£±â
+        // ì•ˆì „ì¥ì¹˜: ì¹´ë©”ë¼ê°€ ì—°ê²° ì•ˆ ë˜ì–´ ìˆìœ¼ë©´ íƒœê·¸ë¡œ ì°¾ê¸°
         if (projCam == null)
         {
             GameObject camObj = GameObject.FindGameObjectWithTag("Project Camera");
@@ -37,7 +37,7 @@ public class DLT_solve : MonoBehaviour
 
     void Update()
     {
-        // 'F' Å°¸¦ ´©¸£¸é DLT °è»ê ½ÃÀÛ
+        // 'F' í‚¤ë¥¼ ëˆ„ë¥´ë©´ DLT ê³„ì‚° ì‹œì‘
         if (Input.GetKeyDown(KeyCode.F))
         {
             PerformDLT();
@@ -45,16 +45,16 @@ public class DLT_solve : MonoBehaviour
     }
 
     /// <summary>
-    /// À¯È¿ÇÑ Á¡µéÀ» ¼öÁıÇÏ¿© DLT °è»êÀ» ¼öÇàÇÏ´Â ¸ŞÀÎ ÇÔ¼ö
+    /// ìœ íš¨í•œ ì ë“¤ì„ ìˆ˜ì§‘í•˜ì—¬ DLT ê³„ì‚°ì„ ìˆ˜í–‰í•˜ëŠ” ë©”ì¸ í•¨ìˆ˜
     /// </summary>
     private void PerformDLT()
     {
-        // 1. À¯È¿ÇÑ(NullÀÌ ¾Æ´Ñ) Á¡¸¸ °ñ¶ó³»±â
+        // 1. ìœ íš¨í•œ(Nullì´ ì•„ë‹Œ) ì ë§Œ ê³¨ë¼ë‚´ê¸°
         List<VertexClickTest.VertexStruct> validPoints = new List<VertexClickTest.VertexStruct>();
 
         for (int i = 0; i < vertexClickTest.clickedObjects.Length; i++)
         {
-            // ¿ÀºêÁ§Æ®°¡ Á¸ÀçÇÏ°í(nullÀÌ ¾Æ´Ï°í), ±¸Á¶Ã¼ µ¥ÀÌÅÍµµ À¯È¿ÇÏ´Ù¸é ¸®½ºÆ®¿¡ Ãß°¡
+            // ì˜¤ë¸Œì íŠ¸ê°€ ì¡´ì¬í•˜ê³ (nullì´ ì•„ë‹ˆê³ ), êµ¬ì¡°ì²´ ë°ì´í„°ë„ ìœ íš¨í•˜ë‹¤ë©´ ë¦¬ìŠ¤íŠ¸ì— ì¶”ê°€
             if (vertexClickTest.clickedObjects[i] != null)
             {
                 validPoints.Add(vertexClickTest.verticesStruct[i]);
@@ -63,20 +63,20 @@ public class DLT_solve : MonoBehaviour
 
         int pointCount = validPoints.Count;
 
-        // DLT´Â ÃÖ¼Ò 6°³ÀÇ Á¡ÀÌ ÇÊ¿äÇÔ
+        // DLTëŠ” ìµœì†Œ 6ê°œì˜ ì ì´ í•„ìš”í•¨
         if (pointCount < 6)
         {
-            Debug.LogError($"[DLT Error] Á¡ÀÌ ºÎÁ·ÇÕ´Ï´Ù. (ÇöÀç: {pointCount}°³ / ÃÖ¼Ò: 6°³)");
+            Debug.LogError($"[DLT Error] ì ì´ ë¶€ì¡±í•©ë‹ˆë‹¤. (í˜„ì¬: {pointCount}ê°œ / ìµœì†Œ: 6ê°œ)");
             return;
         }
 
-        // ÃÖ´ë 6°³±îÁö¸¸ »ç¿ë (±âÁ¸ ·ÎÁ÷ À¯Áö)
-        // ¸¸¾à 6°³ ÀÌ»óµµ Çã¿ëÇÏ·Á¸é ÀÌ ÁÙÀ» Áö¿ì°Å³ª pointCount »óÇÑÀ» ´Ã¸®¼¼¿ä.
+        // ìµœëŒ€ 6ê°œê¹Œì§€ë§Œ ì‚¬ìš© (ê¸°ì¡´ ë¡œì§ ìœ ì§€)
+        // ë§Œì•½ 6ê°œ ì´ìƒë„ í—ˆìš©í•˜ë ¤ë©´ ì´ ì¤„ì„ ì§€ìš°ê±°ë‚˜ pointCount ìƒí•œì„ ëŠ˜ë¦¬ì„¸ìš”.
         int useCount = Math.Min(pointCount, 6);
 
-        Debug.Log($"[DLT Start] À¯È¿ÇÑ Á¡ {useCount}°³¸¦ »ç¿ëÇÏ¿© °è»êÀ» ½ÃÀÛÇÕ´Ï´Ù...");
+        Debug.Log($"[DLT Start] ìœ íš¨í•œ ì  {useCount}ê°œë¥¼ ì‚¬ìš©í•˜ì—¬ ê³„ì‚°ì„ ì‹œì‘í•©ë‹ˆë‹¤...");
 
-        // 2. µ¥ÀÌÅÍ ¹è¿­ ÁØºñ (World -> Image ÁÂÇ¥)
+        // 2. ë°ì´í„° ë°°ì—´ ì¤€ë¹„ (World -> Image ì¢Œí‘œ)
         double[] worldPoints = new double[useCount * 3]; // (x,y,z) * N
         double[] imagePoints = new double[useCount * 2]; // (u,v) * N
         double[] imagePointsGT = new double[useCount * 2]; // Ground Truth
@@ -85,12 +85,12 @@ public class DLT_solve : MonoBehaviour
         {
             var vStruct = validPoints[i];
 
-            // *Note: DLT DLLÀÌ YÃà ¹İÀüÀ» ¿ä±¸ÇÏ¿© -¸¦ ºÙÀÓ (±âÁ¸ ·ÎÁ÷ À¯Áö)
+            // *Note: DLT DLLì´ Yì¶• ë°˜ì „ì„ ìš”êµ¬í•˜ì—¬ -ë¥¼ ë¶™ì„ (ê¸°ì¡´ ë¡œì§ ìœ ì§€)
             worldPoints[i * 3 + 0] = vStruct.worldCoordinate.x;
             worldPoints[i * 3 + 1] = -vStruct.worldCoordinate.y;
             worldPoints[i * 3 + 2] = -vStruct.worldCoordinate.z;
 
-            // Unity Screen ÁÂÇ¥°è(ÁÂÇÏ´Ü 0,0) -> OpenCV ÀÌ¹ÌÁö ÁÂÇ¥°è(ÁÂ»ó´Ü 0,0) º¯È¯
+            // Unity Screen ì¢Œí‘œê³„(ì¢Œí•˜ë‹¨ 0,0) -> OpenCV ì´ë¯¸ì§€ ì¢Œí‘œê³„(ì¢Œìƒë‹¨ 0,0) ë³€í™˜
             imagePoints[i * 2 + 0] = vStruct.screenCoordinate.x;
             imagePoints[i * 2 + 1] = projCam.pixelHeight - vStruct.screenCoordinate.y;
 
@@ -98,18 +98,18 @@ public class DLT_solve : MonoBehaviour
             imagePointsGT[i * 2 + 1] = projCam.pixelHeight - vStruct.screenCoordinateGT.y;
         }
 
-        // 3. DLT °è»ê ¼öÇà (DLL È£Ãâ)
+        // 3. DLT ê³„ì‚° ìˆ˜í–‰ (DLL í˜¸ì¶œ)
         double[] projectionMatrix = new double[11];
         double[] projectionMatrixGT = new double[11];
 
         DLT(worldPoints, imagePoints, useCount, projectionMatrix);
         DLT(worldPoints, imagePointsGT, useCount, projectionMatrixGT);
 
-        // 4. ÆÄ¶ó¹ÌÅÍ ºĞÇØ ¹× Àû¿ë
-        // ³»ºÎ/¿ÜºÎ ÆÄ¶ó¹ÌÅÍ¸¦ °è»êÇÏ¿© projCam¿¡ Àû¿ëÇÕ´Ï´Ù.
+        // 4. íŒŒë¼ë¯¸í„° ë¶„í•´ ë° ì ìš©
+        // ë‚´ë¶€/ì™¸ë¶€ íŒŒë¼ë¯¸í„°ë¥¼ ê³„ì‚°í•˜ì—¬ projCamì— ì ìš©í•©ë‹ˆë‹¤.
         CalculateAndApplyParameters(projectionMatrix, projCam);
 
-        // 5. °á°ú ºĞ¼® (Residual & RMSE)
+        // 5. ê²°ê³¼ ë¶„ì„ (Residual & RMSE)
         Debug.Log("--- [Result Analysis] ---");
         CalculateResidual(imagePointsGT, imagePoints);
         CalculateRMSE(projectionMatrixGT, projectionMatrix);
@@ -118,36 +118,36 @@ public class DLT_solve : MonoBehaviour
 
     #region --- Math & Calibration Logic ---
 
-    // DLT ¸ÅÆ®¸¯½º¸¦ ºĞÇØÇÏ¿© Unity Ä«¸Ş¶ó¿¡ Àû¿ë (ÇÙ½É ¼öÇĞ ·ÎÁ÷)
+    // DLT ë§¤íŠ¸ë¦­ìŠ¤ë¥¼ ë¶„í•´í•˜ì—¬ Unity ì¹´ë©”ë¼ì— ì ìš© (í•µì‹¬ ìˆ˜í•™ ë¡œì§)
     private void CalculateAndApplyParameters(double[] dltMatrix, Camera cam)
     {
-        // Step 1: P Çà·ÄÀÇ °¢ Çà º¤ÅÍ ÃßÃâ
-        Vector3 a = new Vector3((float)dltMatrix[0], (float)dltMatrix[1], (float)dltMatrix[2]); // 1Çà
-        Vector3 b = new Vector3((float)dltMatrix[4], (float)dltMatrix[5], (float)dltMatrix[6]); // 2Çà
-        Vector3 c = new Vector3((float)dltMatrix[8], (float)dltMatrix[9], (float)dltMatrix[10]); // 3Çà
+        // Step 1: P í–‰ë ¬ì˜ ê° í–‰ ë²¡í„° ì¶”ì¶œ
+        Vector3 a = new Vector3((float)dltMatrix[0], (float)dltMatrix[1], (float)dltMatrix[2]); // 1í–‰
+        Vector3 b = new Vector3((float)dltMatrix[4], (float)dltMatrix[5], (float)dltMatrix[6]); // 2í–‰
+        Vector3 c = new Vector3((float)dltMatrix[8], (float)dltMatrix[9], (float)dltMatrix[10]); // 3í–‰
 
         float cTc = Vector3.Dot(c, c);
 
-        // Step 2: ÁÖÁ¡(Principal Point) °è»ê
+        // Step 2: ì£¼ì (Principal Point) ê³„ì‚°
         double x0 = Vector3.Dot(a, c) / cTc;
         double y0 = Vector3.Dot(b, c) / cTc;
 
-        // Step 3: ÃÊÁ¡ °Å¸®(Focal Length) °è»ê
+        // Step 3: ì´ˆì  ê±°ë¦¬(Focal Length) ê³„ì‚°
         // c^2 = (a^T a)/(c^T c) - (a^T c / c^T c)^2
         double cSquared = (Vector3.Dot(a, a) / cTc) - Math.Pow(Vector3.Dot(a, c) / cTc, 2);
-        double focalLength = Math.Sqrt(cSquared); // Pixel ´ÜÀ§ Focal Length
+        double focalLength = Math.Sqrt(cSquared); // Pixel ë‹¨ìœ„ Focal Length
 
-        // Skew (d) °è»ê
+        // Skew (d) ê³„ì‚°
         double num_d = (Vector3.Dot(a, b) * cTc) - (Vector3.Dot(a, c) * Vector3.Dot(b, c));
         double den_d = (Vector3.Dot(a, a) * cTc) - Math.Pow(Vector3.Dot(a, c), 2);
         double d = num_d / den_d;
 
-        // m °è»ê (Scale Factor)
+        // m ê³„ì‚° (Scale Factor)
         float p = Mathf.Sqrt(cTc);
-        double det_abc = Vector3.Dot(a, Vector3.Cross(b, c)); // Çà·Ä½Ä
+        double det_abc = Vector3.Dot(a, Vector3.Cross(b, c)); // í–‰ë ¬ì‹
         double m = -det_abc / (Math.Pow(p, 3) * cSquared);
 
-        // Step 5: È¸Àü Çà·Ä(Rotation Matrix) R ±¸¼º
+        // Step 5: íšŒì „ í–‰ë ¬(Rotation Matrix) R êµ¬ì„±
         Matrix4x4 leftMatrix = new Matrix4x4();
         leftMatrix.m00 = (float)m;
         leftMatrix.m01 = 0;
@@ -181,49 +181,49 @@ public class DLT_solve : MonoBehaviour
             }
         }
 
-        // Translation Vector (T) °è»ê
+        // Translation Vector (T) ê³„ì‚°
         Vector4 translationVector = new Vector4(-(float)dltMatrix[3], -(float)dltMatrix[7], -1, 1);
         Vector4 T = abc.inverse.transpose * translationVector;
         Vector3 translate = new Vector3(T.x, T.y, T.z);
 
-        // R ÀüÄ¡ (Transpose)
+        // R ì „ì¹˜ (Transpose)
         R = R.transpose;
 
-        // --- [·Î±× Ãâ·Â] ---
+        // --- [ë¡œê·¸ ì¶œë ¥] ---
         Debug.Log($"[Calibration Info] Focal Length: {focalLength}");
         Debug.Log($"[Calibration Info] Principal Point: ({x0}, {y0})");
         Debug.Log($"[Calibration Info] Translation: {translate}");
 
-        // ÃÖÁ¾ Àû¿ë
+        // ìµœì¢… ì ìš©
         ApplyIntrinsicsAndExtrinsics(focalLength, d, x0, y0, R, translate, cam);
     }
 
     private void ApplyIntrinsicsAndExtrinsics(double focalLength, double skew, double principalX, double principalY, Matrix4x4 rotationMatrix, Vector3 translation, Camera cam)
     {
-        // 1. ³»ºÎ ÆÄ¶ó¹ÌÅÍ (Intrinsics) Àû¿ë
-        cam.focalLength = (float)focalLength * (36.0f / Screen.width); // 35mm ¼¾¼­ ±âÁØ º¯È¯ ÃßÁ¤
+        // 1. ë‚´ë¶€ íŒŒë¼ë¯¸í„° (Intrinsics) ì ìš©
+        cam.focalLength = (float)focalLength * (36.0f / Screen.width); // 35mm ì„¼ì„œ ê¸°ì¤€ ë³€í™˜ ì¶”ì •
 
         Vector2 lensShift = new Vector2(
-            (float)(principalX / Screen.width) * 2.0f - 1.0f, // XÃà Á¤±ÔÈ­ (-1 ~ 1)
-            (float)(principalY / Screen.height) * 2.0f - 1.0f // YÃà Á¤±ÔÈ­ (-1 ~ 1)
+            (float)(principalX / Screen.width) * 2.0f - 1.0f, // Xì¶• ì •ê·œí™” (-1 ~ 1)
+            (float)(principalY / Screen.height) * 2.0f - 1.0f // Yì¶• ì •ê·œí™” (-1 ~ 1)
         );
         cam.lensShift = lensShift;
 
-        // 2. ¿ÜºÎ ÆÄ¶ó¹ÌÅÍ (Extrinsics) Àû¿ë
-        // OpenCV(¿ì¼ö°è) -> Unity(ÁÂ¼ö°è) ÁÂÇ¥ º¯È¯
+        // 2. ì™¸ë¶€ íŒŒë¼ë¯¸í„° (Extrinsics) ì ìš©
+        // OpenCV(ìš°ìˆ˜ê³„) -> Unity(ì¢Œìˆ˜ê³„) ì¢Œí‘œ ë³€í™˜
         Matrix4x4 unityRotation = AdjustRotationForUnity(rotationMatrix);
         Vector3 unityTranslation = AdjustForCoordinateSystem(translation);
 
         cam.transform.position = unityTranslation;
         cam.transform.rotation = QuaternionFromMatrix(unityRotation);
 
-        Debug.Log("[Camera Update] Ä«¸Ş¶ó ÆÄ¶ó¹ÌÅÍ°¡ Àû¿ëµÇ¾ú½À´Ï´Ù.");
+        Debug.Log("[Camera Update] ì¹´ë©”ë¼ íŒŒë¼ë¯¸í„°ê°€ ì ìš©ë˜ì—ˆìŠµë‹ˆë‹¤.");
     }
 
     private Matrix4x4 AdjustRotationForUnity(Matrix4x4 openCVRotationMatrix)
     {
         Matrix4x4 m = new Matrix4x4();
-        // YÃà, ZÃà ¹İÀü (ÁÂ¼ö°è º¯È¯)
+        // Yì¶•, Zì¶• ë°˜ì „ (ì¢Œìˆ˜ê³„ ë³€í™˜)
         m.m00 = openCVRotationMatrix.m00;
         m.m01 = -openCVRotationMatrix.m01;
         m.m02 = -openCVRotationMatrix.m02;
@@ -241,14 +241,14 @@ public class DLT_solve : MonoBehaviour
 
     private Vector3 AdjustForCoordinateSystem(Vector3 translation)
     {
-        // Y, ZÃà ¹İÀü
+        // Y, Zì¶• ë°˜ì „
         return new Vector3(translation.x, -translation.y, -translation.z);
     }
 
     private Quaternion QuaternionFromMatrix(Matrix4x4 m)
     {
-        // Çà·Ä -> ÄõÅÍ´Ï¾ğ º¯È¯
-        // (Unity ³»ºÎ ·ÎÁ÷ È¤Àº Mathf »ç¿ë °¡´ÉÇÏ³ª, ±âÁ¸ ·ÎÁ÷ À¯Áö)
+        // í–‰ë ¬ -> ì¿¼í„°ë‹ˆì–¸ ë³€í™˜
+        // (Unity ë‚´ë¶€ ë¡œì§ í˜¹ì€ Mathf ì‚¬ìš© ê°€ëŠ¥í•˜ë‚˜, ê¸°ì¡´ ë¡œì§ ìœ ì§€)
         Quaternion q = new Quaternion();
         q.w = Mathf.Sqrt(Mathf.Max(0, 1.0f + m.m00 + m.m11 + m.m22)) / 2.0f;
         float w4 = 4.0f * q.w;
@@ -258,7 +258,7 @@ public class DLT_solve : MonoBehaviour
         return q;
     }
 
-    // °á°ú °ËÁõ¿ë (Residual)
+    // ê²°ê³¼ ê²€ì¦ìš© (Residual)
     private void CalculateResidual(double[] GT, double[] current)
     {
         float totalDist = 0;
@@ -271,7 +271,7 @@ public class DLT_solve : MonoBehaviour
         Debug.Log($"[Residual] Total 2D Error: {totalDist}");
     }
 
-    // °á°ú °ËÁõ¿ë (RMSE)
+    // ê²°ê³¼ ê²€ì¦ìš© (RMSE)
     private void CalculateRMSE(double[] GT, double[] DLT)
     {
         double sumSq = 0;
@@ -298,7 +298,7 @@ public class DLT_solve : MonoBehaviour
 //    void Awake()
 //    {
 
-//        vertexCountDLT = createSphereAtVertex.vertexCount; //»ı¼ºµÈ vertex °³¼ö
+//        vertexCountDLT = createSphereAtVertex.vertexCount; //ìƒì„±ëœ vertex ê°œìˆ˜
 //        Debug.Log(vertexCountDLT);
 //        LVManger = GameObject.Find("LevelManager");
 //        projCam = GameObject.FindGameObjectWithTag("Project Camera").gameObject.GetComponent<Camera>();
@@ -309,21 +309,21 @@ public class DLT_solve : MonoBehaviour
 //    void Update()
 //    {
 //        int index = System.Array.IndexOf(vertexClickTest.clickedObjects, null);
-//        index = Math.Min(index, 6); //ÃÖ´ë 6°³¸¦ À¯ÁöÇÏ±â À§ÇÔ (6°³ ÀÌ»óÀÎ °æ¿ì ¹¹°¡ ¿ì¼±À¸·Î µé¾î°¡´ÂÁö ÆÄ¾ÇÇÒ ÇÊ¿ä O -> ¾îÂ÷ÇÇ ¼öÁ¤ÇÏ¿© 6°³ ÃÊ°úÇØµµ °¡´ÉÇÏ°Ô ¸¸µé ¿¹Á¤)
+//        index = Math.Min(index, 6); //ìµœëŒ€ 6ê°œë¥¼ ìœ ì§€í•˜ê¸° ìœ„í•¨ (6ê°œ ì´ìƒì¸ ê²½ìš° ë­ê°€ ìš°ì„ ìœ¼ë¡œ ë“¤ì–´ê°€ëŠ”ì§€ íŒŒì•…í•  í•„ìš” O -> ì–´ì°¨í”¼ ìˆ˜ì •í•˜ì—¬ 6ê°œ ì´ˆê³¼í•´ë„ ê°€ëŠ¥í•˜ê²Œ ë§Œë“¤ ì˜ˆì •)
 //        //float camPosY = projCam.pixelHeight;
 //        if (Input.GetKeyDown(KeyCode.F))
 //        {
 //            Debug.Log("DO it");
 //            if (index > 5)
 //            {
-//                //3D point, 2D point ÀúÀå ¹× º¯È¯?
+//                //3D point, 2D point ì €ì¥ ë° ë³€í™˜?
 //                double[] worldPoints = new double[18];
 //                double[] imagePoints = new double[12];
 
 //                double[] imagePointsGT = new double[12];
 //                for (int i = 0; i < index; i++)
 //                {
-//                    //y¸¦ -·Î µĞÃ¤·Î °è»êÇÏ¸é ÃÖÁ¾ °è»êµÇ´Â position¿¡¼­ y°¡ -·Î ³ª¿È -> DLT¿¡¼­ °è»êÇÑ µÚ·Î unity·Î ³Ñ°ÜÁÙ¶§ y¿Í °ü·ÃµÈ ºÎºĞ¿¡ -¸¦ ÇØ¾ßÇÒµí
+//                    //yë¥¼ -ë¡œ ë‘”ì±„ë¡œ ê³„ì‚°í•˜ë©´ ìµœì¢… ê³„ì‚°ë˜ëŠ” positionì—ì„œ yê°€ -ë¡œ ë‚˜ì˜´ -> DLTì—ì„œ ê³„ì‚°í•œ ë’¤ë¡œ unityë¡œ ë„˜ê²¨ì¤„ë•Œ yì™€ ê´€ë ¨ëœ ë¶€ë¶„ì— -ë¥¼ í•´ì•¼í• ë“¯
 //                    worldPoints[i * 3] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].worldCoordinate.x;
 //                    worldPoints[i * 3 + 1] = -(double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].worldCoordinate.y;
 //                    worldPoints[i * 3 + 2] = -(double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].worldCoordinate.z;
@@ -334,7 +334,7 @@ public class DLT_solve : MonoBehaviour
 //                    imagePointsGT[i * 2] = (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinateGT.x;
 //                    imagePointsGT[i * 2 + 1] = projCam.pixelHeight - (double)LVManger.GetComponent<VertexClickTest>().verticesStruct[i].screenCoordinateGT.y;
 //                }
-//                //È®ÀÎ ÀıÂ÷
+//                //í™•ì¸ ì ˆì°¨
 //                Debug.Log("3D Matrix: " + string.Join(", ", worldPoints));
 //                Debug.Log("2D Matrix: " + string.Join(", ", imagePoints));
 //                Debug.Log("2D Matrix GT: " + string.Join(", ", imagePointsGT));
@@ -343,7 +343,7 @@ public class DLT_solve : MonoBehaviour
 //                int numPoints = index;
 //                //worldPoints.Length / 3; // Assuming each 3D point has X, Y, Z coordinates
 
-//                // DLT ½Ä¿¡ »ç¿ëµÇ´Â Çà·Ä (3x4 Çà·Ä, (2,3)Àº 1·Î °íÁ¤? ¾Æ´Ï¸é 12 ¹è¿­·Î ¸¸µé¾î¼­ ¸¶Áö¸· °ªÀ¸·Î ³ª´©´Â°É·Î º¯°æ?)
+//                // DLT ì‹ì— ì‚¬ìš©ë˜ëŠ” í–‰ë ¬ (3x4 í–‰ë ¬, (2,3)ì€ 1ë¡œ ê³ ì •? ì•„ë‹ˆë©´ 12 ë°°ì—´ë¡œ ë§Œë“¤ì–´ì„œ ë§ˆì§€ë§‰ ê°’ìœ¼ë¡œ ë‚˜ëˆ„ëŠ”ê±¸ë¡œ ë³€ê²½?)
 //                double[] projectionMatrix = new double[11];
 //                DLT(worldPoints, imagePoints, numPoints, projectionMatrix);
 //                double[] projectionMatrixGT = new double[11];
@@ -378,7 +378,7 @@ public class DLT_solve : MonoBehaviour
 //                Debug.LogError("Not enough index");
 //            }
 //        }
-//        // Áö¼ÓÀûÀÎ À§Ä¡ ¾÷µ¥ÀÌÆ®¸¦ À§ÇÑ ºÎºĞÀÎµ¥... Áö±İÀº ¹Ì»ç¿ë -> 10/16 ¾ê¸¦ ´Ù½Ã »ç¿ëÇØ¾ßÇÒ ¼öµµ?
+//        // ì§€ì†ì ì¸ ìœ„ì¹˜ ì—…ë°ì´íŠ¸ë¥¼ ìœ„í•œ ë¶€ë¶„ì¸ë°... ì§€ê¸ˆì€ ë¯¸ì‚¬ìš© -> 10/16 ì–˜ë¥¼ ë‹¤ì‹œ ì‚¬ìš©í•´ì•¼í•  ìˆ˜ë„?
 //        //for (int i = 0; i < index; i++)
 //        //{
 //        //    Vector3 worldPos = vertexClickTest.clickedObjects[i].transform.position;
@@ -407,7 +407,7 @@ public class DLT_solve : MonoBehaviour
 //    private void RMSE(double[] GT, double[] DLT)
 //    {
 //        double rmse = 0;
-//        //¹°·Ğ µÑ´Ù DLT, GT´Â ???ÀÇ DLT ÆÄ¶ó¹ÌÅÍ, DLT´Â projector¿¡ Àû¿ëµÈ DLT ÆÄ¶ó¹ÌÅÍ
+//        //ë¬¼ë¡  ë‘˜ë‹¤ DLT, GTëŠ” ???ì˜ DLT íŒŒë¼ë¯¸í„°, DLTëŠ” projectorì— ì ìš©ëœ DLT íŒŒë¼ë¯¸í„°
 //        for (int i = 0; i < GT.Length; i++) 
 //        {
 //            double difference = GT[i] - DLT[i];
@@ -421,11 +421,11 @@ public class DLT_solve : MonoBehaviour
 //    }
 
 
-//    //»õ·Î ÀÛ¼º
+//    //ìƒˆë¡œ ì‘ì„±
 //    private void CalculateParameters(double[] dltMatrix, Camera projCam)
 //    {
 //        // Step 1: Define vectors a, b, and c as the rows of the P matrix
-//        // ±âº»ÀûÀ¸·Î º¤ÅÍ´Â ¿­º¤ÅÍÀÎ°¡...? ¿­ÀÌ¿¡¾ß cTc °°Àº°Ô ¼º¸³.
+//        // ê¸°ë³¸ì ìœ¼ë¡œ ë²¡í„°ëŠ” ì—´ë²¡í„°ì¸ê°€...? ì—´ì´ì—ì•¼ cTc ê°™ì€ê²Œ ì„±ë¦½.
 //        Vector4 a = new Vector4((float)dltMatrix[0], (float)dltMatrix[1], (float)dltMatrix[2], (float)dltMatrix[3]);  // First row (a1, a2, a3, a4)
 //        Vector4 b = new Vector4((float)dltMatrix[4], (float)dltMatrix[5], (float)dltMatrix[6], (float)dltMatrix[7]);  // Second row (b1, b2, b3, b4)
 //        Vector4 c = new Vector4((float)dltMatrix[8], (float)dltMatrix[9], (float)dltMatrix[10], 1);                   // Third row (c1, c2, c3, c4=1)
@@ -441,7 +441,7 @@ public class DLT_solve : MonoBehaviour
 //        // c^2 = (a^T a) / (c^T c) - (a^T c / c^T c)^2
 //        double cSquared = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(a.x, a.y, a.z)) / cTc) - Mathf.Pow((float)Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)) / cTc, 2);
 //        // focalLength c
-//        double focalLength = Mathf.Sqrt((float)cSquared); //ÇÈ¼¿ ´ÜÀ§ÀÏ °¡´É¼º ³óÈÄ (±×·¡¼­ °ªÀÌ »ó´çÈ÷ Å­)
+//        double focalLength = Mathf.Sqrt((float)cSquared); //í”½ì…€ ë‹¨ìœ„ì¼ ê°€ëŠ¥ì„± ë†í›„ (ê·¸ë˜ì„œ ê°’ì´ ìƒë‹¹íˆ í¼)
 //        Debug.Log("Focal Length: "+focalLength);
 //        // d = ((a^T b) * (c^T c) - (a^T c) * (b^T c)) / ((a^T a)(c^T c) - (a^T c)^2)
 //        double numerator_d = (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(b.x, b.y, b.z)) * cTc) - (Vector3.Dot(new Vector3(a.x, a.y, a.z), new Vector3(c.x, c.y, c.z)) * Vector3.Dot(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));
@@ -450,8 +450,8 @@ public class DLT_solve : MonoBehaviour
 
 //        // m = -det(abc) / (p^3 * c^2)
 //        float p = Mathf.Sqrt(cTc);  // p = sqrt(c^T * c)
-//        //double det_abc = Vector3.Dot(new Vector3(a.x, a.y, a.z), Vector3.Cross(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));  // Determinant of (abc) -> abc¸¦ Çàº¤ÅÍ·Î ±¸¼ºÇÑ °æ¿ì
-//        double det_abc = Vector3.Dot(new Vector3(a.x, b.x, c.x), Vector3.Cross(new Vector3(a.y, b.y, c.y), new Vector3(a.z, b.z, c.z)));  // Determinant of (abc) -> abc¸¦ ¿­º¤ÅÍ·Î ±¸¼ºÇÑ °æ¿ì
+//        //double det_abc = Vector3.Dot(new Vector3(a.x, a.y, a.z), Vector3.Cross(new Vector3(b.x, b.y, b.z), new Vector3(c.x, c.y, c.z)));  // Determinant of (abc) -> abcë¥¼ í–‰ë²¡í„°ë¡œ êµ¬ì„±í•œ ê²½ìš°
+//        double det_abc = Vector3.Dot(new Vector3(a.x, b.x, c.x), Vector3.Cross(new Vector3(a.y, b.y, c.y), new Vector3(a.z, b.z, c.z)));  // Determinant of (abc) -> abcë¥¼ ì—´ë²¡í„°ë¡œ êµ¬ì„±í•œ ê²½ìš°
 //        double m = -det_abc / (Mathf.Pow(p, 3) * cSquared);
 
 //        // Step 5: Equation 8 - Build the rotation matrix R
@@ -494,7 +494,7 @@ public class DLT_solve : MonoBehaviour
 //        Vector4 T = abc.inverse.transpose* translationVector;
 
 //        Vector3 translate = new Vector3(T.x, T.y, T.z);
-//        //ºĞ¸í °á°ú°ªÀº Á¦´ë·Î ³ª¿À´Â °ÍÀ¸·Î º¸ÀÌ³ª, Àû¿ëÇÏ´Â °úÁ¤¿¡¼­ ÀÌ»óÇÏ°Ô Àû¿ëµÇ´Â °Í °°À½. T´Â ºĞ¸í ±âÁ¸ ÀÌµ¿°ª°ú µ¿ÀÏÇÏ°Ô ³ª¿À´Âµ¥ projCamÀÇ translateÀÌ °á°úÀûÀ¸·Î ´Ş¶óÁü.(È¸Àü¶«¿¡ ¹ß»ıÇÏ´Â Çö»óÀÏÁöµµ?)
+//        //ë¶„ëª… ê²°ê³¼ê°’ì€ ì œëŒ€ë¡œ ë‚˜ì˜¤ëŠ” ê²ƒìœ¼ë¡œ ë³´ì´ë‚˜, ì ìš©í•˜ëŠ” ê³¼ì •ì—ì„œ ì´ìƒí•˜ê²Œ ì ìš©ë˜ëŠ” ê²ƒ ê°™ìŒ. TëŠ” ë¶„ëª… ê¸°ì¡´ ì´ë™ê°’ê³¼ ë™ì¼í•˜ê²Œ ë‚˜ì˜¤ëŠ”ë° projCamì˜ translateì´ ê²°ê³¼ì ìœ¼ë¡œ ë‹¬ë¼ì§.(íšŒì „ë•œì— ë°œìƒí•˜ëŠ” í˜„ìƒì¼ì§€ë„?)
 //        R = leftMatrix * abc.transpose;
 //        for (int i = 0; i < 3; i++)
 //        {
@@ -503,7 +503,7 @@ public class DLT_solve : MonoBehaviour
 //                R[i, j] *= scale;
 //            }
 //        }
-//        //RÀÇ °æ¿ì ¼öÄ¡°¡ °ÅÀÇ À¯»çÇÏ³ª ºÎÈ£°¡ ´Ù¸§. ÀÌ¸¦ º¯°æ¸¸ Àß ½ÃÅ°¸é µÇÁö ¾ÊÀ»±î?
+//        //Rì˜ ê²½ìš° ìˆ˜ì¹˜ê°€ ê±°ì˜ ìœ ì‚¬í•˜ë‚˜ ë¶€í˜¸ê°€ ë‹¤ë¦„. ì´ë¥¼ ë³€ê²½ë§Œ ì˜ ì‹œí‚¤ë©´ ë˜ì§€ ì•Šì„ê¹Œ?
 //        Quaternion cameraRotation = Camera.main.transform.rotation;
 //        Matrix4x4 rotationMatrix = MatrixFromQuaternion(cameraRotation);
 //        R = R.transpose;
@@ -618,8 +618,8 @@ public class DLT_solve : MonoBehaviour
 //    {
 //        projCam.focalLength = (float)focalLength * (36.0f / Screen.width);
 //        Vector2 lensShift = new Vector2(
-//            (float)(principalX / Screen.width) * 2.0f - 1.0f, // XÃàÀ¸·Î Á¤±ÔÈ­
-//            (float)(principalY / Screen.height) * 2.0f - 1.0f  // YÃàÀ¸·Î Á¤±ÔÈ­
+//            (float)(principalX / Screen.width) * 2.0f - 1.0f, // Xì¶•ìœ¼ë¡œ ì •ê·œí™”
+//            (float)(principalY / Screen.height) * 2.0f - 1.0f  // Yì¶•ìœ¼ë¡œ ì •ê·œí™”
 //        );
 //        projCam.lensShift = lensShift;
 

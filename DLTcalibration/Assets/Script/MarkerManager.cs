@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,11 +6,11 @@ using UnityEngine.UI;
 public class MarkerManager : MonoBehaviour
 {
     
-    public RectTransform canvasRectTransform; // CanvasÀÇ RectTransform
-    public GameObject markerPrefab; // ¸¶Ä¿·Î »ç¿ëÇÒ ÇÁ¸®ÆÕ
+    public RectTransform canvasRectTransform; // Canvasì˜ RectTransform
+    public GameObject markerPrefab; // ë§ˆì»¤ë¡œ ì‚¬ìš©í•  í”„ë¦¬íŒ¹
 
     private int markerCount = 0;
-    //Canvas Plane Distance¸¦ object¿Í CameraÀÇ °Å¸® Áß°£°ªÀ¸·Î ¼³Á¤?
+    //Canvas Plane Distanceë¥¼ objectì™€ Cameraì˜ ê±°ë¦¬ ì¤‘ê°„ê°’ìœ¼ë¡œ ì„¤ì •?
     public void Start()
     {
         if (canvasRectTransform == null) Debug.LogError("No Rect Transform");
@@ -26,10 +26,10 @@ public class MarkerManager : MonoBehaviour
 
         if (canvasRectTransform == null) Debug.LogError("No Rect Transform");
 
-        // ¸¶Ä¿ »ı¼º
+        // ë§ˆì»¤ ìƒì„±
         GameObject newMarker = Instantiate(markerPrefab, canvasRectTransform);
         newMarker.name = "MarkerUI " + markerCount.ToString();
-        // ¸¶Ä¿ ¼³Á¤
+        // ë§ˆì»¤ ì„¤ì •
         Marker markerScript = newMarker.GetComponent<Marker>();
         markerScript.SetMarker(++markerCount, screenPosition, canvasRectTransform);
         Debug.Log("Marker Start Point" + screenPosition);

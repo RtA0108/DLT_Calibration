@@ -1,31 +1,31 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI; // UI °ü·Ã ±â´ÉÀ» À§ÇØ ÇÊ¿ä
+using UnityEngine.UI; // UI ê´€ë ¨ ê¸°ëŠ¥ì„ ìœ„í•´ í•„ìš”
 
 public class VertexInteraction : MonoBehaviour
 {
-    // [¼³Á¤] »õ·Î »ı¼ºÇÒ Mesh Prefab (ÇÊ¿ä ½Ã)
+    // [ì„¤ì •] ìƒˆë¡œ ìƒì„±í•  Mesh Prefab (í•„ìš” ì‹œ)
     public GameObject newMeshPrefab;
 
-    // ³»ºÎ º¯¼öµé
+    // ë‚´ë¶€ ë³€ìˆ˜ë“¤
     private Color originalColor;
     private new Renderer renderer;
-    private bool copied = false; // Áßº¹ ½ÇÇà ¹æÁö¿ë ÇÃ·¡±×
+    private bool copied = false; // ì¤‘ë³µ ì‹¤í–‰ ë°©ì§€ìš© í”Œë˜ê·¸
     private GameObject markerManager;
     private GameObject LVManger;
     private Camera mainCam;
 
     void Start()
     {
-        // 1. ·»´õ·¯ ¹× »ö»ó ÃÊ±âÈ­
+        // 1. ë Œë”ëŸ¬ ë° ìƒ‰ìƒ ì´ˆê¸°í™”
         renderer = GetComponent<Renderer>();
         if (renderer != null)
         {
             originalColor = renderer.material.color;
         }
 
-        // 2. Ä«¸Ş¶ó Ã£±â (¾ÈÀüÀåÄ¡ Ãß°¡)
+        // 2. ì¹´ë©”ë¼ ì°¾ê¸° (ì•ˆì „ì¥ì¹˜ ì¶”ê°€)
         if (Camera.main != null) mainCam = Camera.main;
         else
         {
@@ -33,8 +33,8 @@ public class VertexInteraction : MonoBehaviour
             if (camObj != null) mainCam = camObj.GetComponent<Camera>();
         }
 
-        // 3. ¸Å´ÏÀúµé Ã£±â
-        markerManager = GameObject.Find("CanvasUI"); // È¤Àº "MarkerManager"
+        // 3. ë§¤ë‹ˆì €ë“¤ ì°¾ê¸°
+        markerManager = GameObject.Find("CanvasUI"); // í˜¹ì€ "MarkerManager"
         if (markerManager == null) markerManager = GameObject.Find("MarkerManager");
 
         LVManger = GameObject.Find("LevelManager");
@@ -42,47 +42,47 @@ public class VertexInteraction : MonoBehaviour
 
     private void OnMouseDown()
     {
-        // ¡å¡å¡å [ÇÙ½É] 1. Calibration ¸ğµå°¡ ²¨Á®ÀÖÀ¸¸é Å¬¸¯ ¹«½Ã ¡å¡å¡å
+        // â–¼â–¼â–¼ [í•µì‹¬] 1. Calibration ëª¨ë“œê°€ êº¼ì ¸ìˆìœ¼ë©´ í´ë¦­ ë¬´ì‹œ â–¼â–¼â–¼
         if (MainController.Instance != null && !MainController.Instance.IsCalibrationActive)
         {
-            return; // ¾Æ¹«°Íµµ ¾È ÇÏ°í ÇÔ¼ö Á¾·á
+            return; // ì•„ë¬´ê²ƒë„ ì•ˆ í•˜ê³  í•¨ìˆ˜ ì¢…ë£Œ
         }
 
-        // ¡å¡å¡å [¾ÈÀüÀåÄ¡] ÇÊ¼ö ¿ä¼Ò°¡ ¾øÀ¸¸é ¿¡·¯ ¹æÁö ¡å¡å¡å
+        // â–¼â–¼â–¼ [ì•ˆì „ì¥ì¹˜] í•„ìˆ˜ ìš”ì†Œê°€ ì—†ìœ¼ë©´ ì—ëŸ¬ ë°©ì§€ â–¼â–¼â–¼
         if (renderer == null || markerManager == null || LVManger == null || mainCam == null)
         {
-            Debug.LogWarning("[VertexInteraction] ÇÊ¿äÇÑ ¸Å´ÏÀú³ª ÄÄÆ÷³ÍÆ®¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.");
+            Debug.LogWarning("[VertexInteraction] í•„ìš”í•œ ë§¤ë‹ˆì €ë‚˜ ì»´í¬ë„ŒíŠ¸ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
             return;
         }
 
-        // 2. »ö»ó º¯°æ (ÇÏ¾ç <-> »¡°­)
-        // (VertexClickTest¿¡¼­ ¼±ÅÃ ÇØÁ¦ ·ÎÁ÷ÀÌ ÀÖÀ¸¹Ç·Î, ¿©±â¼­´Â ½Ã°¢Àû ÇÇµå¹é¸¸ Áİ´Ï´Ù)
+        // 2. ìƒ‰ìƒ ë³€ê²½ (í•˜ì–‘ <-> ë¹¨ê°•)
+        // (VertexClickTestì—ì„œ ì„ íƒ í•´ì œ ë¡œì§ì´ ìˆìœ¼ë¯€ë¡œ, ì—¬ê¸°ì„œëŠ” ì‹œê°ì  í”¼ë“œë°±ë§Œ ì¤ë‹ˆë‹¤)
         renderer.material.color = (renderer.material.color == originalColor) ? Color.red : originalColor;
 
         Debug.Log($"Vertex Clicked: {this.name} at {transform.position}");
 
-        // 3. ¸¶Ä¿ »ı¼º ¹× µ¥ÀÌÅÍ ÀúÀå (±âÁ¸ ·ÎÁ÷ À¯Áö)
+        // 3. ë§ˆì»¤ ìƒì„± ë° ë°ì´í„° ì €ì¥ (ê¸°ì¡´ ë¡œì§ ìœ ì§€)
         if (!copied)
         {
-            // VertexClickTest ½ºÅ©¸³Æ® °¡Á®¿À±â
+            // VertexClickTest ìŠ¤í¬ë¦½íŠ¸ ê°€ì ¸ì˜¤ê¸°
             var clickTest = LVManger.GetComponent<VertexClickTest>();
 
             if (clickTest != null)
             {
-                // ÇöÀç ÀÎµ¦½º °¡Á®¿À±â (ÁÖÀÇ: VertexClickTestÀÇ arrayIndex¿Í µ¿±âÈ­°¡ Áß¿äÇÔ)
+                // í˜„ì¬ ì¸ë±ìŠ¤ ê°€ì ¸ì˜¤ê¸° (ì£¼ì˜: VertexClickTestì˜ arrayIndexì™€ ë™ê¸°í™”ê°€ ì¤‘ìš”í•¨)
                 int meshIndex = clickTest.arrayIndex;
 
-                // È­¸é ÁÂÇ¥ º¯È¯
+                // í™”ë©´ ì¢Œí‘œ ë³€í™˜
                 Vector2 screenPos = mainCam.WorldToScreenPoint(this.transform.position);
 
-                // UI ¸¶Ä¿ »ı¼º
+                // UI ë§ˆì»¤ ìƒì„±
                 var markerMgrScript = markerManager.GetComponent<MarkerManager>();
                 if (markerMgrScript != null)
                 {
                     markerMgrScript.CreateMarker(screenPos);
                 }
 
-                // µ¥ÀÌÅÍ ÁÖÀÔ (¹üÀ§ Ã¼Å© Ãß°¡)
+                // ë°ì´í„° ì£¼ì… (ë²”ìœ„ ì²´í¬ ì¶”ê°€)
                 if (meshIndex < clickTest.verticesStruct.Length)
                 {
                     clickTest.verticesStruct[meshIndex].screenCoordinate = screenPos;
@@ -90,8 +90,8 @@ public class VertexInteraction : MonoBehaviour
                 }
             }
 
-            // copied = true; // [Âü°í] ¸¸¾à ¼±ÅÃ/ÇØÁ¦¸¦ ¹İº¹ÇØ¾ß ÇÑ´Ù¸é ÀÌ ÁÙÀ» Áö¿ö¾ß ÇÒ ¼öµµ ÀÖ½À´Ï´Ù.
-            // ÀÏ´Ü ±âÁ¸ ±â´É À¯Áö¸¦ À§ÇØ ³öµÓ´Ï´Ù.
+            // copied = true; // [ì°¸ê³ ] ë§Œì•½ ì„ íƒ/í•´ì œë¥¼ ë°˜ë³µí•´ì•¼ í•œë‹¤ë©´ ì´ ì¤„ì„ ì§€ì›Œì•¼ í•  ìˆ˜ë„ ìˆìŠµë‹ˆë‹¤.
+            // ì¼ë‹¨ ê¸°ì¡´ ê¸°ëŠ¥ ìœ ì§€ë¥¼ ìœ„í•´ ë†”ë‘¡ë‹ˆë‹¤.
             copied = true;
         }
     }
@@ -107,7 +107,7 @@ public class VertexInteraction : MonoBehaviour
 //public class VertexInteraction : MonoBehaviour
 //{
 //    public GameObject newMeshPrefab;
-//    //»õ·Î »ı¼ºµÈ VertexÀÇ screenCoord¸¦ Áö¼ÓÀûÀ¸·Î ÀúÀå (¸¶¿ì½º À§Ä¡°¡ ¾Æ´Ï¶ó sphereÀÇ À§Ä¡·Î ÀúÀåÇØ¾ß ÇÔ)
+//    //ìƒˆë¡œ ìƒì„±ëœ Vertexì˜ screenCoordë¥¼ ì§€ì†ì ìœ¼ë¡œ ì €ì¥ (ë§ˆìš°ìŠ¤ ìœ„ì¹˜ê°€ ì•„ë‹ˆë¼ sphereì˜ ìœ„ì¹˜ë¡œ ì €ì¥í•´ì•¼ í•¨)
 //    public Dictionary<int, Vector2> screenCoord = new Dictionary<int, Vector2>();
 
 //    private GameObject createdMesh;
@@ -129,7 +129,7 @@ public class VertexInteraction : MonoBehaviour
 //        markerManager = GameObject.Find("CanvasUI");
 //        if (markerManager == null)
 //        {
-//            Debug.LogError("MarkerManager¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù. ¾À¿¡ MarkerManager°¡ Á¸ÀçÇÏ´ÂÁö È®ÀÎÇÏ¼¼¿ä.");
+//            Debug.LogError("MarkerManagerë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤. ì”¬ì— MarkerManagerê°€ ì¡´ì¬í•˜ëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.");
 //        }
 //        // Store the original color
 //        originalColor = renderer.material.color;
@@ -151,7 +151,7 @@ public class VertexInteraction : MonoBehaviour
 //            Vector2 screenCoordMarker = new Vector2(mainCam.WorldToScreenPoint(this.transform.position).x, mainCam.WorldToScreenPoint(this.transform.position).y);
 //            Debug.Log("interaction"+screenCoordMarker);
 //            markerManager.GetComponent<MarkerManager>().CreateMarker(screenCoordMarker);
-//            //¸¶Ä¿ 2D Ãß°¡
+//            //ë§ˆì»¤ 2D ì¶”ê°€
 //            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinate = screenCoordMarker;
 //            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinateGT = screenCoordMarker;
 //            meshCounter++;

@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
@@ -38,15 +38,15 @@ public class Marker : MonoBehaviour, IDragHandler
             Debug.LogError("canvasRectTransform is null");
             return;
         }
-        // ¼ø¼­ ¼³Á¤
+        // ìˆœì„œ ì„¤ì •
         markerText.text = index.ToString();
         IDX = index-1;
-        // ½ºÅ©¸° ÁÂÇ¥¸¦ Canvas ÁÂÇ¥·Î º¯È¯
+        // ìŠ¤í¬ë¦° ì¢Œí‘œë¥¼ Canvas ì¢Œí‘œë¡œ ë³€í™˜
         Vector2 canvasPosition;
         Debug.Log("screen Position: " + screenPosition + "canvas Rect Transform: " +  canvasRectTransform);
         RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRectTransform, screenPosition, null, out canvasPosition);
         Debug.Log("canvas Position: " + canvasPosition);
-        // ¸¶Ä¿ À§Ä¡ ¼³Á¤
+        // ë§ˆì»¤ ìœ„ì¹˜ ì„¤ì •
         canvasRectTransform.anchoredPosition = canvasPosition;
         Debug.Log("Marker Creat" + canvasPosition);
     }
@@ -57,10 +57,10 @@ public class Marker : MonoBehaviour, IDragHandler
 
 
         Vector2 screenPosition = RectTransformUtility.WorldToScreenPoint(projectCam, rectTransform.position);
-        //µÑÁß¿¡ ¹¹°¡ ¸Â´ÂÁö ¸ğ¸£°ÚÀ½
+        //ë‘˜ì¤‘ì— ë­ê°€ ë§ëŠ”ì§€ ëª¨ë¥´ê² ìŒ
         //LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate = new Vector2(screenPosition.x, projectCam.pixelHeight - screenPosition.y);
         LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate = new Vector2(screenPosition.x, screenPosition.y);
-        //¸¶¿ì½º À§Ä¡°¡ ¾Æ´Ñ ¸¶Ä¿ À§Ä¡·Î Á¤»óÀÎ½Ä
+        //ë§ˆìš°ìŠ¤ ìœ„ì¹˜ê°€ ì•„ë‹Œ ë§ˆì»¤ ìœ„ì¹˜ë¡œ ì •ìƒì¸ì‹
         Debug.Log("screen Coord: " + IDX + " " + LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate);
         Vector2 gt2D = new Vector2((float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinateGT.x, (float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinateGT.y);
         Vector2 image2D = new Vector2((float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate.x, (float)LVManger.GetComponent<VertexClickTest>().verticesStruct[IDX].screenCoordinate.y);
