@@ -115,6 +115,101 @@ public static class SaliencyUtils
         return filtered;
     }
 
+    // 안쪽 가림 경계 필터
+    // 카메라에서 본 모델 깊이를 그려서, 이웃 픽셀끼리 깊이가 크게 끊기는 곳(앞 부분이 뒷 부분을 가리는 경계)을 찾고
+    // 그 근처(±radius px)의 버텍스를 뺀다. 투영이 조금만 어긋나도 빛이 앞 부분 가장자리에 걸리는 점들이다.
+    // 바깥 윤곽선(모델-배경 경계)은 실루엣 필터가 담당하므로 여기서는 모델 픽셀끼리만 비교한다.
+    private static Material _linearDepthMat;
+
+    public static List<Vector3> FilterVerticesByOcclusionEdges(Camera camera, MeshFilter meshFilter, List<Vector3> vertices, float depthRatio, float radiusPixels)
+    {
+        bool[] edge = ComputeOcclusionEdgeMask(camera, meshFilter, depthRatio, out int w, out int h);
+        if (edge == null) return vertices;
+
+        int r = Mathf.CeilToInt(radiusPixels);
+        var result = new List<Vector3>();
+        foreach (var v in vertices)
+        {
+            Vector3 s = camera.WorldToScreenPoint(v);
+            if (s.z < 0) continue;
+            int x = Mathf.RoundToInt(s.x), y = Mathf.RoundToInt(s.y);
+
+            bool near = false;
+            for (int dy = -r; dy <= r && !near; dy++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int px = x + dx, py = y + dy;
+                    if (px >= 0 && px < w && py >= 0 && py < h && edge[py * w + px]) { near = true; break; }
+                }
+            }
+            if (!near) result.Add(v);
+        }
+        return result;
+    }
+
+    // 카메라 픽셀 해상도의 가림 경계 마스크 (true = 경계 픽셀)
+    public static bool[] ComputeOcclusionEdgeMask(Camera camera, MeshFilter meshFilter, float depthRatio, out int w, out int h)
+    {
+        w = camera.pixelWidth;
+        h = camera.pixelHeight;
+
+        if (_linearDepthMat == null)
+        {
+            Shader shader = Shader.Find("Hidden/LinearDepthColor");
+            if (shader == null)
+            {
+                Debug.LogError("[OcclusionEdge] Hidden/LinearDepthColor 셰이더를 찾을 수 없습니다.");
+                return null;
+            }
+            _linearDepthMat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+        }
+
+        bool useFloat = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RFloat);
+        RenderTexture rt = RenderTexture.GetTemporary(w, h, 24, useFloat ? RenderTextureFormat.RFloat : RenderTextureFormat.RHalf);
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = rt;
+        GL.Clear(true, true, Color.clear); // 배경 깊이 = 0
+        GL.PushMatrix();
+        GL.LoadIdentity();
+        GL.LoadProjectionMatrix(camera.projectionMatrix * camera.worldToCameraMatrix);
+        _linearDepthMat.SetPass(0);
+        Graphics.DrawMeshNow(meshFilter.sharedMesh, meshFilter.transform.localToWorldMatrix);
+        GL.PopMatrix();
+
+        // 전체를 읽는다 (부분 읽기는 DX11에서 세로가 뒤집힘)
+        var tex = new Texture2D(w, h, useFloat ? TextureFormat.RFloat : TextureFormat.RHalf, false);
+        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+        tex.Apply();
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(rt);
+        Color[] pixels = tex.GetPixels();
+        if (Application.isPlaying) Object.Destroy(tex); else Object.DestroyImmediate(tex);
+
+        var edge = new bool[w * h];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                float d = pixels[i].r;
+                if (d <= 0f) continue;
+
+                // 오른쪽, 위 이웃과 비교 (두 픽셀 모두 모델일 때만)
+                if (x + 1 < w) MarkIfJump(edge, pixels, i, i + 1, d, depthRatio);
+                if (y + 1 < h) MarkIfJump(edge, pixels, i, i + w, d, depthRatio);
+            }
+        }
+        return edge;
+    }
+
+    private static void MarkIfJump(bool[] edge, Color[] pixels, int i, int j, float d, float depthRatio)
+    {
+        float n = pixels[j].r;
+        if (n <= 0f) return;
+        if (Mathf.Abs(d - n) > depthRatio * Mathf.Min(d, n)) edge[i] = edge[j] = true;
+    }
+
     // triangle normal filter
 
     public static List<Vector3> FilterVerticesByTriangleNormals(List<Vector3> filtered, MeshFilter meshFilter, Camera camera, float dotThreshold = 0.2f)

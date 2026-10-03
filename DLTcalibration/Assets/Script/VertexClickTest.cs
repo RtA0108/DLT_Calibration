@@ -10,7 +10,7 @@ using System.Collections.Generic;
 // 2D 좌표는 모두 projectCam(프로젝터)의 스크린 픽셀 좌표(좌하단 원점)다.
 public class VertexClickTest : MonoBehaviour
 {
-    private const int MaxPoints = 10;
+    public const int MaxPoints = 20; // 대응점 슬롯 수 (= 추천점 개수 상한)
     private const float MinMarkerSpreadPixels = 20f; // 추천점이 이보다 좁게 몰려 있으면 경고
 
     [Header("Data")]

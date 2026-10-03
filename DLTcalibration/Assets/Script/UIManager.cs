@@ -152,6 +152,15 @@ public class UIManager : MonoBehaviour
         t.localRotation = Quaternion.Euler(rotXSlider.value, rotYSlider.value, rotZSlider.value);
     }
 
+    // 코드에서 정한 스케일(예: 로드 시 자동 맞춤)을 슬라이더/입력칸에 표시만 한다.
+    public void SetScaleWithoutNotify(float scale)
+    {
+        if (scale > scaleSlider.maxValue) scaleSlider.maxValue = scale * 2f;
+        if (scale < scaleSlider.minValue) scaleSlider.minValue = scale * 0.5f;
+        scaleSlider.SetValueWithoutNotify(scale);
+        scaleInput.SetTextWithoutNotify(scale.ToString("F2"));
+    }
+
     void SyncUIValues(string id)
     {
         var entry = LibraryManager.Instance.allMeshEntries.Find(x => x.id == id);

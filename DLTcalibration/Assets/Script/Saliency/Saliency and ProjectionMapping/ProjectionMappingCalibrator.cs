@@ -27,6 +27,18 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     public int recommendedVertexCount = 6;
     [Range(0.1f, 5.0f)] public float saliencyWeightAlpha = 1.0f;
 
+    [Header("Filters")]
+    // 안쪽 가림 경계 필터: 앞 부분이 뒷 부분을 가리는 경계(깊이가 끊기는 곳) 근처의 점을 뺀다.
+    // 실루엣 필터는 바깥 윤곽선만 잡아서, 예를 들어 날개 가장자리 바로 뒤 몸통 표면은 걸러지지 않았음.
+    public bool useOcclusionEdgeFilter = true;
+    [Range(0.005f, 0.1f)] public float occlusionDepthRatio = 0.02f; // 이웃 픽셀 깊이가 이 비율 이상 차이 나면 경계
+
+    // Reselect용 캐시
+    private List<Vector3> cachedCandidates;
+    private Dictionary<Vector3, float> cachedSaliency;
+    private float cachedL;
+    private Matrix4x4 cachedLocalToWorld, cachedCameraViewProj;
+
     [Header("Visualization")]
     public float markerScale = 1.75f; // 화면에 보이는 실제 크기 (조절 가능)
     public GameObject markerPrefab;
@@ -155,6 +167,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         List<Vector3> filtered = new List<Vector3>(visible);
 
         if (rtMask != null) filtered = SaliencyUtils.FilterVerticesByEdge(rtMask, filtered, targetCamera, 1.5f);
+        if (useOcclusionEdgeFilter) filtered = SaliencyUtils.FilterVerticesByOcclusionEdges(targetCamera, meshFilter, filtered, occlusionDepthRatio, 1.5f);
         filtered = SaliencyUtils.FilterVerticesByTriangleNormals(filtered, meshFilter, targetCamera, 0.3f);
         publicFilteredVertices = new List<Vector3>(filtered);
 
@@ -263,9 +276,37 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         Vector3 scaledSize = Vector3.Scale(localSize, new Vector3(Mathf.Abs(worldScale.x), Mathf.Abs(worldScale.y), Mathf.Abs(worldScale.z)));
         float correctWorldL = scaledSize.magnitude;
 
+        // 개수만 바꿔 다시 고를 때(Reselect) 재사용
+        cachedCandidates = validCandidates;
+        cachedSaliency = normalizedMap;
+        cachedL = correctWorldL;
+        cachedLocalToWorld = transform.localToWorldMatrix;
+        cachedCameraViewProj = targetCamera.projectionMatrix * targetCamera.worldToCameraMatrix;
+
+        SelectAndShow();
+    }
+
+    // 추천점 개수만 바뀌었을 때: 모델과 카메라가 그대로면 무거운 필터/saliency 계산은 건너뛰고
+    // Multiplicative FPS만 다시 돌린다. 하나라도 바뀌었으면 처음부터 다시 계산한다.
+    public void Reselect()
+    {
+        bool cacheValid = cachedCandidates != null && targetCamera != null
+            && cachedLocalToWorld == transform.localToWorldMatrix
+            && cachedCameraViewProj == targetCamera.projectionMatrix * targetCamera.worldToCameraMatrix;
+        if (!cacheValid) { Run(); return; }
+
+        ClearMarkers();
+        if (!this.enabled || !_visualized) return;
+        SelectAndShow();
+    }
+
+    private void SelectAndShow()
+    {
         var final = SaliencyUtils.SelectVerticesWithMultiplicativeFPS(
-            validCandidates, normalizedMap, correctWorldL, recommendedVertexCount
+            cachedCandidates, cachedSaliency, cachedL, recommendedVertexCount
         );
+        if (final.Count < recommendedVertexCount)
+            Debug.LogWarning($"[Recommend] 후보가 {cachedCandidates.Count}개뿐이라 추천점을 {final.Count}개만 골랐습니다.");
 
         CreateMarkerRoot();
 

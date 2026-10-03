@@ -23,6 +23,14 @@ public class MainController : MonoBehaviour
     public ProjectionMappingCalibrator currentCalibrator;
     public SaliencyMapVisualizer currentVisualizer;
 
+    [Header("Recommendation")]
+    [Range(6, VertexClickTest.MaxPoints)]
+    public int recommendedVertexCount = 6; // 추천점 개수. 실행 중에는 -/= 키로 조절
+
+    [Header("Load")]
+    public bool autoFitOnLoad = true;                      // 모델을 불러올 때 프로젝터 화면에 맞게 크기 조절
+    [Range(0.1f, 0.9f)] public float autoFitFraction = 0.5f; // 프로젝터 화면에서 모델이 차지할 비율
+
     // 상태 변수
     public bool IsCalibrationActive = false;
     public bool IsSaliencyActive = false;
@@ -49,6 +57,75 @@ public class MainController : MonoBehaviour
 
         // (비상용) F5키로 수동 계산 가능
         if (Input.GetKeyDown(KeyCode.F5)) StartCoroutine(ManualRunSaliency());
+
+        // '-' / '=' 키: 추천점 개수 줄이기/늘리기
+        if (Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus)) SetRecommendedVertexCount(recommendedVertexCount - 1);
+        if (Input.GetKeyDown(KeyCode.Equals) || Input.GetKeyDown(KeyCode.KeypadPlus)) SetRecommendedVertexCount(recommendedVertexCount + 1);
+    }
+
+    // 추천점 개수를 바꾸고, 추천점이 표시 중이면 바로 다시 고른다.
+    // (DLT 최소 조건 6개 ~ 대응점 슬롯 수까지)
+    public void SetRecommendedVertexCount(int count)
+    {
+        recommendedVertexCount = Mathf.Clamp(count, 6, VertexClickTest.MaxPoints);
+        if (currentCalibrator == null) return;
+
+        currentCalibrator.recommendedVertexCount = recommendedVertexCount;
+        if (IsCalibrationActive && IsRecommendationActive) currentCalibrator.Reselect();
+        Debug.Log($"[Recommend] 추천점 개수: {recommendedVertexCount}");
+    }
+
+    // 모델이 프로젝터 화면에서 autoFitFraction만큼 차지하도록 크기를 맞춘다.
+    // DLT 결과는 모델 크기와 무관하지만, 너무 작으면 추천점과 마커가 겹쳐서 맞출 수 없다.
+    private void FitToProjectorView(GameObject model, Camera cam)
+    {
+        if (model == null || cam == null) return;
+
+        for (int iter = 0; iter < 3; iter++) // 원근 때문에 한 번에 딱 맞지 않아서 몇 번 반복
+        {
+            if (!TryGetScreenRect(model, cam, out Rect rect)) break;
+            float fraction = Mathf.Max(rect.width / cam.pixelWidth, rect.height / cam.pixelHeight);
+            if (fraction <= 0f) break;
+            model.transform.localScale *= autoFitFraction / fraction;
+        }
+
+        float scale = model.transform.localScale.x;
+        if (UIManager.Instance != null) UIManager.Instance.SetScaleWithoutNotify(scale);
+
+        if (TryGetScreenRect(model, cam, out Rect fitted) &&
+            (fitted.xMin < 0 || fitted.yMin < 0 || fitted.xMax > cam.pixelWidth || fitted.yMax > cam.pixelHeight))
+            Debug.LogWarning("[Load] 모델 일부가 프로젝터 화면 밖에 있습니다. 회전 슬라이더나 카메라 위치를 확인하세요.");
+        Debug.Log($"[Load] 프로젝터 화면에 맞춰 스케일 {scale:F2}로 조정했습니다.");
+    }
+
+    // 모델(같은 레이어의 렌더러만)의 바운딩 박스를 프로젝터 화면에 투영한 사각형
+    private static bool TryGetScreenRect(GameObject model, Camera cam, out Rect rect)
+    {
+        rect = default;
+        bool hasBounds = false;
+        Bounds b = default;
+        foreach (Renderer r in model.GetComponentsInChildren<Renderer>())
+        {
+            if (r.gameObject.layer != model.layer) continue;
+            if (!hasBounds) { b = r.bounds; hasBounds = true; }
+            else b.Encapsulate(r.bounds);
+        }
+        if (!hasBounds) return false;
+
+        Vector2 min = new Vector2(float.MaxValue, float.MaxValue), max = new Vector2(float.MinValue, float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 corner = new Vector3(
+                (i & 1) == 0 ? b.min.x : b.max.x,
+                (i & 2) == 0 ? b.min.y : b.max.y,
+                (i & 4) == 0 ? b.min.z : b.max.z);
+            Vector3 s = cam.WorldToScreenPoint(corner);
+            if (s.z <= 0f) return false; // 카메라 뒤
+            min = Vector2.Min(min, s);
+            max = Vector2.Max(max, s);
+        }
+        rect = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        return true;
     }
 
     // ==================================================================================
@@ -267,6 +344,8 @@ public class MainController : MonoBehaviour
                 currentCalibrator.saliencyMode = SaliencyMode.TexMesh;
             else
                 currentCalibrator.saliencyMode = SaliencyMode.CFSCNN;
+
+            currentCalibrator.recommendedVertexCount = recommendedVertexCount;
         }
         // Visualizer에게도 방금 만들어진 파일 주소를 정확히 넘겨줍니다!
         if (currentVisualizer != null)
@@ -280,7 +359,10 @@ public class MainController : MonoBehaviour
             // 히트맵과 실제 추천 근거가 서로 달랐음)
             if (currentCalibrator != null) currentVisualizer.saliencyMode = currentCalibrator.saliencyMode;
         }
-        // 7. 구체 생성
+        // 7. 프로젝터 화면에 맞게 크기 조절 (구 생성 전에 해야 구 크기 보정이 한 번에 맞음)
+        if (autoFitOnLoad && currentCalibrator != null) FitToProjectorView(newMesh, currentCalibrator.targetCamera);
+
+        // 구체 생성
         if (sphereGenerator != null) sphereGenerator.GenerateSpheres(newMesh);
 
         // 8. 초기화
