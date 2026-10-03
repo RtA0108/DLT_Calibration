@@ -23,7 +23,14 @@ public class VertexClickTest : MonoBehaviour
     public Camera projectCam;            // 프로젝터 카메라 (2D 좌표의 기준)
     public MarkerManager markerManager;  // 마커를 띄울 CanvasUI의 MarkerManager
 
+    [Header("Patch Marker")]
+    public int patchSize = 64;                                    // 패치 한 변 (프로젝터 픽셀). 0이면 패치 없음
+    public PatchSnapshot.Mode patchMode = PatchSnapshot.Mode.Lines; // T 키로 전환
+
     private Marker[] markers;
+    private readonly PatchSnapshot patchSnapshot = new PatchSnapshot();
+    private bool alignmentView;          // V 키: 프로젝터에 모델 없이 마커/패치만 표시
+    private int savedCullingMask;
 
     [Serializable]
     public struct VertexStruct
@@ -64,6 +71,58 @@ public class VertexClickTest : MonoBehaviour
         {
             SelectRecommendedVertices();
         }
+
+        // 'T' 키: 패치를 선(외곽선/모서리) <-> 텍스처로 전환
+        if (Input.GetKeyDown(KeyCode.T))
+        {
+            TogglePatchMode();
+        }
+
+        // 'V' 키: 정렬 보기 (프로젝터에 모델 없이 마커/패치만)
+        if (Input.GetKeyDown(KeyCode.V))
+        {
+            ToggleAlignmentView();
+        }
+    }
+
+    private void OnDestroy()
+    {
+        patchSnapshot.Release();
+    }
+
+    public void TogglePatchMode()
+    {
+        patchMode = patchMode == PatchSnapshot.Mode.Lines ? PatchSnapshot.Mode.Texture : PatchSnapshot.Mode.Lines;
+        foreach (Marker m in markers) if (m != null) m.SetPatchMode(patchMode);
+        Debug.Log($"[Patch] 패치 모드: {patchMode}");
+    }
+
+    public void ToggleAlignmentView()
+    {
+        alignmentView = !alignmentView;
+        if (alignmentView)
+        {
+            savedCullingMask = projectCam.cullingMask;
+            projectCam.cullingMask = 1 << LayerMask.NameToLayer("UI");
+        }
+        else
+        {
+            projectCam.cullingMask = savedCullingMask;
+        }
+        Debug.Log($"[Patch] 정렬 보기: {(alignmentView ? "켜짐 (마커/패치만 투사)" : "꺼짐")}");
+    }
+
+    // 마커에 주변 모양 패치를 붙인다. 패치 중심 = 현재 프로젝터 카메라로 본 버텍스 위치.
+    private void AttachPatch(Marker marker, Vector2 screen)
+    {
+        GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
+        if (marker == null || target == null || patchSize <= 0) return;
+
+        patchSnapshot.EnsureCaptured(projectCam, target);
+        marker.SetPatches(
+            patchSnapshot.Crop(PatchSnapshot.Mode.Lines, screen, patchSize),
+            patchSnapshot.Crop(PatchSnapshot.Mode.Texture, screen, patchSize),
+            patchMode, patchSize);
     }
 
     // 표시 중인 추천점들을 대응점으로 선택한다. 기존 선택(마커 포함)은 비우고,
@@ -198,6 +257,7 @@ public class VertexClickTest : MonoBehaviour
             screenCoordinateGT = screen
         };
         if (markerManager != null) markers[slot] = markerManager.CreateMarker(slot, screen, projectCam, this);
+        AttachPatch(markers[slot], screen);
         SetSphereSelected(target, true);
 
         arrayIndex++;
