@@ -26,9 +26,13 @@ public class VertexClickTest : MonoBehaviour
     [Header("Patch Marker")]
     public int patchSize = 64;                                    // 패치 한 변 (프로젝터 픽셀). 0이면 패치 없음
     public PatchSnapshot.Mode patchMode = PatchSnapshot.Mode.Lines; // T 키로 전환
-    // 선 모드에서 이 각도(도)보다 크게 꺾인 모서리를 그린다. 매끈한 high poly는 35 정도,
-    // 면이 각진 low poly는 15~20 정도가 실물의 면 경계와 잘 맞는다. (TheRock: 정면 모서리 중앙값 약 17도)
-    [Range(5f, 90f)] public float patchCreaseAngle = 35f;
+    // 선 모드에서 이 각도(도)보다 크게 꺾인 모서리를 그린다.
+    // 0이면 모델마다 정함: 라이브러리 항목의 patchCreaseAngle -> 없으면 모서리 각도 분포로 자동
+    // (매끈한 high poly 35도, 각진 low poly는 중앙값 x 0.8. PatchSnapshot.AutoCreaseAngle 참고).
+    // 0보다 크면 모든 모델에 이 값을 쓴다 (실험용).
+    [Range(0f, 90f)] public float patchCreaseAngle = 0f;
+
+    private GameObject creaseAngleLoggedFor;
 
     [Header("Live Calibration")]
     public bool liveSolve = true;          // L 키: 마커를 놓을 때마다 자동으로 DLT를 다시 풂 (점 6개 이상)
@@ -121,7 +125,7 @@ public class VertexClickTest : MonoBehaviour
     {
         GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
         if (target == null || patchSize <= 0) return;
-        patchSnapshot.creaseAngle = patchCreaseAngle;
+        patchSnapshot.creaseAngle = EffectiveCreaseAngle(target);
         patchSnapshot.EnsureCaptured(projectCam, target);
 
         for (int i = 0; i < clickedObjects.Length; i++)
@@ -177,12 +181,31 @@ public class VertexClickTest : MonoBehaviour
         GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
         if (marker == null || target == null || patchSize <= 0) return;
 
-        patchSnapshot.creaseAngle = patchCreaseAngle;
+        patchSnapshot.creaseAngle = EffectiveCreaseAngle(target);
         patchSnapshot.EnsureCaptured(projectCam, target);
         marker.SetPatches(
             patchSnapshot.Crop(PatchSnapshot.Mode.Lines, screen, patchSize),
             patchSnapshot.Crop(PatchSnapshot.Mode.Texture, screen, patchSize),
             patchMode, patchSize);
+    }
+
+    // 선 모드 모서리 기준 각도: Inspector 값(>0) -> 라이브러리 항목 값(>0) -> 자동
+    private float EffectiveCreaseAngle(GameObject target)
+    {
+        string source;
+        float angle;
+        MeshEntry entry = MainController.Instance != null ? MainController.Instance.currentEntry : null;
+        float median = 0f;
+        if (patchCreaseAngle > 0f) { angle = patchCreaseAngle; source = "Inspector 지정"; }
+        else if (entry != null && entry.patchCreaseAngle > 0f) { angle = entry.patchCreaseAngle; source = "라이브러리 지정"; }
+        else { angle = patchSnapshot.AutoCreaseAngle(target, out median); source = $"자동, 모서리 각도 중앙값 {median:F1}도"; }
+
+        if (creaseAngleLoggedFor != target)
+        {
+            creaseAngleLoggedFor = target;
+            Debug.Log($"[Patch] 선 패치 모서리 기준: {angle:F1}도 ({source})");
+        }
+        return angle;
     }
 
     // 표시 중인 추천점들을 대응점으로 선택한다. 기존 선택(마커 포함)은 비우고,

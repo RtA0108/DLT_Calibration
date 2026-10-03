@@ -10,6 +10,7 @@ public class MainController : MonoBehaviour
 
     [Header("Target Info")]
     public GameObject targetMesh;
+    [System.NonSerialized] public MeshEntry currentEntry; // 지금 불러온 모델의 라이브러리 항목 (경로로 직접 불러오면 임시 항목)
 
     [SerializeField] private string _currentObjPath;
     [SerializeField] private string _currentCfsPath; // 사용자가 입력한 CfS 경로 (없을 수 있음)

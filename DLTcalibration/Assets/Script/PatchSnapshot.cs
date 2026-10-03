@@ -33,6 +33,24 @@ public class PatchSnapshot
         public List<bool> multiFace = new List<bool>();               // 면 3개 이상이 공유 (항상 그림)
         public Vector3[] faceNormals, faceCenters;
         public float creaseAngle = -1f;                               // crease를 계산할 때 쓴 기준 각도
+        public float medianAngle;                                     // 모서리 꺾임 각도 중앙값 (자동 기준값용)
+    }
+
+    // 모서리 기준 각도 자동 결정.
+    //  - 매끈한 메쉬(중앙값 10도 미만, 예: 라이브러리의 high poly 모델들 0~6도): 크게 꺾인 진짜 모서리만 -> 35도
+    //  - 각진 메쉬(중앙값 10도 이상, 예: TheRock 21도): 면 경계가 실물에서도 보이므로 중앙값 x 0.8 (10~35도)
+    public const float SmoothMedianLimit = 10f, SmoothMeshAngle = 35f, FacetedFactor = 0.8f;
+
+    public float AutoCreaseAngle(GameObject target, out float medianAngle)
+    {
+        // 모델 메쉬 중 면이 가장 많은 것을 기준으로
+        Mesh mesh = null;
+        foreach (MeshFilter mf in ModelMeshFilters(target))
+            if (mf.sharedMesh != null && (mesh == null || mf.sharedMesh.triangles.Length > mesh.triangles.Length)) mesh = mf.sharedMesh;
+
+        medianAngle = mesh != null ? GetEdges(mesh).medianAngle : 0f;
+        if (medianAngle < SmoothMedianLimit) return SmoothMeshAngle;
+        return Mathf.Clamp(medianAngle * FacetedFactor, SmoothMedianLimit, SmoothMeshAngle);
     }
 
     // 같은 프레임에 같은 카메라/모델이면 다시 그리지 않는다 (R로 여러 점을 한 번에 고를 때).
@@ -253,6 +271,12 @@ public class PatchSnapshot
                 }
             }
         }
+
+        var angles = new List<float>();
+        for (int e = 0; e < cache.a.Count; e++)
+            if (cache.t2[e] >= 0) angles.Add(Vector3.Angle(cache.faceNormals[cache.t1[e]], cache.faceNormals[cache.t2[e]]));
+        angles.Sort();
+        cache.medianAngle = angles.Count > 0 ? angles[angles.Count / 2] : 0f;
 
         UpdateCreases(cache);
         edgeCaches.Add(mesh, cache);

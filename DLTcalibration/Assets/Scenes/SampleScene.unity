@@ -13207,6 +13207,7 @@ MonoBehaviour:
   markerManager: {fileID: 1487993647}
   patchSize: 64
   patchMode: 0
+  patchCreaseAngle: 0
   liveSolve: 1
   dltSolver: {fileID: 0}
 --- !u!1001 &2105277072

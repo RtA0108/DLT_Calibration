@@ -21,6 +21,9 @@ public class MeshEntry
     // Resources 기준 경로 또는 디스크 절대 경로. 자세한 규칙은 TextureSequenceAnimator 참고.
     public string animatedTexturePath;
     public float animatedTextureFps;   // 0이면 기본값(24fps)
+
+    // 패치 선 모드에서 이 각도(도)보다 크게 꺾인 모서리를 그림. 0이면 모서리 각도 분포로 자동 결정.
+    public float patchCreaseAngle;
 }
 
 [System.Serializable]
