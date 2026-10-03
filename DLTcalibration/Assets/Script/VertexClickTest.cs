@@ -1,109 +1,286 @@
-using System.Collections;
-using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.UI;
+using System;
+
+// 대응점 선택을 슬롯 단위로 관리한다. 슬롯 i 하나에 아래 네 가지가 항상 함께 묶인다.
+//   clickedObjects[i]  : 선택된 버텍스 구
+//   verticesStruct[i]  : 3D 좌표 + 프로젝터 2D 좌표(screenCoordinate) + 클릭 당시 투영 위치(screenCoordinateGT)
+//   markers[i]         : 프로젝터 화면의 마커 (드래그하면 verticesStruct[i].screenCoordinate가 갱신됨)
+//   구 색상             : 빨강 = 선택됨
+// 2D 좌표는 모두 projectCam(프로젝터)의 스크린 픽셀 좌표(좌하단 원점)다.
 public class VertexClickTest : MonoBehaviour
 {
-    public GameObject[] clickedObjects; // Array to store clicked objects
-    public int arrayIndex;
-    public Camera projectCam;
+    private const int MaxPoints = 10;
 
+    [Header("Data")]
+    public GameObject[] clickedObjects; // 선택된 Vertex 오브젝트들
+    public int arrayIndex = 0; // 현재 선택된 개수
+
+    public VertexStruct[] verticesStruct; // 데이터 저장용 구조체 배열
+
+    [Header("References")]
+    public Camera projectCam;            // 프로젝터 카메라 (2D 좌표의 기준)
+    public MarkerManager markerManager;  // 마커를 띄울 CanvasUI의 MarkerManager
+
+    private Marker[] markers;
+
+    [Serializable]
     public struct VertexStruct
     {
         public int uniqIndex;
         public Vector3 worldCoordinate;
         public Vector2 screenCoordinate;
-        public VertexStruct(int vertexIndex, Vector3 worldCoord, Vector2 screenCoord)
-        {
-            this.uniqIndex = vertexIndex;
-            this.worldCoordinate = worldCoord;
-            screenCoordinate = screenCoord;
-        }
+        public Vector2 screenCoordinateGT;
     }
-    public VertexStruct[] verticesStruct;
-
-  
 
     private void Start()
     {
-
-        clickedObjects = new GameObject[10]; // Initializing arrays with size 10
-        verticesStruct = new VertexStruct[12];
+        clickedObjects = new GameObject[MaxPoints];
+        verticesStruct = new VertexStruct[MaxPoints];
+        markers = new Marker[MaxPoints];
         arrayIndex = 0;
+
+        if (markerManager == null)
+        {
+            GameObject canvasUI = GameObject.Find("CanvasUI");
+            if (canvasUI != null) markerManager = canvasUI.GetComponent<MarkerManager>();
+        }
+        if (projectCam == null) Debug.LogError("[VertexClickTest] projectCam이 지정되지 않았습니다.");
+        if (markerManager == null) Debug.LogError("[VertexClickTest] MarkerManager를 찾을 수 없습니다.");
     }
 
     private void Update()
     {
-        // Check if the left mouse button is clicked
-        if (Input.GetMouseButtonDown(0))
+        ReleaseDestroyedSlots();
+
+        if (Input.GetMouseButtonDown(0) && Display.activeEditorGameViewTarget == 0)
         {
-            // Shoot a ray from the camera to the mouse position
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            RaycastHit hit;
+            HandleClick();
+        }
+    }
 
-            // Check if the ray hits an object
-            if (Physics.Raycast(ray, out hit))
+    private void HandleClick()
+    {
+        // Calibration 모드가 꺼져 있으면 선택하지 않는다.
+        if (MainController.Instance != null && !MainController.Instance.IsCalibrationActive) return;
+
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit))
+        {
+            GameObject target = hit.collider.gameObject;
+
+            // 태그 체크 (원하는 태그가 아니면 무시)
+            if (!target.CompareTag("SphereMainCam")) return;
+
+            // ▼▼▼ [수정됨] 토글 로직 구현 ▼▼▼
+
+            // 1. 이미 선택된 오브젝트인가? -> 선택 해제 (삭제)
+            if (ArrayContains(clickedObjects, target))
             {
-                // Store clicked object
-                GameObject clickedObject = hit.collider.gameObject;
-                
-                // Check if the clicked object is not already in the array
-                if (!ArrayContains(clickedObjects, clickedObject))
-                {
-                    // Find first empty slot
-                    int index = System.Array.IndexOf(clickedObjects, null);
-                    Debug.Log("index: "+ index);
-                   
-                    if (index != -1 && clickedObject.tag == "SphereMainCam")
-                    {
-                        //임시로 "SphereIn2D" 태그에서 현재태그로 변경. -> 이거 아냐...이렇게 하면 안돼... VertexInteraction에서 array에 추가하는 코드로 변경해야 함
-                        //여기 확인 필요
-                        clickedObjects[index] = clickedObject;
-                        Debug.Log("Object already clicked vertex MainCam: " + clickedObject.name);
-                        verticesStruct[index].uniqIndex = index;
-                        verticesStruct[index].screenCoordinate = new Vector2(projectCam.WorldToScreenPoint(clickedObject.transform.position).x, projectCam.pixelHeight - projectCam.WorldToScreenPoint(clickedObject.transform.position).y);
-                        arrayIndex++;
-
-                        Debug.Log(verticesStruct[index].uniqIndex);
-                        Debug.Log(verticesStruct[index].worldCoordinate);
-                        Debug.Log(verticesStruct[index].screenCoordinate);
-                    }
-                    else
-                    {
-                        Debug.LogWarning("Clicked objects array is full. Increase array size if needed.");
-                    }
-                    
-                }
-                else
-                {
-                    Debug.Log("Object already clicked: " + clickedObject.name);
-                }
+                RemoveObject(target);
+            }
+            // 2. 새로운 오브젝트인가? -> 선택 (추가)
+            else
+            {
+                AddObject(target);
             }
         }
     }
 
-    
+    // 오브젝트 추가 함수
+    private void AddObject(GameObject target)
+    {
+        int slot = Array.IndexOf(clickedObjects, null);
+
+        if (slot == -1)
+        {
+            Debug.LogWarning("더 이상 선택할 수 없습니다 (배열 가득 참).");
+            return;
+        }
+
+        Vector3 world = target.transform.position;
+
+        // 마커 시작 위치 = 현재 프로젝터 카메라로 이 버텍스를 투영한 위치.
+        // (예전에는 Main Camera 픽셀 좌표를 써서, 해상도가 다른 프로젝터 화면과 좌표계가 섞였음)
+        Vector3 projected = projectCam.WorldToScreenPoint(world);
+        Vector2 screen = new Vector2(projected.x, projected.y);
+        if (projected.z <= 0f || screen.x < 0f || screen.y < 0f || screen.x > projectCam.pixelWidth || screen.y > projectCam.pixelHeight)
+            Debug.LogWarning($"[Select] {target.name}이(가) 프로젝터 화면 밖에 투영됩니다: {projected}");
+
+        clickedObjects[slot] = target;
+        verticesStruct[slot] = new VertexStruct
+        {
+            uniqIndex = slot,
+            worldCoordinate = world,
+            screenCoordinate = screen,
+            screenCoordinateGT = screen
+        };
+        if (markerManager != null) markers[slot] = markerManager.CreateMarker(slot, screen, projectCam, this);
+        SetSphereSelected(target, true);
+
+        arrayIndex++;
+        Debug.Log($"[Select] 추가됨 ({arrayIndex}개, 마커 {slot + 1}번): {target.name}");
+    }
+
+    // 오브젝트 제거 함수
+    private void RemoveObject(GameObject target)
+    {
+        for (int i = 0; i < clickedObjects.Length; i++)
+        {
+            if (clickedObjects[i] == target)
+            {
+                SetSphereSelected(target, false);
+                ReleaseSlot(i);
+                Debug.Log($"[Deselect] 해제됨 ({arrayIndex}개 남음): {target.name}");
+                return;
+            }
+        }
+    }
+
+    // 슬롯을 비우고 그 슬롯의 마커도 지운다.
+    private void ReleaseSlot(int slot)
+    {
+        if (markers[slot] != null) Destroy(markers[slot].gameObject);
+        markers[slot] = null;
+        clickedObjects[slot] = null;
+        verticesStruct[slot] = new VertexStruct();
+        arrayIndex--;
+    }
+
+    // 메쉬를 바꾸면 구들이 새로 만들어지면서 선택돼 있던 구가 파괴된다. 그런 슬롯은 마커와 함께 정리한다.
+    private void ReleaseDestroyedSlots()
+    {
+        for (int i = 0; i < clickedObjects.Length; i++)
+        {
+            // 참조는 남아 있는데 Unity 오브젝트는 파괴된 상태
+            if (!ReferenceEquals(clickedObjects[i], null) && clickedObjects[i] == null)
+                ReleaseSlot(i);
+        }
+    }
+
+    private static void SetSphereSelected(GameObject sphere, bool selected)
+    {
+        if (sphere.TryGetComponent(out VertexInteraction interaction))
+            interaction.SetSelected(selected);
+    }
+
     private bool ArrayContains(GameObject[] array, GameObject obj)
     {
-        foreach (GameObject item in array)
+        foreach (var item in array)
         {
-            if (item == obj)
-                return true;
+            if (item == obj) return true;
         }
         return false;
     }
-    // private void OnMouseDown()
-    // {
-    //     renderer.material.color = renderer.material.color == originalColor ? Color.red : originalColor;
-    //     //Debug.Log(this.transform.position);
-    //     if (!copied){
-    //         GameObject copy = Instantiate(gameObject);
-    //         copy.transform.Translate(0f,0f,-10f);
-    //         copied = true;
-    //     }
-
-    // }
-    // Function to check if an array contains a specific object
-
 }
+
+//using System.Collections;
+//using System.Collections.Generic;
+//using Unity.VisualScripting;
+//using UnityEngine;
+//using UnityEngine.UI;
+//public class VertexClickTest : MonoBehaviour
+//{
+//    public GameObject[] clickedObjects; // Array to store clicked objects
+//    public int arrayIndex;
+//    public Camera projectCam;
+
+//    public struct VertexStruct
+//    {
+//        public int uniqIndex;
+//        public Vector3 worldCoordinate;
+//        public Vector2 screenCoordinate;
+//        public Vector2 screenCoordinateGT;
+//        public VertexStruct(int vertexIndex, Vector3 worldCoord, Vector2 screenCoord, Vector2 screenCoordGT)
+//        {
+//            this.uniqIndex = vertexIndex;
+//            this.worldCoordinate = worldCoord;
+//            this.screenCoordinate = screenCoord;
+//            this.screenCoordinateGT = screenCoordGT;
+//            //원래는 screenCoordinate에 this가 붙어있지 않았는데 이게 원인이었을까?
+//        }
+//    }
+//    public VertexStruct[] verticesStruct;
+
+
+
+//    private void Start()
+//    {
+
+//        clickedObjects = new GameObject[10]; // Initializing arrays with size 10
+//        verticesStruct = new VertexStruct[12];
+//        arrayIndex = 0;
+//    }
+
+//    private void Update()
+//    {
+//        // Check if the left mouse button is clicked
+//        if (Input.GetMouseButtonDown(0) && Display.activeEditorGameViewTarget == 0)
+//        {
+//            // Shoot a ray from the camera to the mouse position
+//            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+//            RaycastHit hit;
+
+//            // Check if the ray hits an object
+//            if (Physics.Raycast(ray, out hit))
+//            {
+//                // Store clicked object
+//                GameObject clickedObject = hit.collider.gameObject;
+
+//                // Check if the clicked object is not already in the array
+//                if (!ArrayContains(clickedObjects, clickedObject))
+//                {
+//                    // Find first empty slot
+//                    int index = System.Array.IndexOf(clickedObjects, null);
+//                    Debug.Log("index: " + index);
+
+//                    if (index != -1 && clickedObject.tag == "SphereMainCam")
+//                    {
+//                        //임시로 "SphereIn2D" 태그에서 현재태그로 변경. -> VertexInteraction에서 array에 추가하는 코드로 변경해야 함
+//                        //여기 확인 필요
+//                        clickedObjects[index] = clickedObject;
+//                        Debug.Log("Object already clicked vertex MainCam: " + clickedObject.name);
+//                        verticesStruct[index].uniqIndex = index;
+//                        verticesStruct[index].worldCoordinate = clickedObject.transform.position;
+//                        //verticesStruct[index].screenCoordinate = new Vector2(projectCam.WorldToScreenPoint(clickedObject.transform.position).x, projectCam.pixelHeight - projectCam.WorldToScreenPoint(clickedObject.transform.position).y);
+//                        arrayIndex++;
+//                        Debug.Log("Working");
+//                    }
+//                    else
+//                    {
+//                        Debug.Log("Object already clicked vertex MainCam: " + clickedObject.name);
+//                        Debug.LogWarning("Clicked objects array is full. Increase array size if needed.");
+//                    }
+
+//                }
+//                else
+//                {
+//                    Debug.Log("Object already clicked: " + clickedObject.name);
+//                }
+//            }
+//        }
+//    }
+
+
+//    private bool ArrayContains(GameObject[] array, GameObject obj)
+//    {
+//        foreach (GameObject item in array)
+//        {
+//            if (item == obj)
+//                return true;
+//        }
+//        return false;
+//    }
+//    // private void OnMouseDown()
+//    // {
+//    //     renderer.material.color = renderer.material.color == originalColor ? Color.red : originalColor;
+//    //     //Debug.Log(this.transform.position);
+//    //     if (!copied){
+//    //         GameObject copy = Instantiate(gameObject);
+//    //         copy.transform.Translate(0f,0f,-10f);
+//    //         copied = true;
+//    //     }
+
+//    // }
+//    // Function to check if an array contains a specific object
+
+//}

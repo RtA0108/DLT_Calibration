@@ -1,36 +1,40 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
+ï»¿using UnityEngine;
 
 public class MarkerManager : MonoBehaviour
 {
-    
-    public RectTransform canvasRectTransform; // CanvasÀÇ RectTransform
-    public GameObject markerPrefab; // ¸¶Ä¿·Î »ç¿ëÇÒ ÇÁ¸®ÆÕ
 
-    private int markerCount = 0;
-    //Canvas Plane Distance¸¦ object¿Í CameraÀÇ °Å¸® Áß°£°ªÀ¸·Î ¼³Á¤?
+    public RectTransform canvasRectTransform; // Canvasì˜ RectTransform
+    public GameObject markerPrefab; // ë§ˆì»¤ë¡œ ì‚¬ìš©í•  í”„ë¦¬íŒ¹
+
+    //Canvas Plane Distanceë¥¼ objectì™€ Cameraì˜ ê±°ë¦¬ ì¤‘ê°„ê°’ìœ¼ë¡œ ì„¤ì •?
     public void Start()
     {
         if (canvasRectTransform == null) Debug.LogError("No Rect Transform");
     }
 
-    public void CreateMarker(Vector2 screenPosition)
+    // slot: VertexClickTestì˜ ìŠ¬ë¡¯ ì¸ë±ìŠ¤. ë§ˆì»¤ ë²ˆí˜¸ëŠ” slot + 1ë¡œ í‘œì‹œëœë‹¤.
+    // screenPosition: cam ê¸°ì¤€ ìŠ¤í¬ë¦° í”½ì…€ ì¢Œí‘œ (ì¢Œí•˜ë‹¨ ì›ì )
+    public Marker CreateMarker(int slot, Vector2 screenPosition, Camera cam, VertexClickTest owner)
     {
         if (markerPrefab == null)
         {
             Debug.LogError("Marker prefab is not assigned.");
-            return;
+            return null;
         }
 
-        if (canvasRectTransform == null) Debug.LogError("No Rect Transform");
+        if (canvasRectTransform == null)
+        {
+            Debug.LogError("No Rect Transform");
+            return null;
+        }
 
-        // ¸¶Ä¿ »ı¼º
+        // ë§ˆì»¤ ìƒì„±
         GameObject newMarker = Instantiate(markerPrefab, canvasRectTransform);
-        newMarker.name = "MarkerUI " + markerCount.ToString();
-        // ¸¶Ä¿ ¼³Á¤
+        newMarker.name = "MarkerUI " + (slot + 1);
+        // ë§ˆì»¤ ì„¤ì •
         Marker markerScript = newMarker.GetComponent<Marker>();
-        markerScript.SetMarker(++markerCount, screenPosition, canvasRectTransform);
+        markerScript.SetMarker(slot, screenPosition, canvasRectTransform, cam, owner);
+        Debug.Log("Marker Start Point" + screenPosition);
+        return markerScript;
     }
 }

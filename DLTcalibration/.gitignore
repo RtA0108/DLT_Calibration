@@ -10,6 +10,18 @@ opencv_world480d.dll
 /[Bb]uilds/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
+Assets/**/*.obj
+
+# Large binaries kept local only (GitHub 100MB limit)
+/PythonScripts/*.mat
+/Assets/Resources/Meshes/**/*.png
+/Assets/Resources/Meshes/**/*.png.meta
+/Assets/kangaroo_max_quality.png
+/Assets/kangaroo_max_quality.png.meta
+
+# Windows download metadata
+*Zone.Identifier
+*Zone.Identifier.meta
 
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data

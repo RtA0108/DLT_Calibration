@@ -1,77 +1,94 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using Unity.VisualScripting;
-using UnityEngine;
-using UnityEngine.UI;
+ï»¿using UnityEngine;
 
+// ë²„í…ìŠ¤ êµ¬ì˜ ì„ íƒ í‘œì‹œ(ìƒ‰ìƒ)ë§Œ ë‹´ë‹¹í•œë‹¤.
+// ì„ íƒ / ë§ˆì»¤ ìƒì„± / 2D-3D ë°ì´í„° ì €ì¥ì€ VertexClickTestê°€ ìŠ¬ë¡¯ ë‹¨ìœ„ë¡œ í•œ ê³³ì—ì„œ ê´€ë¦¬í•œë‹¤.
+// (ì˜ˆì „ì—ëŠ” ì—¬ê¸°ì™€ VertexClickTestê°€ ì„œë¡œ ë‹¤ë¥¸ ì¸ë±ìŠ¤ë¡œ ë°ì´í„°ë¥¼ ì¨ì„œ, ì„ íƒ í•´ì œ í›„ ì§ì´ ì–´ê¸‹ë‚¬ìŒ)
 public class VertexInteraction : MonoBehaviour
 {
+    // [ì„¤ì •] ìƒˆë¡œ ìƒì„±í•  Mesh Prefab (í•„ìš” ì‹œ)
     public GameObject newMeshPrefab;
-    //»õ·Î »ı¼ºµÈ VertexÀÇ screenCoord¸¦ Áö¼ÓÀûÀ¸·Î ÀúÀå (¸¶¿ì½º À§Ä¡°¡ ¾Æ´Ï¶ó sphereÀÇ À§Ä¡·Î ÀúÀåÇØ¾ß ÇÔ)
-    public Dictionary<int, Vector2> screenCoord = new Dictionary<int, Vector2>();
 
-    private GameObject createdMesh;
-    private GameObject LVManger;
     private Color originalColor;
     private new Renderer renderer;
-    private static int meshCounter = 0;
-    private int meshIndex = 0;
-    private bool copied = false;
-    public Camera mainCam;
-    private GameObject markerManager;
-    void Start()
+
+    void Awake()
     {
-        Camera cam = GameObject.FindGameObjectWithTag("MainCamera").gameObject.GetComponent<Camera>();
-        mainCam = cam;
-        // Get the renderer component to access the material color
         renderer = GetComponent<Renderer>();
-        // markerManager = GameObject.Find("MarkerManager");
-        markerManager = GameObject.Find("CanvasUI");
-        if (markerManager == null)
+        if (renderer != null)
         {
-            Debug.LogError("MarkerManager¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù. ¾À¿¡ MarkerManager°¡ Á¸ÀçÇÏ´ÂÁö È®ÀÎÇÏ¼¼¿ä.");
+            originalColor = renderer.material.color;
         }
-        // Store the original color
-        originalColor = renderer.material.color;
-        LVManger = GameObject.Find("LevelManager");
     }
-    private void OnMouseDown()
+
+    public void SetSelected(bool selected)
     {
-        if (markerManager == null)
-        {
-            Debug.LogError("MarkerManager is not assigned.");
-            return;
-        }
-
-        renderer.material.color = renderer.material.color == originalColor ? Color.red : originalColor;
-        Debug.Log(this.transform.position);
-        if (!copied){
-            createdMesh = Instantiate(newMeshPrefab, this.transform.position, Quaternion.identity);
-            Vector3 newPos = this.transform.position;
-            meshIndex = LVManger.GetComponent<VertexClickTest>().arrayIndex;
-            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].worldCoordinate = newPos;
-            newPos.z += 1000f; // Change this value as needed
-            createdMesh.transform.position = newPos;
-            // GameObject copy = Instantiate(gameObject);
-            // copy.transform.Translate(0f,0f,-10f);
-            // copy.transform.Position()
-            Vector2 screenCoordMarker = new Vector2(mainCam.WorldToScreenPoint(newPos).x, mainCam.WorldToScreenPoint(newPos).y);
-            Debug.Log("interaction"+screenCoordMarker);
-            markerManager.GetComponent<MarkerManager>().CreateMarker(screenCoordMarker);
-            //¸¶Ä¿ 2D Ãß°¡
-            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinate = screenCoordMarker;
-
-            createdMesh.name = "2D_Vertex_" + meshCounter.ToString();
-            meshCounter++;
-            copied = true;
-        }
-        
+        if (renderer == null) return;
+        renderer.material.color = selected ? Color.red : originalColor;
     }
-    void Update()
-    {
- 
-    }
-
-   
 }
+
+//using System;
+//using System.Collections;
+//using System.Collections.Generic;
+//using Unity.VisualScripting;
+//using UnityEngine;
+//using UnityEngine.UI;
+
+//public class VertexInteraction : MonoBehaviour
+//{
+//    public GameObject newMeshPrefab;
+//    //ìƒˆë¡œ ìƒì„±ëœ Vertexì˜ screenCoordë¥¼ ì§€ì†ì ìœ¼ë¡œ ì €ì¥ (ë§ˆìš°ìŠ¤ ìœ„ì¹˜ê°€ ì•„ë‹ˆë¼ sphereì˜ ìœ„ì¹˜ë¡œ ì €ì¥í•´ì•¼ í•¨)
+//    public Dictionary<int, Vector2> screenCoord = new Dictionary<int, Vector2>();
+
+//    private GameObject createdMesh;
+//    private GameObject LVManger;
+//    private Color originalColor;
+//    private new Renderer renderer;
+//    private static int meshCounter = 0;
+//    private int meshIndex = 0;
+//    private bool copied = false;
+//    public Camera mainCam;
+//    private GameObject markerManager;
+//    void Start()
+//    {
+//        Camera cam = GameObject.FindGameObjectWithTag("MainCamera").gameObject.GetComponent<Camera>();
+//        mainCam = cam;
+//        // Get the renderer component to access the material color
+//        renderer = GetComponent<Renderer>();
+//        // markerManager = GameObject.Find("MarkerManager");
+//        markerManager = GameObject.Find("CanvasUI");
+//        if (markerManager == null)
+//        {
+//            Debug.LogError("MarkerManagerë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤. ì”¬ì— MarkerManagerê°€ ì¡´ì¬í•˜ëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.");
+//        }
+//        // Store the original color
+//        originalColor = renderer.material.color;
+//        LVManger = GameObject.Find("LevelManager");
+//    }
+//    private void OnMouseDown()
+//    {
+//        if (markerManager == null)
+//        {
+//            Debug.LogError("MarkerManager is not assigned.");
+//            return;
+//        }
+
+//        renderer.material.color = renderer.material.color == originalColor ? Color.red : originalColor;
+//        Debug.Log(this.transform.position);
+//        if (!copied){
+
+//            meshIndex = LVManger.GetComponent<VertexClickTest>().arrayIndex;
+//            Vector2 screenCoordMarker = new Vector2(mainCam.WorldToScreenPoint(this.transform.position).x, mainCam.WorldToScreenPoint(this.transform.position).y);
+//            Debug.Log("interaction"+screenCoordMarker);
+//            markerManager.GetComponent<MarkerManager>().CreateMarker(screenCoordMarker);
+//            //ë§ˆì»¤ 2D ì¶”ê°€
+//            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinate = screenCoordMarker;
+//            LVManger.GetComponent<VertexClickTest>().verticesStruct[meshIndex].screenCoordinateGT = screenCoordMarker;
+//            meshCounter++;
+//            copied = true;
+//        }
+
+//    }
+
+
+//}
