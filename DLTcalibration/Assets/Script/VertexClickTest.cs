@@ -71,6 +71,8 @@ public class VertexClickTest : MonoBehaviour
             HandleClick();
         }
 
+        if (HotkeyGuard.Blocked) return; // 입력칸에 글자를 치는 중
+
         // 'R' 키: 추천점(빨간 구)을 대응점으로 바로 선택
         if (Input.GetKeyDown(KeyCode.R))
         {
@@ -92,9 +94,16 @@ public class VertexClickTest : MonoBehaviour
         // 'L' 키: 실시간 재계산 켜기/끄기
         if (Input.GetKeyDown(KeyCode.L))
         {
-            liveSolve = !liveSolve;
-            Debug.Log($"[Live] 실시간 재계산: {(liveSolve ? "켜짐" : "꺼짐 (F 키로 직접 계산)")}");
+            ToggleLiveSolve();
         }
+    }
+
+    public bool AlignmentView => alignmentView;
+
+    public void ToggleLiveSolve()
+    {
+        liveSolve = !liveSolve;
+        Debug.Log($"[Live] 실시간 재계산: {(liveSolve ? "켜짐" : "꺼짐 (F 키로 직접 계산)")}");
     }
 
     // 마커 드래그가 끝날 때 Marker가 호출한다.
@@ -124,7 +133,7 @@ public class VertexClickTest : MonoBehaviour
         }
     }
 
-    private int SelectedCount()
+    public int SelectedCount()
     {
         int count = 0;
         foreach (GameObject o in clickedObjects) if (o != null) count++;
@@ -250,6 +259,9 @@ public class VertexClickTest : MonoBehaviour
     {
         // Calibration 모드가 꺼져 있으면 선택하지 않는다.
         if (MainController.Instance != null && !MainController.Instance.IsCalibrationActive) return;
+
+        // UI(버튼, 슬라이더 등)를 클릭한 것이면 뒤에 있는 버텍스 구를 선택하지 않는다.
+        if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit))

@@ -50,7 +50,7 @@ public class DLT_solve : MonoBehaviour
     void Update()
     {
         // 'F' 키를 누르면 DLT 계산 시작
-        if (Input.GetKeyDown(KeyCode.F))
+        if (Input.GetKeyDown(KeyCode.F) && !HotkeyGuard.Blocked)
         {
             PerformDLT();
         }

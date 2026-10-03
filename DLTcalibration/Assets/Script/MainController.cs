@@ -50,6 +50,7 @@ public class MainController : MonoBehaviour
     void Update()
     {
         if (currentCalibrator == null || currentVisualizer == null) return;
+        if (HotkeyGuard.Blocked) return; // 입력칸에 글자를 치는 중
 
         if (Input.GetKeyDown(KeyCode.Alpha1)) ToggleCalibration();
         if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleSaliency();

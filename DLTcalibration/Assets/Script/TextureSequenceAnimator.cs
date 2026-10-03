@@ -38,11 +38,7 @@ public class TextureSequenceAnimator : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.P) && frames != null)
-        {
-            playing = !playing;
-            Debug.Log($"[4D Texture] {(playing ? "재생" : "일시정지")}");
-        }
+        if (Input.GetKeyDown(KeyCode.P) && !HotkeyGuard.Blocked) TogglePlaying();
 
         if (!playing || frames == null || frames.Length == 0 || targetMaterials.Count == 0) return;
 
@@ -52,6 +48,15 @@ public class TextureSequenceAnimator : MonoBehaviour
         timer %= frameTime;
         currentFrame = (currentFrame + 1) % frames.Length;
         foreach (Material m in targetMaterials) if (m != null) m.mainTexture = frames[currentFrame];
+    }
+
+    public bool HasSequence => frames != null && frames.Length > 0;
+
+    public void TogglePlaying()
+    {
+        if (!HasSequence) return;
+        playing = !playing;
+        Debug.Log($"[4D Texture] {(playing ? "재생" : "일시정지")}");
     }
 
     // 모델을 불러올 때 RuntimeMeshLoader가 호출한다. entry가 없으면(경로로 직접 불러온 모델) 재생하지 않는다.
