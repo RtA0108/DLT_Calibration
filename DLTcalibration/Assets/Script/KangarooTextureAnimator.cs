@@ -1,14 +1,14 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.Collections;
-using System.Linq; // Á¤·Ä(OrderBy)À» À§ÇØ Ãß°¡
+using System.Linq; // ì •ë ¬(OrderBy)ì„ ìœ„í•´ ì¶”ê°€
 
 public class KangarooTextureAnimator : MonoBehaviour
 {
     [Header("Dynamic Mesh Settings")]
-    public string targetTag = "something"; // µ¿Àû ·ÎµåµÇ´Â ¸Ş½¬ ÅÂ±×
+    public string targetTag = "something"; // ë™ì  ë¡œë“œë˜ëŠ” ë©”ì‰¬ íƒœê·¸
 
     [Header("Resources Load Settings")]
-    [Tooltip("Resources Æú´õ ÇÏÀ§ÀÇ °æ·Î¸¦ ÀÔ·ÂÇÏ¼¼¿ä. (¿¹: 4D_Textures/Kangaroo)")]
+    [Tooltip("Resources í´ë” í•˜ìœ„ì˜ ê²½ë¡œë¥¼ ì…ë ¥í•˜ì„¸ìš”. (ì˜ˆ: 4D_Textures/Kangaroo)")]
     public string resourcePath = "4D_Textures/Kangaroo";
     public float framesPerSecond = 24f;
 
@@ -20,25 +20,25 @@ public class KangarooTextureAnimator : MonoBehaviour
 
     void Start()
     {
-        // 1. Resources Æú´õ¿¡¼­ ÅØ½ºÃ³ 24ÀåÀ» ÀÌ¸§ ¼ø¼­´ë·Î ÀÚµ¿ ·Îµå
+        // 1. Resources í´ë”ì—ì„œ í…ìŠ¤ì²˜ 24ì¥ì„ ì´ë¦„ ìˆœì„œëŒ€ë¡œ ìë™ ë¡œë“œ
         LoadTextures();
 
-        // 2. µ¿Àû ¸Ş½¬(OBJ)°¡ ¾À¿¡ ³ªÅ¸³¯ ¶§±îÁö ´ë±â
+        // 2. ë™ì  ë©”ì‰¬(OBJ)ê°€ ì”¬ì— ë‚˜íƒ€ë‚  ë•Œê¹Œì§€ ëŒ€ê¸°
         StartCoroutine(WaitForDynamicMesh());
     }
 
     void LoadTextures()
     {
-        // ÆÄÀÏ ÀÌ¸§(texture_00, 01...) ±âÁØÀ¸·Î ¿À¸§Â÷¼ø Á¤·ÄÇÏ¿© ¹è¿­¿¡ ÀúÀå
+        // íŒŒì¼ ì´ë¦„(texture_00, 01...) ê¸°ì¤€ìœ¼ë¡œ ì˜¤ë¦„ì°¨ìˆœ ì •ë ¬í•˜ì—¬ ë°°ì—´ì— ì €ì¥
         frames = Resources.LoadAll<Texture2D>(resourcePath).OrderBy(t => t.name).ToArray();
 
         if (frames.Length == 0)
         {
-            Debug.LogError($"[°æ°í] Resources/{resourcePath} ¿¡¼­ ÅØ½ºÃ³¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù!");
+            Debug.LogError($"[ê²½ê³ ] Resources/{resourcePath} ì—ì„œ í…ìŠ¤ì²˜ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤!");
         }
         else
         {
-            Debug.Log($"[¼º°ø] {frames.Length}ÀåÀÇ 4D ÅØ½ºÃ³ ½ÃÄö½º¸¦ ÀÚµ¿À¸·Î ·ÎµåÇß½À´Ï´Ù.");
+            Debug.Log($"[ì„±ê³µ] {frames.Length}ì¥ì˜ 4D í…ìŠ¤ì²˜ ì‹œí€€ìŠ¤ë¥¼ ìë™ìœ¼ë¡œ ë¡œë“œí–ˆìŠµë‹ˆë‹¤.");
         }
     }
 
@@ -60,7 +60,7 @@ public class KangarooTextureAnimator : MonoBehaviour
         {
             targetMaterial = renderer.material;
             isReady = true;
-            Debug.Log($"[{targetTag}] ¸Ş½¬ Æ÷Âø ¿Ï·á! 4D ÅØ½ºÃ³ ·»´õ¸µÀ» ½ÃÀÛÇÕ´Ï´Ù.");
+            Debug.Log($"[{targetTag}] ë©”ì‰¬ í¬ì°© ì™„ë£Œ! 4D í…ìŠ¤ì²˜ ë Œë”ë§ì„ ì‹œì‘í•©ë‹ˆë‹¤.");
         }
     }
 
