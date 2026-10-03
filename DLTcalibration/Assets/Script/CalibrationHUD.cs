@@ -39,8 +39,8 @@ public class CalibrationHUD : MonoBehaviour
         "4. 프로젝터 화면에서 각 마커(패치)를 실물의 같은 위치로 드래그\n" +
         "     <b>V</b> 정렬 보기: 모델 없이 마커와 패치만 투사\n" +
         "     <b>T</b> 패치 전환: 선(외곽선·모서리) ↔ 텍스처\n" +
-        "5. 점이 6개 이상이면 마커를 놓을 때마다 자동으로 보정됨\n" +
-        "     <b>L</b> 자동 보정 켜기/끄기, <b>F</b> 직접 보정 계산\n" +
+        "5. 마커를 6개 이상 옮기면, 놓을 때마다 옮긴 마커들로 자동 보정됨\n" +
+        "     <b>L</b> 자동 보정 켜기/끄기, <b>F</b> 선택된 점 전부로 보정 계산\n" +
         "\n" +
         "<b>기타</b>\n" +
         "<b>2</b> 히트맵 (추천 근거인 saliency 표시)      <b>P</b> 4D 텍스처 재생/정지\n" +
@@ -141,7 +141,7 @@ public class CalibrationHUD : MonoBehaviour
             if (main.IsSaliencyPending)
                 return $"saliency: {main.CurrentSaliencyJob.Stage}... {main.CurrentSaliencyJob.ElapsedSeconds:F0}초";
             if (!main.IsCalibrationActive) return "캘리브레이션 모드 꺼짐 (1 키)";
-            return $"선택된 대응점: {clickTest.SelectedCount()}개";
+            return $"맞춘 대응점: {clickTest.PlacedCount()} / {clickTest.SelectedCount()}개";
         }));
     }
 

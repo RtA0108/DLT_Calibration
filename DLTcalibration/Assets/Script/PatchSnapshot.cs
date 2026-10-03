@@ -15,6 +15,9 @@ public class PatchSnapshot
 
     private RenderTexture textureFrame, linesFrame;
     private Texture2D textureFrameCpu, linesFrameCpu; // 잘라내기용 CPU 복사본
+    // 픽셀 배열은 촬영할 때 한 번만 꺼내 둔다. (예전에는 패치 하나 자를 때마다 화면 전체를 복사해서,
+    //  1080p 프로젝터에서 점 20개면 마커를 놓을 때마다 약 330MB를 만들고 버렸음)
+    private Color32[] textureFramePixels, linesFramePixels;
     private int capturedFrame = -1;
     private Matrix4x4 capturedViewProj;
     private GameObject capturedTarget;
@@ -71,6 +74,8 @@ public class PatchSnapshot
         // 전체를 한 번 읽어 두고 CPU에서 잘라낸다. (전체 읽기는 WorldToScreenPoint 좌표와 일치함을 확인)
         ReadFull(textureFrame, ref textureFrameCpu);
         ReadFull(linesFrame, ref linesFrameCpu);
+        textureFramePixels = textureFrameCpu.GetPixels32();
+        linesFramePixels = linesFrameCpu.GetPixels32();
 
         capturedFrame = Time.frameCount;
         capturedTarget = target;
@@ -82,7 +87,8 @@ public class PatchSnapshot
     public Texture2D Crop(Mode mode, Vector2 center, int size)
     {
         Texture2D source = mode == Mode.Lines ? linesFrameCpu : textureFrameCpu;
-        if (source == null) return null;
+        Color32[] frame = mode == Mode.Lines ? linesFramePixels : textureFramePixels;
+        if (source == null || frame == null) return null;
 
         var patch = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
         var pixels = new Color32[size * size];
@@ -90,7 +96,6 @@ public class PatchSnapshot
 
         int x0 = Mathf.RoundToInt(center.x) - size / 2;
         int y0 = Mathf.RoundToInt(center.y) - size / 2;
-        Color32[] frame = source.GetPixels32();
         for (int y = 0; y < size; y++)
         {
             int sy = y0 + y;
@@ -114,13 +119,26 @@ public class PatchSnapshot
 
     public void Release()
     {
-        if (textureFrame != null) textureFrame.Release();
-        if (linesFrame != null) linesFrame.Release();
+        DestroyTexture(ref textureFrame);
+        DestroyTexture(ref linesFrame);
         if (textureFrameCpu != null) Object.Destroy(textureFrameCpu);
         if (linesFrameCpu != null) Object.Destroy(linesFrameCpu);
-        textureFrame = linesFrame = null;
+        if (depthMat != null) Object.Destroy(depthMat); // HideAndDontSave라 직접 지우지 않으면 플레이마다 쌓임
+        if (lineMat != null) Object.Destroy(lineMat);
         textureFrameCpu = linesFrameCpu = null;
+        textureFramePixels = linesFramePixels = null;
+        depthMat = lineMat = null;
+        edgeCaches.Clear();
         capturedFrame = -1;
+    }
+
+    // Release()는 GPU 메모리만 비우고 RenderTexture 객체는 남기므로 Destroy까지 한다.
+    private static void DestroyTexture(ref RenderTexture rt)
+    {
+        if (rt == null) return;
+        rt.Release();
+        Object.Destroy(rt);
+        rt = null;
     }
 
     private static void ReadFull(RenderTexture rt, ref Texture2D cpu)
@@ -222,6 +240,12 @@ public class PatchSnapshot
             return cache;
         }
 
+        // 모델을 바꿀 때마다 메쉬 인스턴스가 새로 생기므로(SaliencyDataLoader가 meshFilter.mesh 사용)
+        // 이미 지워진 메쉬의 항목은 정리한다. 안 그러면 모델을 바꿀 때마다 쌓임.
+        var dead = new List<Mesh>();
+        foreach (Mesh key in edgeCaches.Keys) if (key == null) dead.Add(key);
+        foreach (Mesh key in dead) edgeCaches.Remove(key);
+
         cache = new EdgeCache();
         Vector3[] verts = mesh.vertices;
         int[] tris = mesh.triangles;
@@ -315,7 +339,7 @@ public class PatchSnapshot
     private static void EnsureTexture(ref RenderTexture rt, int w, int h, string name)
     {
         if (rt != null && rt.width == w && rt.height == h) return;
-        if (rt != null) rt.Release();
+        DestroyTexture(ref rt);
         rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32) { name = name };
     }
 

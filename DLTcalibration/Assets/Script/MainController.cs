@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 using System.IO;
 
 public class MainController : MonoBehaviour
@@ -40,6 +41,9 @@ public class MainController : MonoBehaviour
     // 지금 모델의 saliency 백그라운드 계산 (결과 파일이 없는 새 모델, 또는 F5).
     // 계산 중에는 추천점과 히트맵을 내려 두고, 끝나면 켜져 있던 것을 자동으로 다시 계산한다.
     private SaliencyJob saliencyJob;
+    // OBJ별로 돌고 있는 계산. 계산 중에 다른 모델로 갔다가 돌아오면 새로 돌리지 않고 그 계산을 기다린다.
+    // (예전에는 같은 결과 파일을 쓰는 Python이 두 번 겹쳐 돌았음)
+    private readonly Dictionary<string, SaliencyJob> runningJobs = new Dictionary<string, SaliencyJob>();
     public SaliencyJob CurrentSaliencyJob => saliencyJob;
     public bool IsSaliencyPending => saliencyJob != null && !saliencyJob.IsDone;
 
@@ -386,8 +390,17 @@ public class MainController : MonoBehaviour
             Debug.LogError("[Saliency] 씬에 PythonProcessManager가 없어 saliency를 계산할 수 없습니다.");
             return;
         }
-        saliencyJob = PythonProcessManager.Instance.StartSaliencyCalculation(
-            objPath, ResultDir("Result_CfS"), ResultDir("Result_Tex"), runCfs, runTex);
+        if (runningJobs.TryGetValue(objPath, out SaliencyJob running) && !running.IsDone)
+        {
+            Debug.Log("[Saliency] 이 모델은 이미 계산 중이라 그 결과를 기다립니다.");
+            saliencyJob = running;
+        }
+        else
+        {
+            saliencyJob = PythonProcessManager.Instance.StartSaliencyCalculation(
+                objPath, ResultDir("Result_CfS"), ResultDir("Result_Tex"), runCfs, runTex);
+            runningJobs[objPath] = saliencyJob;
+        }
         StartCoroutine(WaitForSaliency(saliencyJob, mesh, objPath, inputCfsPath));
     }
 

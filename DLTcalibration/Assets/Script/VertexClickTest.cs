@@ -39,6 +39,10 @@ public class VertexClickTest : MonoBehaviour
     public DLT_solve dltSolver;
 
     private Marker[] markers;
+    // 사용자가 드래그해서 놓은 마커. 실시간 재계산은 이것만 쓴다.
+    // (R로 10개를 고르면 바로 "선택 6개 이상"이 되어, 예전에는 아직 안 옮긴 마커들까지 계산에 섞였음.
+    //  다 맞출 때까지 매번 불일치 경고가 뜨고 투영과 패치가 중간에 흔들렸다)
+    private bool[] placed;
     private readonly PatchSnapshot patchSnapshot = new PatchSnapshot();
     private bool alignmentView;          // V 키: 프로젝터에 모델 없이 마커/패치만 표시
     private int savedCullingMask;
@@ -57,6 +61,7 @@ public class VertexClickTest : MonoBehaviour
         clickedObjects = new GameObject[MaxPoints];
         verticesStruct = new VertexStruct[MaxPoints];
         markers = new Marker[MaxPoints];
+        placed = new bool[MaxPoints];
         arrayIndex = 0;
 
         if (markerManager == null)
@@ -113,10 +118,20 @@ public class VertexClickTest : MonoBehaviour
         Debug.Log($"[Live] 실시간 재계산: {(liveSolve ? "켜짐" : "꺼짐 (F 키로 직접 계산)")}");
     }
 
-    // 마커 드래그가 끝날 때 Marker가 호출한다.
+    // 마커 드래그가 끝날 때 Marker가 호출한다. 옮긴 마커가 6개 이상이면 그 마커들로만 다시 푼다.
     public void OnMarkerDragEnd(int slot)
     {
-        if (liveSolve && dltSolver != null && SelectedCount() >= 6) dltSolver.PerformDLT(false);
+        placed[slot] = true;
+        if (liveSolve && dltSolver != null && PlacedCount() >= 6) dltSolver.PerformDLT(false, placedOnly: true);
+    }
+
+    public bool IsPlaced(int slot) => placed != null && placed[slot] && clickedObjects[slot] != null;
+
+    public int PlacedCount()
+    {
+        int count = 0;
+        for (int i = 0; i < clickedObjects.Length; i++) if (IsPlaced(i)) count++;
+        return count;
     }
 
     // DLT 결과가 projectCam에 적용된 뒤 호출된다 (F 키, 실시간 재계산 모두).
@@ -133,6 +148,7 @@ public class VertexClickTest : MonoBehaviour
             if (clickedObjects[i] == null || markers[i] == null) continue;
 
             Vector3 projected = projectCam.WorldToScreenPoint(clickedObjects[i].transform.position);
+            if (projected.z <= 0f) continue; // 잘못 풀려 버텍스가 카메라 뒤면 좌표가 뒤집히므로 이전 패치 유지
             Vector2 predicted = new Vector2(projected.x, projected.y);
             markers[i].SetPatches(
                 patchSnapshot.Crop(PatchSnapshot.Mode.Lines, predicted, patchSize),
@@ -341,6 +357,7 @@ public class VertexClickTest : MonoBehaviour
             Debug.LogWarning($"[Select] {target.name}이(가) 프로젝터 화면 밖에 투영됩니다: {projected}");
 
         clickedObjects[slot] = target;
+        placed[slot] = false;
         verticesStruct[slot] = new VertexStruct
         {
             uniqIndex = slot,
@@ -377,6 +394,7 @@ public class VertexClickTest : MonoBehaviour
         if (markers[slot] != null) Destroy(markers[slot].gameObject);
         markers[slot] = null;
         clickedObjects[slot] = null;
+        placed[slot] = false;
         verticesStruct[slot] = new VertexStruct();
         arrayIndex--;
     }

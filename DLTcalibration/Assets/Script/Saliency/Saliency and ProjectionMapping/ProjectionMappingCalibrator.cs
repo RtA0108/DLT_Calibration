@@ -69,7 +69,11 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     private void OnEnable() { if (isInitialized && _visualized) Run(); }
     private void OnDisable() { ClearMarkers(); }
 
-    public void SetPaths(string obj, string cfs, string tex) { this.objPath = obj; this.cfsSaliencyPath = cfs; this.texSaliencyPath = tex; }
+    public void SetPaths(string obj, string cfs, string tex)
+    {
+        this.objPath = obj; this.cfsSaliencyPath = cfs; this.texSaliencyPath = tex;
+        cachedCandidates = null; // saliency 파일이 바뀌었으면 Reselect가 예전 값을 다시 쓰지 않게
+    }
 
     // ★ [수정됨] .transform을 통해 lossyScale 접근
     private void Update()

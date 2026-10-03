@@ -59,8 +59,9 @@ public class DLT_solve : MonoBehaviour
     /// <summary>
     /// 유효한 점들을 수집하여 DLT 계산을 수행하는 메인 함수.
     /// verbose = false는 마커를 옮길 때마다 자동으로 다시 푸는 경우로, 로그를 한 줄만 남긴다.
+    /// placedOnly = true면 사용자가 실제로 옮긴 마커만 쓴다 (실시간 재계산). F 키는 선택된 점 전부.
     /// </summary>
-    public bool PerformDLT(bool verbose = true)
+    public bool PerformDLT(bool verbose = true, bool placedOnly = false)
     {
         // 1. 선택된 점 수집.
         //    3D 좌표는 클릭 시점 값이 아니라 구의 현재 위치를 쓴다 (클릭 후 슬라이더로 메쉬를 움직였을 수 있음).
@@ -70,6 +71,7 @@ public class DLT_solve : MonoBehaviour
         for (int i = 0; i < vertexClickTest.clickedObjects.Length; i++)
         {
             if (vertexClickTest.clickedObjects[i] == null) continue;
+            if (placedOnly && !vertexClickTest.IsPlaced(i)) continue;
             world.Add(vertexClickTest.clickedObjects[i].transform.position);
             image.Add(vertexClickTest.verticesStruct[i].screenCoordinate);
             imageGT.Add(vertexClickTest.verticesStruct[i].screenCoordinateGT);
@@ -111,7 +113,7 @@ public class DLT_solve : MonoBehaviour
         else
         {
             ReprojectionError(world, image, out double rmse, out double max);
-            Debug.Log($"[Live] 점 {pointCount}개로 다시 계산: 재투영 RMSE {rmse:F2}px, 최대 {max:F2}px{(nearlyPlanar ? " (점들이 거의 한 평면!)" : "")}");
+            Debug.Log($"[Live] 맞춘 점 {pointCount}개로 다시 계산: 재투영 RMSE {rmse:F2}px, 최대 {max:F2}px{(nearlyPlanar ? " (점들이 거의 한 평면!)" : "")}");
 
             // 점이 7개 이상이면 서로 맞지 않는 마커가 있는지 전체 일관성으로만 알린다.
             // 어느 마커인지는 지목하지 않는다: 미지수가 11개라 점 10개 이하에서는 최소제곱이 오차를
@@ -252,6 +254,7 @@ public class DLT_solve : MonoBehaviour
     private static void ApplyToCamera(CameraParams p, Camera cam, bool verbose)
     {
         cam.transform.SetPositionAndRotation(p.position, p.Rotation);
+        FitFarPlane(cam);
 
         // 내부 파라미터는 투영 행렬로 직접 넣는다.
         // (focalLength/lensShift로는 fy != fx와 skew를 표현할 수 없고, 예전 환산식은 Screen.width 기준이라
@@ -259,6 +262,39 @@ public class DLT_solve : MonoBehaviour
         cam.projectionMatrix = BuildProjectionMatrix(p, cam.pixelWidth, cam.pixelHeight, cam.nearClipPlane, cam.farClipPlane);
 
         if (verbose) Debug.Log("[Camera Update] 카메라 파라미터가 적용되었습니다.");
+    }
+
+    // 실제 프로젝터는 보통 가상 프로젝터 시작 위치보다 멀리 있다 (화각이 좁아서).
+    // 보정된 위치에서 모델이 원거리 클리핑(far) 밖이면 모델이 통째로 잘려 투영도 패치도 비어 버린다.
+    // (화각 20도 프로젝터로 시뮬레이션: 모델 깊이 1065~1210, far 1000 -> 패치 전부 빈 칸)
+    // 그래서 모델 가장 먼 곳의 2배까지 far를 늘린다. 2배는 보정 후 슬라이더로 모델을 키울 여유.
+    // near는 그대로 둔다. 마커 캔버스가 카메라 앞 planeDistance에 있어서 near를 키우면 마커가 잘린다.
+    private static void FitFarPlane(Camera cam)
+    {
+        GameObject model = MainController.Instance != null ? MainController.Instance.targetMesh : null;
+        if (model == null) return;
+
+        float farthest = 0f;
+        foreach (Renderer r in model.GetComponentsInChildren<Renderer>())
+        {
+            if (r.gameObject.layer != model.layer) continue; // 버텍스 구, 추천 마커 제외
+            Bounds b = r.bounds;
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 corner = new Vector3(
+                    (i & 1) == 0 ? b.min.x : b.max.x,
+                    (i & 2) == 0 ? b.min.y : b.max.y,
+                    (i & 4) == 0 ? b.min.z : b.max.z);
+                farthest = Mathf.Max(farthest, Vector3.Dot(corner - cam.transform.position, cam.transform.forward));
+            }
+        }
+
+        float needed = farthest * 2f;
+        if (needed > cam.farClipPlane)
+        {
+            Debug.Log($"[Camera Update] 모델이 원거리 클리핑 밖이라 far를 {cam.farClipPlane:F0} -> {needed:F0}로 늘렸습니다.");
+            cam.farClipPlane = needed;
+        }
     }
 
     // 픽셀 단위 K를 Unity(OpenGL 규약) 투영 행렬로 옮긴다. 뷰 공간에서 카메라는 -z를 바라본다.

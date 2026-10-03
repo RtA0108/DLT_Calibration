@@ -63,6 +63,8 @@ public class TextureSequenceAnimator : MonoBehaviour
     public void Apply(GameObject model, MeshEntry entry)
     {
         frames = null;
+        // 이전 모델용으로 만든 재질 복사본(r.material)은 모델이 지워져도 남으므로 정리
+        foreach (Material m in targetMaterials) if (m != null) Destroy(m);
         targetMaterials.Clear();
         timer = 0f;
         currentFrame = 0;
