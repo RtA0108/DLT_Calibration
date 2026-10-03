@@ -57,6 +57,16 @@ public static class SaliencyDataLoader
         }
     }
 
+    // 캐시는 경로로만 구분하므로, 같은 경로의 파일을 다시 계산했으면 이걸 불러 새로 읽게 한다.
+    public static void ClearCache()
+    {
+        _fullLocalSaliencyMap = null;
+        _unityToObjCoordMap = null;
+        _unityKeyGrid = null;
+        _loadedObjPath = null;
+        _loadedTxtPath = null;
+    }
+
     public static Dictionary<Vector3, float> GetSaliencyMap(MeshFilter meshFilter, List<Vector3> filteredWorldVertices, string objPath, string txtPath)
     {
         // 캐싱 로직

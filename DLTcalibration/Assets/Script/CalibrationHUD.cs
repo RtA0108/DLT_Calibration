@@ -138,6 +138,8 @@ public class CalibrationHUD : MonoBehaviour
         {
             MainController main = MainController.Instance;
             if (main == null || main.currentCalibrator == null) return "모델을 먼저 선택하세요";
+            if (main.IsSaliencyPending)
+                return $"saliency: {main.CurrentSaliencyJob.Stage}... {main.CurrentSaliencyJob.ElapsedSeconds:F0}초";
             if (!main.IsCalibrationActive) return "캘리브레이션 모드 꺼짐 (1 키)";
             return $"선택된 대응점: {clickTest.SelectedCount()}개";
         }));

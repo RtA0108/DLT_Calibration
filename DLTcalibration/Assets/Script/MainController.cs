@@ -37,6 +37,12 @@ public class MainController : MonoBehaviour
     public bool IsSaliencyActive = false;
     public bool IsRecommendationActive = false;
 
+    // 지금 모델의 saliency 백그라운드 계산 (결과 파일이 없는 새 모델, 또는 F5).
+    // 계산 중에는 추천점과 히트맵을 내려 두고, 끝나면 켜져 있던 것을 자동으로 다시 계산한다.
+    private SaliencyJob saliencyJob;
+    public SaliencyJob CurrentSaliencyJob => saliencyJob;
+    public bool IsSaliencyPending => saliencyJob != null && !saliencyJob.IsDone;
+
     private void Awake()
     {
         if (Instance == null) Instance = this;
@@ -58,7 +64,7 @@ public class MainController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha3)) ToggleRecommendation();
 
         // (비상용) F5키로 수동 계산 가능
-        if (Input.GetKeyDown(KeyCode.F5)) StartCoroutine(ManualRunSaliency());
+        if (Input.GetKeyDown(KeyCode.F5)) ManualRunSaliency();
 
         // '-' / '=' 키: 추천점 개수 줄이기/늘리기
         if (Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus)) SetRecommendedVertexCount(recommendedVertexCount - 1);
@@ -273,26 +279,9 @@ public class MainController : MonoBehaviour
         _currentCfsPath = inputCfsPath;
         _currentTexPath = texPath;
 
-        string meshDir = Path.GetDirectoryName(objPath);
-        string meshName = Path.GetFileNameWithoutExtension(objPath);
-
-        // =========================================================
-        // ★ [경로 분리] Result_CfS 와 Result_Tex 전용 폴더 설정
-        // =========================================================
-        string resourcesPath = Path.Combine(Application.dataPath, "Resources");
-
-        // 새 결과 폴더 경로 지정
-        string cfsOutDir = Path.Combine(resourcesPath, "Result_CfS");
-        string texOutDir = Path.Combine(resourcesPath, "Result_Tex");
-
-        // 폴더가 없으면 자동으로 생성
-        if (!Directory.Exists(cfsOutDir)) Directory.CreateDirectory(cfsOutDir);
-        if (!Directory.Exists(texOutDir)) Directory.CreateDirectory(texOutDir);
-
-        // 예상되는 결과 파일의 최종 절대 경로
-        string expectedCfsFile = Path.Combine(cfsOutDir, $"{meshName}_saliency.txt");
-        string expectedTexFile = Path.Combine(texOutDir, $"{meshName}_vertex_saliency.txt");
-        // =========================================================
+        // 결과 파일 (Resources/Result_CfS, Result_Tex에 OBJ 이름으로 저장됨)
+        string expectedCfsFile = CfsResultPath(objPath);
+        string expectedTexFile = TexResultPath(objPath);
 
         // 파일 존재 여부 확인
         bool cfsExists = File.Exists(expectedCfsFile);
@@ -300,67 +289,25 @@ public class MainController : MonoBehaviour
         Debug.Log($"3. 파일 확인 -> CfS({cfsExists}): {Path.GetFileName(expectedCfsFile)}");
         Debug.Log($"            -> Tex({texExists}): {Path.GetFileName(expectedTexFile)}");
 
-        // 계산 필요 여부 (무조건 결과 파일이 없으면 계산!)
-        bool needCfsCalc = !cfsExists;
-        bool needTexCalc = !texExists;
-
         // -----------------------------------------------------------
         currentCalibrator = newMesh.GetComponent<ProjectionMappingCalibrator>();
         currentVisualizer = newMesh.GetComponent<SaliencyMapVisualizer>();
 
-        if (needCfsCalc || needTexCalc)
+        // 4. 결과 파일이 없으면 백그라운드에서 계산 (없는 것만). 그동안 모델은 바로 쓸 수 있다.
+        saliencyJob = null; // 이전 모델의 계산은 계속 돌아서 파일만 남긴다
+        if (!cfsExists || !texExists)
         {
-            Debug.LogWarning($"4. 자동 계산 시작... (CfS 필요: {needCfsCalc}, Tex 필요: {needTexCalc})");
-            // ★ [수정됨] 매니저에게 아웃풋 폴더를 따로따로 2개 넘겨줍니다.
-            PythonProcessManager.Instance.RunSaliencyCalculation(objPath, texPath, cfsOutDir, texOutDir);
+            Debug.LogWarning($"4. saliency 결과가 없어 백그라운드에서 계산합니다 (CfS 필요: {!cfsExists}, Tex 필요: {!texExists}). 끝나면 자동으로 반영됩니다.");
+            StartSaliencyJob(newMesh, objPath, inputCfsPath, !cfsExists, !texExists);
         }
         else
         {
             Debug.Log("4. 계산 건너뜀 (이미 Result_CfS와 Result_Tex 폴더에 파일이 존재함)");
         }
 
-        // -----------------------------------------------------------
-        // 5. 최종 경로 할당 (파일이 진짜 생겼는지 다시 체크)
+        // 5~6. 지금 있는 결과 파일로 경로와 모드 설정 (계산이 끝나면 다시 설정)
+        AssignSaliencyPaths(objPath, inputCfsPath);
 
-        if (File.Exists(expectedCfsFile)) _generatedCfsPath = expectedCfsFile;
-        else _generatedCfsPath = inputCfsPath; // 없으면 사용자 입력값 유지 (없으면 빈칸)
-
-        if (File.Exists(expectedTexFile)) _generatedTexSaliencyPath = expectedTexFile;
-        else _generatedTexSaliencyPath = "";
-
-        // 실패 시 에러 로그
-        if (needCfsCalc && !File.Exists(expectedCfsFile))
-            Debug.LogError($"[MainController] CfS 파일 생성 실패! ({expectedCfsFile})");
-
-        if (needTexCalc && !File.Exists(expectedTexFile))
-            Debug.LogError($"[MainController] TexSaliency 파일 생성 실패! ({expectedTexFile})");
-
-        // -----------------------------------------------------------
-        // 6. Calibrator 설정
-        if (currentCalibrator != null)
-        {
-            // 이제 원래 이름대로 들어가므로 Calibrator도 정상 작동할 것입니다.
-            currentCalibrator.SetPaths(objPath, _generatedCfsPath, _generatedTexSaliencyPath);
-
-            if (File.Exists(_generatedTexSaliencyPath))
-                currentCalibrator.saliencyMode = SaliencyMode.TexMesh;
-            else
-                currentCalibrator.saliencyMode = SaliencyMode.CFSCNN;
-
-            currentCalibrator.recommendedVertexCount = recommendedVertexCount;
-        }
-        // Visualizer에게도 방금 만들어진 파일 주소를 정확히 넘겨줍니다!
-        if (currentVisualizer != null)
-        {
-            currentVisualizer.cfsObjPath = objPath;
-            currentVisualizer.cfsTxtPath = _generatedCfsPath;
-            currentVisualizer.texObjPath = objPath;
-            currentVisualizer.texTxtPath = _generatedTexSaliencyPath;
-
-            // 히트맵(키 2)도 추천점과 같은 saliency로 보여준다. (예전에는 기본값 Entropy로 남아 있어서
-            // 히트맵과 실제 추천 근거가 서로 달랐음)
-            if (currentCalibrator != null) currentVisualizer.saliencyMode = currentCalibrator.saliencyMode;
-        }
         // 7. 프로젝터 화면에 맞게 크기 조절 (구 생성 전에 해야 구 크기 보정이 한 번에 맞음)
         if (autoFitOnLoad && currentCalibrator != null) FitToProjectorView(newMesh, currentCalibrator.targetCamera);
 
@@ -376,32 +323,92 @@ public class MainController : MonoBehaviour
         Debug.Log($"[RegisterNewMesh] 완료. (CfS: {Path.GetFileName(_generatedCfsPath)})");
     }
 
-    // (수동 실행용)
-    private System.Collections.IEnumerator ManualRunSaliency()
+    // (수동 실행용) 지금 모델의 CfS, TexMesh를 둘 다 다시 계산한다. 끝나면 자동으로 반영.
+    private void ManualRunSaliency()
     {
-        if (string.IsNullOrEmpty(_currentObjPath)) yield break;
-
-        // =========================================================
-        // ★ [경로 분리] 수동 계산 시에도 똑같이 폴더 2개로 나눕니다.
-        // =========================================================
-        string resourcesPath = Path.Combine(Application.dataPath, "Resources");
-        string cfsOutDir = Path.Combine(resourcesPath, "Result_CfS");
-        string texOutDir = Path.Combine(resourcesPath, "Result_Tex");
-
-        if (!Directory.Exists(cfsOutDir)) Directory.CreateDirectory(cfsOutDir);
-        if (!Directory.Exists(texOutDir)) Directory.CreateDirectory(texOutDir);
-
-        // ★ [수정됨] 이제 3개가 아니라 4개의 인자(obj, tex, cfs폴더, tex폴더)를 정확히 넘겨줍니다!
-        bool success = PythonProcessManager.Instance.RunSaliencyCalculation(_currentObjPath, _currentTexPath, cfsOutDir, texOutDir);
-
-        if (success && currentCalibrator != null)
+        if (string.IsNullOrEmpty(_currentObjPath) || targetMesh == null) return;
+        if (IsSaliencyPending)
         {
-            // 경로 갱신 및 재로딩
-            currentCalibrator.Init();
-            currentCalibrator.Run();
-            Debug.Log("[MainController] 수동 계산 및 갱신 완료.");
+            Debug.LogWarning("[Saliency] 이미 계산 중입니다.");
+            return;
         }
-        yield return null;
+        StartSaliencyJob(targetMesh, _currentObjPath, _currentCfsPath, true, true);
+        ApplyStates(); // 계산 중에는 추천점과 히트맵을 내림
+    }
+
+    // ==================================================================================
+    // saliency 결과 파일과 백그라운드 계산
+    // ==================================================================================
+    private static string ResultDir(string folder)
+    {
+        string dir = Path.Combine(Application.dataPath, "Resources", folder);
+        if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static string CfsResultPath(string objPath) =>
+        Path.Combine(ResultDir("Result_CfS"), $"{Path.GetFileNameWithoutExtension(objPath)}_saliency.txt");
+
+    private static string TexResultPath(string objPath) =>
+        Path.Combine(ResultDir("Result_Tex"), $"{Path.GetFileNameWithoutExtension(objPath)}_vertex_saliency.txt");
+
+    // 있는 결과 파일로 계산기와 히트맵의 경로/모드를 정한다. TexMesh가 있으면 TexMesh, 없으면 CfS.
+    private void AssignSaliencyPaths(string objPath, string inputCfsPath)
+    {
+        string cfsFile = CfsResultPath(objPath);
+        string texFile = TexResultPath(objPath);
+        _generatedCfsPath = File.Exists(cfsFile) ? cfsFile : inputCfsPath; // 없으면 사용자 입력값 유지 (없으면 빈칸)
+        _generatedTexSaliencyPath = File.Exists(texFile) ? texFile : "";
+
+        if (currentCalibrator != null)
+        {
+            currentCalibrator.SetPaths(objPath, _generatedCfsPath, _generatedTexSaliencyPath);
+            currentCalibrator.saliencyMode = File.Exists(_generatedTexSaliencyPath) ? SaliencyMode.TexMesh : SaliencyMode.CFSCNN;
+            currentCalibrator.recommendedVertexCount = recommendedVertexCount;
+        }
+        if (currentVisualizer != null)
+        {
+            currentVisualizer.cfsObjPath = objPath;
+            currentVisualizer.cfsTxtPath = _generatedCfsPath;
+            currentVisualizer.texObjPath = objPath;
+            currentVisualizer.texTxtPath = _generatedTexSaliencyPath;
+
+            // 히트맵(키 2)도 추천점과 같은 saliency로 보여준다. (예전에는 기본값 Entropy로 남아 있어서
+            // 히트맵과 실제 추천 근거가 서로 달랐음)
+            if (currentCalibrator != null) currentVisualizer.saliencyMode = currentCalibrator.saliencyMode;
+        }
+    }
+
+    private void StartSaliencyJob(GameObject mesh, string objPath, string inputCfsPath, bool runCfs, bool runTex)
+    {
+        if (PythonProcessManager.Instance == null)
+        {
+            Debug.LogError("[Saliency] 씬에 PythonProcessManager가 없어 saliency를 계산할 수 없습니다.");
+            return;
+        }
+        saliencyJob = PythonProcessManager.Instance.StartSaliencyCalculation(
+            objPath, ResultDir("Result_CfS"), ResultDir("Result_Tex"), runCfs, runTex);
+        StartCoroutine(WaitForSaliency(saliencyJob, mesh, objPath, inputCfsPath));
+    }
+
+    private System.Collections.IEnumerator WaitForSaliency(SaliencyJob job, GameObject mesh, string objPath, string inputCfsPath)
+    {
+        while (!job.IsDone) yield return null;
+
+        if (job.runCfs && !job.CfsSucceeded) Debug.LogError($"[MainController] CfS 파일 생성 실패! ({job.CfsResultPath})");
+        if (job.runTex && !job.TexSucceeded) Debug.LogError($"[MainController] TexSaliency 파일 생성 실패! ({job.TexResultPath})");
+        Debug.Log($"[Saliency] {Path.GetFileName(objPath)} 계산 끝 ({job.ElapsedSeconds:F0}초)");
+
+        if (mesh == null || mesh != targetMesh)
+        {
+            Debug.Log("[Saliency] 그 사이 다른 모델로 바뀌어서 결과 파일만 저장했습니다.");
+            yield break;
+        }
+        if (saliencyJob == job) saliencyJob = null;
+
+        SaliencyDataLoader.ClearCache(); // F5로 같은 경로의 파일을 다시 썼을 수 있음
+        AssignSaliencyPaths(objPath, inputCfsPath);
+        ApplyStates(); // 켜져 있던 추천점/히트맵을 새 결과로 계산
     }
 
     // ==================================================================================
@@ -418,18 +425,23 @@ public class MainController : MonoBehaviour
 
     private void ApplyStates()
     {
+        // saliency 계산 중이면 추천점과 히트맵은 계산이 끝난 뒤에 (WaitForSaliency가 다시 부름)
+        bool waiting = IsSaliencyPending;
+        if (waiting && ((IsCalibrationActive && IsRecommendationActive) || IsSaliencyActive))
+            Debug.Log("[Saliency] 계산 중이라 추천점/히트맵은 계산이 끝나면 표시됩니다.");
+
         if (currentCalibrator != null)
         {
-            currentCalibrator.enabled = IsCalibrationActive;
+            currentCalibrator.enabled = IsCalibrationActive && !waiting;
             currentCalibrator.visualized = IsRecommendationActive;
 
-            if (IsCalibrationActive) currentCalibrator.Run();
+            if (IsCalibrationActive && !waiting) currentCalibrator.Run();
             else currentCalibrator.ClearMarkers();
         }
 
         if (currentVisualizer != null)
         {
-            currentVisualizer.enabled = IsSaliencyActive;
+            currentVisualizer.enabled = IsSaliencyActive && !waiting;
         }
 
         if (UIManager.Instance != null)

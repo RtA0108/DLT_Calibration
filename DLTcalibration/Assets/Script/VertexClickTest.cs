@@ -221,6 +221,12 @@ public class VertexClickTest : MonoBehaviour
             return;
         }
 
+        if (main.IsSaliencyPending)
+        {
+            Debug.LogWarning("[Recommend] saliency 계산 중입니다. 끝나면 추천점이 표시되니 그때 다시 누르세요.");
+            return;
+        }
+
         ProjectionMappingCalibrator calibrator = main.currentCalibrator;
         List<Vector3> recommended = calibrator != null ? calibrator.GetRecommendedPositions() : new List<Vector3>();
         if (recommended.Count == 0)
