@@ -35,6 +35,14 @@ public class ModelImportWindow : EditorWindow
 
     private static string ResourcesDir => Path.Combine(Application.dataPath, "Resources");
     private static string LibraryPath => Path.Combine(ResourcesDir, "DefaultLibrary.txt");
+    // 사용법 문서: Unity 프로젝트 폴더(Assets 옆)에 있어서 탐색기에서도 바로 보임
+    private static string GuidePath => Path.Combine(Directory.GetParent(Application.dataPath).FullName, "새_모델_추가_방법.md");
+
+    private static void OpenGuide()
+    {
+        if (File.Exists(GuidePath)) EditorUtility.OpenWithDefaultApp(GuidePath);
+        else Debug.LogWarning($"[모델 추가] 사용법 문서가 없습니다: {GuidePath}");
+    }
 
     [MenuItem("Tools/캘리브레이션/새 모델 추가")]
     private static void Open()
@@ -51,9 +59,13 @@ public class ModelImportWindow : EditorWindow
     private void OnGUI()
     {
         scroll = EditorGUILayout.BeginScrollView(scroll);
-        EditorGUILayout.HelpBox(
-            "OBJ를 고르면 MTL과 텍스처를 함께 복사하고, 텍스처 연결, Read/Write, 라이브러리 등록, saliency 계산까지 한 번에 합니다.",
-            MessageType.Info);
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            EditorGUILayout.HelpBox(
+                "OBJ를 고르면 MTL과 텍스처를 함께 복사하고, 텍스처 연결, Read/Write, 라이브러리 등록, saliency 계산까지 한 번에 합니다.",
+                MessageType.Info);
+            if (GUILayout.Button("사용법", GUILayout.Width(56f), GUILayout.Height(38f))) OpenGuide();
+        }
 
         using (new EditorGUI.DisabledScope(job != null))
         {
