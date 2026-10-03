@@ -8746,7 +8746,7 @@ GameObject:
   - component: {fileID: 1320470903}
   m_Layer: 0
   m_Name: Capturet Camera
-  m_TagString: Project Camera
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -13148,6 +13148,7 @@ MonoBehaviour:
   arrayIndex: 0
   verticesStruct: []
   projectCam: {fileID: 808022739}
+  markerManager: {fileID: 1487993647}
 --- !u!1001 &2105277072
 PrefabInstance:
   m_ObjectHideFlags: 0

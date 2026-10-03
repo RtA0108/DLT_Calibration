@@ -1,15 +1,15 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Transactions;
-using Unity.VisualScripting;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.UIElements;
-//using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
+// 대응점(3D 버텍스 <-> 프로젝터 2D 픽셀)으로 DLT를 풀어 프로젝터 카메라(projCam)에 적용한다.
+//
+// 좌표계는 변환 없이 Unity 그대로 쓴다.
+//   - 3D : Unity 월드 좌표
+//   - 2D : projCam 스크린 픽셀 좌표 (좌하단 원점, y 위쪽) = Camera.WorldToScreenPoint와 같은 좌표
+// 이 좌표로 푼 P = λK[R | -RC]를 분해하면 R의 행이 곧 카메라의 right / up / forward이고,
+// K(fx, fy, skew, cx, cy)는 projCam.projectionMatrix로 그대로 옮길 수 있다.
 public class DLT_solve : MonoBehaviour
 {
 
@@ -24,6 +24,16 @@ public class DLT_solve : MonoBehaviour
     public VertexClickTest vertexClickTest;      // 클릭 데이터
     public CreateSphereAtVertex createSphereAtVertex; // 전체 버텍스 정보 (focal length 보정에 필요하다면 사용)
     public Camera projCam;                       // 프로젝션 맵핑에 사용할 카메라
+
+    // DLT 결과를 분해한 카메라 파라미터 (픽셀 단위 내부 파라미터 + 월드 기준 포즈)
+    public struct CameraParams
+    {
+        public double fx, fy, skew, cx, cy;
+        public Vector3 position;                 // 카메라 중심
+        public Vector3 right, up, forward;       // R의 각 행
+
+        public Quaternion Rotation => Quaternion.LookRotation(forward, up);
+    }
 
     private void Awake()
     {
@@ -49,239 +59,274 @@ public class DLT_solve : MonoBehaviour
     /// </summary>
     private void PerformDLT()
     {
-        // 1. 유효한(Null이 아닌) 점만 골라내기
-        List<VertexClickTest.VertexStruct> validPoints = new List<VertexClickTest.VertexStruct>();
-
+        // 1. 선택된 점 수집.
+        //    3D 좌표는 클릭 시점 값이 아니라 구의 현재 위치를 쓴다 (클릭 후 슬라이더로 메쉬를 움직였을 수 있음).
+        var world = new List<Vector3>();
+        var image = new List<Vector2>();
+        var imageGT = new List<Vector2>();
         for (int i = 0; i < vertexClickTest.clickedObjects.Length; i++)
         {
-            // 오브젝트가 존재하고(null이 아니고), 구조체 데이터도 유효하다면 리스트에 추가
-            if (vertexClickTest.clickedObjects[i] != null)
-            {
-                validPoints.Add(vertexClickTest.verticesStruct[i]);
-            }
+            if (vertexClickTest.clickedObjects[i] == null) continue;
+            world.Add(vertexClickTest.clickedObjects[i].transform.position);
+            image.Add(vertexClickTest.verticesStruct[i].screenCoordinate);
+            imageGT.Add(vertexClickTest.verticesStruct[i].screenCoordinateGT);
         }
 
-        int pointCount = validPoints.Count;
+        int pointCount = world.Count;
 
-        // DLT는 최소 6개의 점이 필요함
+        // DLT는 최소 6개의 점이 필요함 (6개를 넘으면 전부 써서 최소제곱으로 푼다)
         if (pointCount < 6)
         {
             Debug.LogError($"[DLT Error] 점이 부족합니다. (현재: {pointCount}개 / 최소: 6개)");
             return;
         }
 
-        // 최대 6개까지만 사용 (기존 로직 유지)
-        // 만약 6개 이상도 허용하려면 이 줄을 지우거나 pointCount 상한을 늘리세요.
-        int useCount = Math.Min(pointCount, 6);
+        // 점들이 한 평면 위에 있으면 DLT 해가 하나로 정해지지 않는다.
+        if (PlanarityScore(world) < 1e-3)
+            Debug.LogWarning("[DLT] 선택한 점들이 거의 한 평면(또는 직선) 위에 있습니다. 결과가 매우 불안정할 수 있습니다.");
 
-        Debug.Log($"[DLT Start] 유효한 점 {useCount}개를 사용하여 계산을 시작합니다...");
+        Debug.Log($"[DLT Start] 점 {pointCount}개로 계산을 시작합니다...");
 
-        // 2. 데이터 배열 준비 (World -> Image 좌표)
-        double[] worldPoints = new double[useCount * 3]; // (x,y,z) * N
-        double[] imagePoints = new double[useCount * 2]; // (u,v) * N
-        double[] imagePointsGT = new double[useCount * 2]; // Ground Truth
-
-        for (int i = 0; i < useCount; i++)
+        // 2. DLT 계산 및 분해
+        if (!TryDecompose(SolveDLT(world, image), world, out CameraParams cam))
         {
-            var vStruct = validPoints[i];
-
-            // *Note: DLT DLL이 Y축 반전을 요구하여 -를 붙임 (기존 로직 유지)
-            worldPoints[i * 3 + 0] = vStruct.worldCoordinate.x;
-            worldPoints[i * 3 + 1] = -vStruct.worldCoordinate.y;
-            worldPoints[i * 3 + 2] = -vStruct.worldCoordinate.z;
-
-            // Unity Screen 좌표계(좌하단 0,0) -> OpenCV 이미지 좌표계(좌상단 0,0) 변환
-            imagePoints[i * 2 + 0] = vStruct.screenCoordinate.x;
-            imagePoints[i * 2 + 1] = projCam.pixelHeight - vStruct.screenCoordinate.y;
-
-            imagePointsGT[i * 2 + 0] = vStruct.screenCoordinateGT.x;
-            imagePointsGT[i * 2 + 1] = projCam.pixelHeight - vStruct.screenCoordinateGT.y;
+            Debug.LogError("[DLT Error] 투영 행렬을 카메라 파라미터로 분해하지 못했습니다.");
+            return;
         }
 
-        // 3. DLT 계산 수행 (DLL 호출)
-        double[] projectionMatrix = new double[11];
-        double[] projectionMatrixGT = new double[11];
+        // 3. projCam에 적용
+        ApplyToCamera(cam, projCam);
 
-        DLT(worldPoints, imagePoints, useCount, projectionMatrix);
-        DLT(worldPoints, imagePointsGT, useCount, projectionMatrixGT);
-
-        // 4. 파라미터 분해 및 적용
-        // 내부/외부 파라미터를 계산하여 projCam에 적용합니다.
-        CalculateAndApplyParameters(projectionMatrix, projCam);
-
-        // 5. 결과 분석 (Residual & RMSE)
+        // 4. 결과 분석
         Debug.Log("--- [Result Analysis] ---");
-        CalculateResidual(imagePointsGT, imagePoints);
-        CalculateRMSE(projectionMatrixGT, projectionMatrix);
+        ReportResult(cam, world, image, imageGT);
         Debug.Log("-------------------------");
     }
 
     #region --- Math & Calibration Logic ---
 
-    // DLT 매트릭스를 분해하여 Unity 카메라에 적용 (핵심 수학 로직)
-    private void CalculateAndApplyParameters(double[] dltMatrix, Camera cam)
+    // Hartley 정규화를 거쳐 DLL의 DLT를 호출하고, 원래 좌표계의 3x4 투영 행렬 P를 돌려준다 (row-major 12개).
+    // DLL은 P[2,3] = 1로 고정한 11-파라미터 최소제곱이라, 정규화 없이 넣으면 좌표 크기 차이 때문에 수치적으로 불안정하다.
+    private static double[] SolveDLT(List<Vector3> world, List<Vector2> image)
     {
-        // Step 1: P 행렬의 각 행 벡터 추출
-        Vector3 a = new Vector3((float)dltMatrix[0], (float)dltMatrix[1], (float)dltMatrix[2]); // 1행
-        Vector3 b = new Vector3((float)dltMatrix[4], (float)dltMatrix[5], (float)dltMatrix[6]); // 2행
-        Vector3 c = new Vector3((float)dltMatrix[8], (float)dltMatrix[9], (float)dltMatrix[10]); // 3행
+        int n = world.Count;
 
-        float cTc = Vector3.Dot(c, c);
+        // 월드 점: 중심을 원점으로 옮기고 원점까지 평균 거리가 sqrt(3)이 되도록
+        D3 c3 = default;
+        foreach (var p in world) c3 = c3 + new D3(p);
+        c3 = c3 / n;
+        double d3 = 0;
+        foreach (var p in world) d3 += (new D3(p) - c3).Norm;
+        double s3 = Math.Sqrt(3) / (d3 / n);
 
-        // Step 2: 주점(Principal Point) 계산
-        double x0 = Vector3.Dot(a, c) / cTc;
-        double y0 = Vector3.Dot(b, c) / cTc;
+        // 이미지 점: 중심을 원점으로 옮기고 평균 거리가 sqrt(2)가 되도록
+        double c2x = 0, c2y = 0;
+        foreach (var q in image) { c2x += q.x; c2y += q.y; }
+        c2x /= n; c2y /= n;
+        double d2 = 0;
+        foreach (var q in image) d2 += Math.Sqrt((q.x - c2x) * (q.x - c2x) + (q.y - c2y) * (q.y - c2y));
+        double s2 = Math.Sqrt(2) / (d2 / n);
 
-        // Step 3: 초점 거리(Focal Length) 계산
-        // c^2 = (a^T a)/(c^T c) - (a^T c / c^T c)^2
-        double cSquared = (Vector3.Dot(a, a) / cTc) - Math.Pow(Vector3.Dot(a, c) / cTc, 2);
-        double focalLength = Math.Sqrt(cSquared); // Pixel 단위 Focal Length
-
-        // Skew (d) 계산
-        double num_d = (Vector3.Dot(a, b) * cTc) - (Vector3.Dot(a, c) * Vector3.Dot(b, c));
-        double den_d = (Vector3.Dot(a, a) * cTc) - Math.Pow(Vector3.Dot(a, c), 2);
-        double d = num_d / den_d;
-
-        // m 계산 (Scale Factor)
-        float p = Mathf.Sqrt(cTc);
-        double det_abc = Vector3.Dot(a, Vector3.Cross(b, c)); // 행렬식
-        double m = -det_abc / (Math.Pow(p, 3) * cSquared);
-
-        // Step 5: 회전 행렬(Rotation Matrix) R 구성
-        Matrix4x4 leftMatrix = new Matrix4x4();
-        leftMatrix.m00 = (float)m;
-        leftMatrix.m01 = 0;
-        leftMatrix.m02 = (float)(-m * x0);
-
-        leftMatrix.m10 = (float)(-d);
-        leftMatrix.m11 = 1;
-        leftMatrix.m12 = (float)(x0 * d - y0);
-
-        leftMatrix.m20 = 0;
-        leftMatrix.m21 = 0;
-        leftMatrix.m22 = -(float)(m * focalLength);
-        leftMatrix.m33 = 1.0f;
-
-        // (abc)^T Matrix
-        Matrix4x4 abc = new Matrix4x4();
-        abc.SetColumn(0, new Vector4(a.x, a.y, a.z, 0));
-        abc.SetColumn(1, new Vector4(b.x, b.y, b.z, 0));
-        abc.SetColumn(2, new Vector4(c.x, c.y, c.z, 0));
-        abc.m33 = 1.0f;
-
-        // R = scale * leftMatrix * abc^T
-        float scale = 1.0f / (p * (float)m * (float)focalLength);
-        Matrix4x4 R = leftMatrix * abc.transpose;
-
-        for (int i = 0; i < 3; i++)
+        double[] worldPoints = new double[n * 3];
+        double[] imagePoints = new double[n * 2];
+        for (int i = 0; i < n; i++)
         {
-            for (int j = 0; j < 3; j++)
-            {
-                R[i, j] *= scale;
-            }
+            D3 w = (new D3(world[i]) - c3) * s3;
+            worldPoints[i * 3 + 0] = w.x;
+            worldPoints[i * 3 + 1] = w.y;
+            worldPoints[i * 3 + 2] = w.z;
+            imagePoints[i * 2 + 0] = (image[i].x - c2x) * s2;
+            imagePoints[i * 2 + 1] = (image[i].y - c2y) * s2;
         }
 
-        // Translation Vector (T) 계산
-        Vector4 translationVector = new Vector4(-(float)dltMatrix[3], -(float)dltMatrix[7], -1, 1);
-        Vector4 T = abc.inverse.transpose * translationVector;
-        Vector3 translate = new Vector3(T.x, T.y, T.z);
+        double[] L = new double[11];
+        DLT(worldPoints, imagePoints, n, L);
+        double[,] Pn =
+        {
+            { L[0], L[1], L[2],  L[3] },
+            { L[4], L[5], L[6],  L[7] },
+            { L[8], L[9], L[10], 1.0 }
+        };
 
-        // R 전치 (Transpose)
-        R = R.transpose;
+        // 정규화 해제: P = T2^-1 * Pn * T3
+        //   T3 = [s3*I | -s3*c3],  T2^-1 = [[1/s2, 0, c2x], [0, 1/s2, c2y], [0, 0, 1]]
+        var A = new double[3, 4];
+        for (int r = 0; r < 3; r++)
+        {
+            for (int j = 0; j < 3; j++) A[r, j] = s3 * Pn[r, j];
+            A[r, 3] = Pn[r, 3] - s3 * (Pn[r, 0] * c3.x + Pn[r, 1] * c3.y + Pn[r, 2] * c3.z);
+        }
 
-        // --- [로그 출력] ---
-        Debug.Log($"[Calibration Info] Focal Length: {focalLength}");
-        Debug.Log($"[Calibration Info] Principal Point: ({x0}, {y0})");
-        Debug.Log($"[Calibration Info] Translation: {translate}");
-
-        // 최종 적용
-        ApplyIntrinsicsAndExtrinsics(focalLength, d, x0, y0, R, translate, cam);
+        double[] P = new double[12];
+        for (int j = 0; j < 4; j++)
+        {
+            P[0 + j] = A[0, j] / s2 + c2x * A[2, j];
+            P[4 + j] = A[1, j] / s2 + c2y * A[2, j];
+            P[8 + j] = A[2, j];
+        }
+        return P;
     }
 
-    private void ApplyIntrinsicsAndExtrinsics(double focalLength, double skew, double principalX, double principalY, Matrix4x4 rotationMatrix, Vector3 translation, Camera cam)
+    // P = λK[R | -RC]를 분해한다 (RQ 분해를 Gram-Schmidt로 풀어 쓴 것).
+    //   K = [[fx, skew, cx], [0, fy, cy], [0, 0, 1]],  R의 행 = right, up, forward,  C = 카메라 중심
+    private static bool TryDecompose(double[] P, List<Vector3> world, out CameraParams cam)
     {
-        // 1. 내부 파라미터 (Intrinsics) 적용
-        cam.focalLength = (float)focalLength * (36.0f / Screen.width); // 35mm 센서 기준 변환 추정
+        cam = default;
 
-        Vector2 lensShift = new Vector2(
-            (float)(principalX / Screen.width) * 2.0f - 1.0f, // X축 정규화 (-1 ~ 1)
-            (float)(principalY / Screen.height) * 2.0f - 1.0f // Y축 정규화 (-1 ~ 1)
-        );
-        cam.lensShift = lensShift;
+        D3 m1 = new D3(P[0], P[1], P[2]);
+        D3 m2 = new D3(P[4], P[5], P[6]);
+        D3 m3 = new D3(P[8], P[9], P[10]);
+        D3 p4 = new D3(P[3], P[7], P[11]);
 
-        // 2. 외부 파라미터 (Extrinsics) 적용
-        // OpenCV(우수계) -> Unity(좌수계) 좌표 변환
-        Matrix4x4 unityRotation = AdjustRotationForUnity(rotationMatrix);
-        Vector3 unityTranslation = AdjustForCoordinateSystem(translation);
+        // P의 부호는 임의다. 점들이 카메라 앞(깊이 > 0)에 오도록 부호를 맞춘다.
+        double depthSum = 0;
+        foreach (var X in world) depthSum += D3.Dot(m3, new D3(X)) + p4.z;
+        if (depthSum < 0)
+        {
+            m1 = m1 * -1; m2 = m2 * -1; m3 = m3 * -1; p4 = p4 * -1;
+        }
 
-        cam.transform.position = unityTranslation;
-        cam.transform.rotation = QuaternionFromMatrix(unityRotation);
+        double lambda = m3.Norm;
+        if (lambda < 1e-12) return false;
+
+        D3 r3 = m3 / lambda;
+
+        double cy = D3.Dot(m2, r3) / lambda;
+        D3 v2 = m2 / lambda - r3 * cy;
+        double fy = v2.Norm;
+        D3 r2 = v2 / fy;
+
+        double cx = D3.Dot(m1, r3) / lambda;
+        double skew = D3.Dot(m1, r2) / lambda;
+        D3 v1 = m1 / lambda - r2 * skew - r3 * cx;
+        double fx = v1.Norm;
+        D3 r1 = v1 / fx;
+
+        // 대응이 정상이면 (right, up, forward)는 Unity 카메라와 손잡이 방향이 같아 det(R) = +1이다.
+        // -1이면 2D 좌표가 좌우로 뒤집혀 들어온 것. P를 그대로 재현하도록 fx를 음수로 둔다.
+        if (D3.Dot(r1, D3.Cross(r2, r3)) < 0)
+        {
+            Debug.LogWarning("[DLT] 좌우가 뒤집힌 해가 나왔습니다. 마커와 버텍스의 짝이 맞는지 확인하세요.");
+            r1 = r1 * -1;
+            fx = -fx;
+        }
+
+        // 카메라 중심: M C = -p4.  M의 역행렬의 열은 행 벡터끼리의 외적 / det(M)
+        double det = D3.Dot(m1, D3.Cross(m2, m3));
+        if (Math.Abs(det) < 1e-12) return false;
+        D3 C = (D3.Cross(m2, m3) * p4.x + D3.Cross(m3, m1) * p4.y + D3.Cross(m1, m2) * p4.z) * (-1.0 / det);
+
+        cam = new CameraParams
+        {
+            fx = fx, fy = fy, skew = skew, cx = cx, cy = cy,
+            position = C.ToVector3(),
+            right = r1.ToVector3(),
+            up = r2.ToVector3(),
+            forward = r3.ToVector3()
+        };
+        return true;
+    }
+
+    private static void ApplyToCamera(CameraParams p, Camera cam)
+    {
+        cam.transform.SetPositionAndRotation(p.position, p.Rotation);
+
+        // 내부 파라미터는 투영 행렬로 직접 넣는다.
+        // (focalLength/lensShift로는 fy != fx와 skew를 표현할 수 없고, 예전 환산식은 Screen.width 기준이라
+        //  프로젝터 해상도와도 맞지 않았음. 되돌리려면 cam.ResetProjectionMatrix())
+        cam.projectionMatrix = BuildProjectionMatrix(p, cam.pixelWidth, cam.pixelHeight, cam.nearClipPlane, cam.farClipPlane);
 
         Debug.Log("[Camera Update] 카메라 파라미터가 적용되었습니다.");
     }
 
-    private Matrix4x4 AdjustRotationForUnity(Matrix4x4 openCVRotationMatrix)
+    // 픽셀 단위 K를 Unity(OpenGL 규약) 투영 행렬로 옮긴다. 뷰 공간에서 카메라는 -z를 바라본다.
+    //   u = fx * x/z + skew * y/z + cx  (x, y, z = right, up, forward 성분)  ->  NDC x = 2u/W - 1
+    public static Matrix4x4 BuildProjectionMatrix(CameraParams p, float width, float height, float near, float far)
     {
-        Matrix4x4 m = new Matrix4x4();
-        // Y축, Z축 반전 (좌수계 변환)
-        m.m00 = openCVRotationMatrix.m00;
-        m.m01 = -openCVRotationMatrix.m01;
-        m.m02 = -openCVRotationMatrix.m02;
-
-        m.m10 = -openCVRotationMatrix.m10;
-        m.m11 = openCVRotationMatrix.m11;
-        m.m12 = openCVRotationMatrix.m12;
-
-        m.m20 = -openCVRotationMatrix.m20;
-        m.m21 = openCVRotationMatrix.m21;
-        m.m22 = openCVRotationMatrix.m22;
-        m.m33 = 1.0f;
+        Matrix4x4 m = Matrix4x4.zero;
+        m.m00 = (float)(2.0 * p.fx / width);
+        m.m01 = (float)(2.0 * p.skew / width);
+        m.m02 = (float)(1.0 - 2.0 * p.cx / width);
+        m.m11 = (float)(2.0 * p.fy / height);
+        m.m12 = (float)(1.0 - 2.0 * p.cy / height);
+        m.m22 = -(far + near) / (far - near);
+        m.m23 = -2f * far * near / (far - near);
+        m.m32 = -1f;
         return m;
     }
 
-    private Vector3 AdjustForCoordinateSystem(Vector3 translation)
+    private void ReportResult(CameraParams cam, List<Vector3> world, List<Vector2> image, List<Vector2> imageGT)
     {
-        // Y, Z축 반전
-        return new Vector3(translation.x, -translation.y, -translation.z);
-    }
+        int n = world.Count;
 
-    private Quaternion QuaternionFromMatrix(Matrix4x4 m)
-    {
-        // 행렬 -> 쿼터니언 변환
-        // (Unity 내부 로직 혹은 Mathf 사용 가능하나, 기존 로직 유지)
-        Quaternion q = new Quaternion();
-        q.w = Mathf.Sqrt(Mathf.Max(0, 1.0f + m.m00 + m.m11 + m.m22)) / 2.0f;
-        float w4 = 4.0f * q.w;
-        q.x = (m.m21 - m.m12) / w4;
-        q.y = (m.m02 - m.m20) / w4;
-        q.z = (m.m10 - m.m01) / w4;
-        return q;
-    }
+        Debug.Log($"[Calibration Info] fx {cam.fx:F2}, fy {cam.fy:F2}, skew {cam.skew:F3}, 주점 ({cam.cx:F2}, {cam.cy:F2}) px  (화면 {projCam.pixelWidth}x{projCam.pixelHeight})");
+        Debug.Log($"[Calibration Info] 위치 {cam.position}, 회전 {cam.Rotation.eulerAngles}");
 
-    // 결과 검증용 (Residual)
-    private void CalculateResidual(double[] GT, double[] current)
-    {
-        float totalDist = 0;
-        for (int i = 0; i < GT.Length; i += 2)
+        // 재투영 오차: 적용된 projCam으로 3D 점을 다시 투영해 마커 위치와 비교한다.
+        // (점이 6개면 식 12개에 미지수 11개라 거의 0으로 나온다. 점이 많을수록 의미 있는 값이 된다)
+        double sumSq = 0, max = 0;
+        for (int i = 0; i < n; i++)
         {
-            Vector2 gtPos = new Vector2((float)GT[i], (float)GT[i + 1]);
-            Vector2 curPos = new Vector2((float)current[i], (float)current[i + 1]);
-            totalDist += Vector2.Distance(gtPos, curPos);
+            Vector3 s = projCam.WorldToScreenPoint(world[i]);
+            double d = Vector2.Distance(new Vector2(s.x, s.y), image[i]);
+            sumSq += d * d;
+            max = Math.Max(max, d);
         }
-        Debug.Log($"[Residual] Total 2D Error: {totalDist}");
+        Debug.Log($"[Reprojection] RMSE {Math.Sqrt(sumSq / n):F3}px, 최대 {max:F3}px");
+
+        // 마커 이동량: 클릭 당시 투영 위치(GT)에서 마커를 얼마나 옮겼는지
+        double moved = 0;
+        for (int i = 0; i < n; i++) moved += Vector2.Distance(image[i], imageGT[i]);
+        Debug.Log($"[Residual] 마커 평균 이동량 {moved / n:F2}px");
+
+        // 시뮬레이션 평가: 마커를 옮기지 않은 GT 2D 점으로 푼 카메라와 비교
+        if (TryDecompose(SolveDLT(world, imageGT), world, out CameraParams gt))
+        {
+            float posErr = Vector3.Distance(cam.position, gt.position);
+            float rotErr = Quaternion.Angle(cam.Rotation, gt.Rotation);
+            Debug.Log($"[Sim] GT 대비 카메라 위치 오차 {posErr:F3}, 회전 오차 {rotErr:F3}°, fx 차이 {cam.fx - gt.fx:F2}px");
+        }
     }
 
-    // 결과 검증용 (RMSE)
-    private void CalculateRMSE(double[] GT, double[] DLT)
+    // 점 분포의 공분산으로 평면성을 잰다. 0이면 완전히 한 평면(또는 직선), 고르게 퍼져 있으면 1에 가깝다.
+    private static double PlanarityScore(List<Vector3> pts)
     {
-        double sumSq = 0;
-        for (int i = 0; i < GT.Length; i++)
+        D3 c = default;
+        foreach (var p in pts) c = c + new D3(p);
+        c = c / pts.Count;
+
+        double xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+        foreach (var p in pts)
         {
-            double diff = GT[i] - DLT[i];
-            sumSq += diff * diff;
+            D3 d = new D3(p) - c;
+            xx += d.x * d.x; xy += d.x * d.y; xz += d.x * d.z;
+            yy += d.y * d.y; yz += d.y * d.z; zz += d.z * d.z;
         }
-        double rmse = Math.Sqrt(sumSq / GT.Length);
-        Debug.Log($"[RMSE] Error: {rmse}");
+
+        double det = xx * (yy * zz - yz * yz) - xy * (xy * zz - yz * xz) + xz * (xy * yz - yy * xz);
+        double meanVar = (xx + yy + zz) / 3;
+        if (meanVar <= 0) return 0;
+        return det / (meanVar * meanVar * meanVar);
+    }
+
+    // double 정밀도 3D 벡터 (Vector3는 float라 분해 과정에서 정밀도가 부족함)
+    private struct D3
+    {
+        public double x, y, z;
+
+        public D3(double x, double y, double z) { this.x = x; this.y = y; this.z = z; }
+        public D3(Vector3 v) : this(v.x, v.y, v.z) { }
+
+        public static D3 operator +(D3 a, D3 b) => new D3(a.x + b.x, a.y + b.y, a.z + b.z);
+        public static D3 operator -(D3 a, D3 b) => new D3(a.x - b.x, a.y - b.y, a.z - b.z);
+        public static D3 operator *(D3 a, double s) => new D3(a.x * s, a.y * s, a.z * s);
+        public static D3 operator /(D3 a, double s) => new D3(a.x / s, a.y / s, a.z / s);
+
+        public static double Dot(D3 a, D3 b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        public static D3 Cross(D3 a, D3 b) => new D3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+
+        public double Norm => Math.Sqrt(Dot(this, this));
+        public Vector3 ToVector3() => new Vector3((float)x, (float)y, (float)z);
     }
 
     #endregion
