@@ -162,6 +162,10 @@ public class RuntimeMeshLoader : MonoBehaviour
 
             if (MainController.Instance != null)
                 MainController.Instance.RegisterNewMesh(loadedObj, objPath, cfsPath, texPath);
+
+            // 모델별 4D 텍스처 (있으면 재생, 없으면 원래 텍스처)
+            if (TextureSequenceAnimator.Instance != null)
+                TextureSequenceAnimator.Instance.Apply(loadedObj, entry);
         }
         catch (System.Exception e)
         {

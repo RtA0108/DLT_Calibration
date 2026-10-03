@@ -16,6 +16,11 @@ public class MeshEntry
     public string meshPath;     // 모델 경로
     public string cfsDataPath;  // 데이터 경로 1
     public string texDataPath;  // 데이터 경로 2
+
+    // 4D 텍스처(이미지 시퀀스). 비워 두면 Resources/4D_Textures/<id> 폴더가 있을 때 자동으로 사용.
+    // Resources 기준 경로 또는 디스크 절대 경로. 자세한 규칙은 TextureSequenceAnimator 참고.
+    public string animatedTexturePath;
+    public float animatedTextureFps;   // 0이면 기본값(24fps)
 }
 
 [System.Serializable]
