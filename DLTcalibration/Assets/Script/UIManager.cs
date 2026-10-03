@@ -78,6 +78,7 @@ public class UIManager : MonoBehaviour
 
         // 슬라이더 리스너 연결
         SetupTransformListeners();
+        SetupScalePercent();
     }
 
     // 슬라이더/인풋필드 리스너 세팅
@@ -134,6 +135,9 @@ public class UIManager : MonoBehaviour
         if (float.TryParse(text, out float value))
         {
             targetSlider.SetValueWithoutNotify(value);
+            // 스케일이 범위(25~400%)를 넘으면 슬라이더가 잘라낸 값으로 입력칸도 맞춤
+            if (targetSlider == scaleSlider && !Mathf.Approximately(targetSlider.value, value))
+                scaleInput.SetTextWithoutNotify(targetSlider.value.ToString("F0"));
             ApplyTransform();
         }
     }
@@ -144,21 +148,41 @@ public class UIManager : MonoBehaviour
 
         Transform t = MainController.Instance.targetMesh.transform;
 
-        // Scale
-        float s = scaleSlider.value;
+        // Scale: 슬라이더는 기준 크기(불러올 때 프로젝터 화면에 맞춘 크기)의 %
+        float s = baseScale * scaleSlider.value / 100f;
         t.localScale = new Vector3(s, s, s);
 
         // Rotation
         t.localRotation = Quaternion.Euler(rotXSlider.value, rotYSlider.value, rotZSlider.value);
     }
 
-    // 코드에서 정한 스케일(예: 로드 시 자동 맞춤)을 슬라이더/입력칸에 표시만 한다.
-    public void SetScaleWithoutNotify(float scale)
+    // 스케일 슬라이더를 절대값(0.01~200) 대신 기준 크기의 %(25~400)로 쓴다.
+    // 예전에는 슬라이더 1px이 스케일 약 2라서 TheRock(맞춤 0.68)처럼 작은 값은 미세 조정이 불가능했음.
+    // 참고: 크기는 보정 결과에 영향이 없다 (보정이 크기 차이를 흡수). 처음에 마커가 겹치지 않을 만큼이면 충분.
+    public const float MinScalePercent = 25f, MaxScalePercent = 400f;
+    private float baseScale = 1f;
+
+    private void SetupScalePercent()
     {
-        if (scale > scaleSlider.maxValue) scaleSlider.maxValue = scale * 2f;
-        if (scale < scaleSlider.minValue) scaleSlider.minValue = scale * 0.5f;
-        scaleSlider.SetValueWithoutNotify(scale);
-        scaleInput.SetTextWithoutNotify(scale.ToString("F2"));
+        scaleSlider.minValue = MinScalePercent;
+        scaleSlider.maxValue = MaxScalePercent;
+        scaleSlider.wholeNumbers = false;
+        ResetScalePercent();
+        var header = scaleSlider.transform.parent != null ? scaleSlider.transform.parent.GetComponent<TMP_Text>() : null;
+        if (header != null && header.text == "Scale/Rotation") header.text = "Scale(%) / Rotation";
+    }
+
+    private void ResetScalePercent()
+    {
+        scaleSlider.SetValueWithoutNotify(100f);
+        scaleInput.SetTextWithoutNotify("100");
+    }
+
+    // 코드에서 정한 스케일(예: 로드 시 자동 맞춤)을 기준 크기(100%)로 삼는다.
+    public void SetBaseScale(float scale)
+    {
+        baseScale = scale;
+        ResetScalePercent();
     }
 
     void SyncUIValues(string id)
@@ -168,9 +192,8 @@ public class UIManager : MonoBehaviour
         {
             _isUpdatingUI = true;
 
-            float initScale = (entry.initialScale.x == 0) ? 1f : entry.initialScale.x;
-            scaleSlider.value = initScale;
-            scaleInput.text = initScale.ToString("F2");
+            baseScale = (entry.initialScale.x == 0) ? 1f : entry.initialScale.x; // 자동 맞춤이 켜져 있으면 불러온 뒤 다시 정해짐
+            ResetScalePercent();
 
             rotXSlider.value = entry.initialRotation.x;
             rotXInput.text = entry.initialRotation.x.ToString("F2");

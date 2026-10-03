@@ -23,9 +23,15 @@ public class VertexClickTest : MonoBehaviour
     public Camera projectCam;            // 프로젝터 카메라 (2D 좌표의 기준)
     public MarkerManager markerManager;  // 마커를 띄울 CanvasUI의 MarkerManager
 
+    [Header("Selection")]
+    public float pickRadiusPixels = 25f; // 커서에서 이 거리(조작 화면 픽셀) 안의 보이는 버텍스를 고른다
+
     [Header("Patch Marker")]
+    // 패치(마커 주변 모양)는 기본으로 끈다. 매끈한 모델에서는 그릴 게 없어 일관성이 없었음.
+    // T 키로 끔 -> 선 -> 텍스처 순서로 바꿀 수 있다 (연구 비교용).
+    public bool showPatches = false;
     public int patchSize = 64;                                    // 패치 한 변 (프로젝터 픽셀). 0이면 패치 없음
-    public PatchSnapshot.Mode patchMode = PatchSnapshot.Mode.Lines; // T 키로 전환
+    public PatchSnapshot.Mode patchMode = PatchSnapshot.Mode.Lines;
     // 선 모드에서 이 각도(도)보다 크게 꺾인 모서리를 그린다.
     // 0이면 모델마다 정함: 라이브러리 항목의 patchCreaseAngle -> 없으면 모서리 각도 분포로 자동
     // (매끈한 high poly 35도, 각진 low poly는 중앙값 x 0.8. PatchSnapshot.AutoCreaseAngle 참고).
@@ -43,6 +49,16 @@ public class VertexClickTest : MonoBehaviour
     // (R로 10개를 고르면 바로 "선택 6개 이상"이 되어, 예전에는 아직 안 옮긴 마커들까지 계산에 섞였음.
     //  다 맞출 때까지 매번 불일치 경고가 뜨고 투영과 패치가 중간에 흔들렸다)
     private bool[] placed;
+    // 마지막으로 끈 마커. 방향키로 1px(Shift 10px)씩 옮긴다. 조작 화면 번호도 이 점을 강조한다.
+    public int ActiveSlot { get; private set; } = -1;
+    private float nudgeRepeatAt;
+    private GameObject hoverHighlight;   // 클릭하면 선택될 버텍스를 미리 보여주는 표시 (조작 화면에만 보임)
+    private GameObject hoverCandidate;
+    private Vector2 lastPickMouse = new Vector2(-1f, -1f);
+    private int lastPickFrame;
+    private Mesh pickMesh;               // 고르기용 메쉬 데이터 캐시 (매 프레임 배열을 새로 만들지 않게)
+    private int[] pickTriangles;
+    private Vector3[] pickVertices;
     private readonly PatchSnapshot patchSnapshot = new PatchSnapshot();
     private bool alignmentView;          // V 키: 프로젝터에 모델 없이 마커/패치만 표시
     private int savedCullingMask;
@@ -78,12 +94,26 @@ public class VertexClickTest : MonoBehaviour
     {
         ReleaseDestroyedSlots();
 
-        if (Input.GetMouseButtonDown(0) && Display.activeEditorGameViewTarget == 0)
+        // 조작 화면(Display 1) 위에서: 고를 버텍스 미리 표시 + 클릭으로 선택/해제
+        bool overOperatorView = Display.activeEditorGameViewTarget == 0;
+        bool canPick = overOperatorView && MainController.Instance != null && MainController.Instance.IsCalibrationActive
+                       && !IsPointerOverUI();
+        // 마우스가 움직였을 때만 다시 찾는다 (가만히 있으면 이전 결과 사용, 가끔은 다시 확인)
+        Vector2 mouse = Input.mousePosition;
+        if (!canPick) hoverCandidate = null;
+        else if (mouse != lastPickMouse || Time.frameCount - lastPickFrame > 15 || Input.GetMouseButtonDown(0))
         {
-            HandleClick();
+            hoverCandidate = PickVertexSphere(mouse);
+            lastPickMouse = mouse;
+            lastPickFrame = Time.frameCount;
         }
+        GameObject candidate = hoverCandidate;
+        UpdateHoverHighlight(candidate);
+        if (Input.GetMouseButtonDown(0) && candidate != null) ToggleSphere(candidate);
 
         if (HotkeyGuard.Blocked) return; // 입력칸에 글자를 치는 중
+
+        NudgeActiveMarker();
 
         // 'R' 키: 추천점(빨간 구)을 대응점으로 바로 선택
         if (Input.GetKeyDown(KeyCode.R))
@@ -91,7 +121,7 @@ public class VertexClickTest : MonoBehaviour
             SelectRecommendedVertices();
         }
 
-        // 'T' 키: 패치를 선(외곽선/모서리) <-> 텍스처로 전환
+        // 'T' 키: 패치 끔 -> 선 -> 텍스처
         if (Input.GetKeyDown(KeyCode.T))
         {
             TogglePatchMode();
@@ -118,11 +148,47 @@ public class VertexClickTest : MonoBehaviour
         Debug.Log($"[Live] 실시간 재계산: {(liveSolve ? "켜짐" : "꺼짐 (F 키로 직접 계산)")}");
     }
 
+    // 마커 드래그를 시작할 때 Marker가 호출한다. 이 마커가 방향키 미세 조정 대상이 된다.
+    public void OnMarkerDragBegin(int slot)
+    {
+        ActiveSlot = slot;
+        // 슬라이더 등 UI가 선택돼 있으면 방향키가 그 UI를 움직이므로 선택을 푼다 (예: 회전 슬라이더가 돌아감)
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es != null) es.SetSelectedGameObject(null);
+    }
+
     // 마커 드래그가 끝날 때 Marker가 호출한다. 옮긴 마커가 6개 이상이면 그 마커들로만 다시 푼다.
     public void OnMarkerDragEnd(int slot)
     {
+        MarkPlaced(slot);
+    }
+
+    private void MarkPlaced(int slot)
+    {
         placed[slot] = true;
         if (liveSolve && dltSolver != null && PlacedCount() >= 6) dltSolver.PerformDLT(false, placedOnly: true);
+    }
+
+    // 방향키: 마지막으로 끈 마커를 1px씩, Shift를 누르면 10px씩 옮긴다. 누르고 있으면 반복.
+    private void NudgeActiveMarker()
+    {
+        if (ActiveSlot < 0 || clickedObjects[ActiveSlot] == null) return;
+
+        Vector2 dir = Vector2.zero;
+        if (Input.GetKey(KeyCode.LeftArrow)) dir.x -= 1f;
+        if (Input.GetKey(KeyCode.RightArrow)) dir.x += 1f;
+        if (Input.GetKey(KeyCode.UpArrow)) dir.y += 1f;
+        if (Input.GetKey(KeyCode.DownArrow)) dir.y -= 1f;
+        if (dir == Vector2.zero) return;
+
+        bool firstPress = Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow)
+                          || Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.DownArrow);
+        if (!firstPress && Time.unscaledTime < nudgeRepeatAt) return;
+        nudgeRepeatAt = Time.unscaledTime + (firstPress ? 0.35f : 0.05f); // 누르고 있으면 0.35초 뒤부터 반복
+
+        float step = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? 10f : 1f;
+        verticesStruct[ActiveSlot].screenCoordinate += dir * step; // 마커는 LateUpdate에서 이 좌표로 옮겨짐
+        MarkPlaced(ActiveSlot);
     }
 
     public bool IsPlaced(int slot) => placed != null && placed[slot] && clickedObjects[slot] != null;
@@ -138,8 +204,14 @@ public class VertexClickTest : MonoBehaviour
     // 패치를 새 카메라 기준으로 다시 잘라, 그 버텍스 주변의 더 정확한 모양으로 바꾼다.
     public void OnCameraSolved()
     {
+        RefreshPatches();
+    }
+
+    // 모든 마커의 패치를 지금 카메라 기준으로 다시 자른다 (패치를 켤 때, 보정 후)
+    private void RefreshPatches()
+    {
         GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
-        if (target == null || patchSize <= 0) return;
+        if (target == null || !showPatches || patchSize <= 0) return;
         patchSnapshot.creaseAngle = EffectiveCreaseAngle(target);
         patchSnapshot.EnsureCaptured(projectCam, target);
 
@@ -167,14 +239,33 @@ public class VertexClickTest : MonoBehaviour
     private void OnDestroy()
     {
         patchSnapshot.Release();
+        if (hoverHighlight != null)
+        {
+            Destroy(hoverHighlight.GetComponent<Renderer>().sharedMaterial);
+            Destroy(hoverHighlight);
+        }
     }
 
+    // 끔 -> 선 -> 텍스처 -> 끔
     public void TogglePatchMode()
     {
-        patchMode = patchMode == PatchSnapshot.Mode.Lines ? PatchSnapshot.Mode.Texture : PatchSnapshot.Mode.Lines;
-        foreach (Marker m in markers) if (m != null) m.SetPatchMode(patchMode);
-        Debug.Log($"[Patch] 패치 모드: {patchMode}");
+        if (!showPatches) { showPatches = true; patchMode = PatchSnapshot.Mode.Lines; }
+        else if (patchMode == PatchSnapshot.Mode.Lines) patchMode = PatchSnapshot.Mode.Texture;
+        else showPatches = false;
+
+        if (showPatches)
+        {
+            RefreshPatches();
+            foreach (Marker m in markers) if (m != null) m.SetPatchMode(patchMode);
+        }
+        else
+        {
+            foreach (Marker m in markers) if (m != null) m.ClearPatches();
+        }
+        Debug.Log($"[Patch] 패치: {PatchLabel}");
     }
+
+    public string PatchLabel => !showPatches ? "끔" : patchMode == PatchSnapshot.Mode.Lines ? "선" : "텍스처";
 
     public void ToggleAlignmentView()
     {
@@ -195,7 +286,7 @@ public class VertexClickTest : MonoBehaviour
     private void AttachPatch(Marker marker, Vector2 screen)
     {
         GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
-        if (marker == null || target == null || patchSize <= 0) return;
+        if (marker == null || target == null || !showPatches || patchSize <= 0) return;
 
         patchSnapshot.creaseAngle = EffectiveCreaseAngle(target);
         patchSnapshot.EnsureCaptured(projectCam, target);
@@ -230,24 +321,27 @@ public class VertexClickTest : MonoBehaviour
     {
         MainController main = MainController.Instance;
         if (main == null) return;
-
-        if (!main.IsCalibrationActive)
+        if (main.currentCalibrator == null)
         {
-            Debug.LogWarning("[Recommend] Calibration 모드(키 1)를 먼저 켜세요.");
+            Debug.LogWarning("[Recommend] 모델을 먼저 선택하세요.");
             return;
         }
-
         if (main.IsSaliencyPending)
         {
             Debug.LogWarning("[Recommend] saliency 계산 중입니다. 끝나면 추천점이 표시되니 그때 다시 누르세요.");
             return;
         }
 
+        // R 하나로 시작할 수 있게, 꺼져 있으면 캘리브레이션 모드(1)와 추천점 표시(3)를 켠다.
+        // (모델을 바꾸면 둘 다 꺼지는데, 리허설에서 이걸 다시 켜야 하는지 몰라 마커가 안 생겼음)
+        if (!main.IsCalibrationActive) main.ToggleCalibration(true);
+        if (!main.IsRecommendationActive) main.ToggleRecommendation(true);
+
         ProjectionMappingCalibrator calibrator = main.currentCalibrator;
-        List<Vector3> recommended = calibrator != null ? calibrator.GetRecommendedPositions() : new List<Vector3>();
+        List<Vector3> recommended = calibrator.GetRecommendedPositions();
         if (recommended.Count == 0)
         {
-            Debug.LogWarning("[Recommend] 표시된 추천점이 없습니다. 키 3으로 추천점을 먼저 표시하세요.");
+            Debug.LogWarning("[Recommend] 추천점을 찾지 못했습니다. 모델이 프로젝터 화면 안에 보이는지 확인하세요.");
             return;
         }
 
@@ -305,35 +399,155 @@ public class VertexClickTest : MonoBehaviour
         }
     }
 
-    private void HandleClick()
+    // 이미 선택된 구면 해제, 아니면 선택
+    private void ToggleSphere(GameObject target)
     {
-        // Calibration 모드가 꺼져 있으면 선택하지 않는다.
-        if (MainController.Instance != null && !MainController.Instance.IsCalibrationActive) return;
+        if (ArrayContains(clickedObjects, target)) RemoveObject(target);
+        else AddObject(target);
+    }
 
-        // UI(버튼, 슬라이더 등)를 클릭한 것이면 뒤에 있는 버텍스 구를 선택하지 않는다.
-        if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject()) return;
+    // UI(버튼, 슬라이더 등) 위면 뒤에 있는 버텍스를 고르지 않는다.
+    private static bool IsPointerOverUI()
+    {
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        return es != null && es.IsPointerOverGameObject();
+    }
 
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        if (Physics.Raycast(ray, out RaycastHit hit))
+    // 커서 근처의 보이는 버텍스 구. 구는 화면에서 2px 정도라 직접 맞히기 어려워서,
+    // 모델 표면을 맞히면 그 삼각형의 세 꼭짓점 중 커서에 가장 가까운 것을 고른다 (pickRadiusPixels 이내).
+    // 표면에 가려진 뒤쪽 버텍스는 고르지 않는다.
+    private GameObject PickVertexSphere(Vector2 mouse)
+    {
+        Camera cam = Camera.main;
+        MainController main = MainController.Instance;
+        if (cam == null || main == null || main.sphereGenerator == null) return null;
+
+        if (!Physics.Raycast(cam.ScreenPointToRay(mouse), out RaycastHit hit))
+            return PickNearestVisibleOnScreen(cam, main.sphereGenerator, mouse); // 모델 가장자리 바로 바깥을 누른 경우
+        if (hit.collider.CompareTag("SphereMainCam")) return hit.collider.gameObject; // 구를 직접 맞힘
+
+        var meshCollider = hit.collider as MeshCollider;
+        if (meshCollider == null || meshCollider.sharedMesh == null || hit.triangleIndex < 0) return null;
+        if (pickMesh != meshCollider.sharedMesh)
         {
-            GameObject target = hit.collider.gameObject;
-
-            // 태그 체크 (원하는 태그가 아니면 무시)
-            if (!target.CompareTag("SphereMainCam")) return;
-
-            // ▼▼▼ [수정됨] 토글 로직 구현 ▼▼▼
-
-            // 1. 이미 선택된 오브젝트인가? -> 선택 해제 (삭제)
-            if (ArrayContains(clickedObjects, target))
-            {
-                RemoveObject(target);
-            }
-            // 2. 새로운 오브젝트인가? -> 선택 (추가)
-            else
-            {
-                AddObject(target);
-            }
+            pickMesh = meshCollider.sharedMesh;
+            pickTriangles = pickMesh.triangles;
+            pickVertices = pickMesh.vertices;
         }
+
+        float best = pickRadiusPixels;
+        Vector3 bestWorld = default;
+        bool found = false;
+        for (int k = 0; k < 3; k++)
+        {
+            Vector3 world = meshCollider.transform.TransformPoint(pickVertices[pickTriangles[hit.triangleIndex * 3 + k]]);
+            float d = Vector2.Distance(cam.WorldToScreenPoint(world), mouse);
+            if (d < best) { best = d; bestWorld = world; found = true; }
+        }
+        return found ? main.sphereGenerator.FindSphereAt(bestWorld, 0.1f) : null;
+    }
+
+    // 화면에서 커서에 가장 가까운 보이는 구 (pickRadiusPixels 이내).
+    // 가장자리 버텍스는 조금만 바깥을 눌러도 표면에 닿지 않아서, 이때는 화면 거리로 찾는다.
+    private GameObject PickNearestVisibleOnScreen(Camera cam, CreateSphereAtVertex spheres, Vector2 mouse)
+    {
+        // 커서가 모델 근처가 아니면 바로 끝 (빈 곳 위에서 매 프레임 구 수만 개를 훑지 않게)
+        GameObject model = MainController.Instance.targetMesh;
+        if (model == null || !NearModelOnScreen(cam, model, mouse, pickRadiusPixels)) return null;
+
+        // 화면 좌표는 행렬로 직접 계산 (WorldToScreenPoint를 수만 번 부르면 수 ms 걸림)
+        Matrix4x4 viewProj = cam.projectionMatrix * cam.worldToCameraMatrix;
+        Rect pixels = cam.pixelRect;
+        var candidates = new List<(float distance, Transform sphere)>();
+        foreach (Transform sphere in spheres.ActiveSpheres)
+        {
+            if (sphere == null) continue;
+            Vector3 p = sphere.position;
+            Vector4 clip = viewProj * new Vector4(p.x, p.y, p.z, 1f);
+            if (clip.w <= 0f) continue;
+            float sx = pixels.x + (clip.x / clip.w * 0.5f + 0.5f) * pixels.width;
+            float sy = pixels.y + (clip.y / clip.w * 0.5f + 0.5f) * pixels.height;
+            float d = Vector2.Distance(new Vector2(sx, sy), mouse);
+            if (d <= pickRadiusPixels) candidates.Add((d, sphere));
+        }
+        candidates.Sort((a, b) => a.distance.CompareTo(b.distance));
+
+        // 카메라에서 그 구로 쏜 광선이 구 자신에 먼저 닿으면 보이는 버텍스 (모델에 가려졌으면 표면에 먼저 닿음)
+        foreach (var (_, sphere) in candidates)
+        {
+            Vector3 toSphere = sphere.position - cam.transform.position;
+            if (Physics.Raycast(cam.transform.position, toSphere, out RaycastHit hit, toSphere.magnitude + 1f)
+                && hit.collider.transform == sphere)
+                return sphere.gameObject;
+        }
+        return null;
+    }
+
+    private GameObject boundsModel;
+    private readonly List<Renderer> modelRenderers = new List<Renderer>();
+
+    private bool NearModelOnScreen(Camera cam, GameObject model, Vector2 mouse, float margin)
+    {
+        // 모델 아래에 버텍스 구 수만 개가 붙어 있어서, 모델 자체 렌더러는 모델이 바뀔 때만 찾아 둔다
+        if (boundsModel != model)
+        {
+            boundsModel = model;
+            modelRenderers.Clear();
+            foreach (Renderer r in model.GetComponentsInChildren<Renderer>())
+                if (r.gameObject.layer == model.layer) modelRenderers.Add(r);
+        }
+
+        bool any = false;
+        Bounds b = default;
+        foreach (Renderer r in modelRenderers)
+        {
+            if (r == null) continue;
+            if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+        }
+        if (!any) return false;
+
+        Rect rect = Rect.MinMaxRect(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 corner = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
+            Vector3 s = cam.WorldToScreenPoint(corner);
+            rect.xMin = Mathf.Min(rect.xMin, s.x); rect.yMin = Mathf.Min(rect.yMin, s.y);
+            rect.xMax = Mathf.Max(rect.xMax, s.x); rect.yMax = Mathf.Max(rect.yMax, s.y);
+        }
+        return mouse.x >= rect.xMin - margin && mouse.x <= rect.xMax + margin && mouse.y >= rect.yMin - margin && mouse.y <= rect.yMax + margin;
+    }
+
+    // 클릭하면 선택될 버텍스를 노란 점으로 미리 보여준다. 조작 화면에만 보이고(구와 같은 레이어), 모델에 가려지지 않게 그린다.
+    private void UpdateHoverHighlight(GameObject candidate)
+    {
+        if (candidate == null)
+        {
+            if (hoverHighlight != null) hoverHighlight.SetActive(false);
+            return;
+        }
+
+        if (hoverHighlight == null)
+        {
+            hoverHighlight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            hoverHighlight.name = "VertexHoverHighlight";
+            Destroy(hoverHighlight.GetComponent<Collider>());
+            var material = new Material(Shader.Find("Hidden/Internal-Colored"));
+            material.SetColor("_Color", new Color(1f, 0.9f, 0f, 1f));
+            material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+            material.SetInt("_ZWrite", 0);
+            material.renderQueue = 4000;
+            hoverHighlight.GetComponent<Renderer>().sharedMaterial = material;
+        }
+
+        hoverHighlight.layer = candidate.layer;
+        hoverHighlight.SetActive(true);
+        hoverHighlight.transform.position = candidate.transform.position;
+
+        // 화면에서 약 12px 크기
+        Camera cam = Camera.main;
+        float depth = Vector3.Dot(candidate.transform.position - cam.transform.position, cam.transform.forward);
+        float worldPerPixel = 2f * depth * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) / cam.pixelHeight;
+        hoverHighlight.transform.localScale = Vector3.one * (12f * worldPerPixel);
     }
 
     // 오브젝트 추가 함수
@@ -395,6 +609,7 @@ public class VertexClickTest : MonoBehaviour
         markers[slot] = null;
         clickedObjects[slot] = null;
         placed[slot] = false;
+        if (ActiveSlot == slot) ActiveSlot = -1;
         verticesStruct[slot] = new VertexStruct();
         arrayIndex--;
     }

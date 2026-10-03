@@ -102,7 +102,7 @@ public class MainController : MonoBehaviour
         }
 
         float scale = model.transform.localScale.x;
-        if (UIManager.Instance != null) UIManager.Instance.SetScaleWithoutNotify(scale);
+        if (UIManager.Instance != null) UIManager.Instance.SetBaseScale(scale);
 
         if (TryGetScreenRect(model, cam, out Rect fitted) &&
             (fitted.xMin < 0 || fitted.yMin < 0 || fitted.xMax > cam.pixelWidth || fitted.yMax > cam.pixelHeight))

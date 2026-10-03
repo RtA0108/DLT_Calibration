@@ -161,6 +161,8 @@ public class CreateSphereAtVertex : MonoBehaviour
     }
 
     // worldPos에 가장 가까운 버텍스 구를 찾는다. tolerance보다 멀리 있으면 null.
+    public IReadOnlyList<Transform> ActiveSpheres => _activeSpheres;
+
     public GameObject FindSphereAt(Vector3 worldPos, float tolerance)
     {
         Transform best = null;

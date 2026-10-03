@@ -333,6 +333,12 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         marker.transform.position = position;
         marker.transform.SetParent(markerRoot.transform, true); // transform 명시
 
+        // 추천점은 조작 화면에만 보이게 (버텍스 구와 같은 레이어, 프로젝터 카메라는 이 레이어를 그리지 않음).
+        // 프로젝터에 같이 비추면 R로 만든 십자선 마커의 가운데 빈 칸을 빨간 점이 가렸음.
+        int operatorOnlyLayer = LayerMask.NameToLayer("Vertex In 3D");
+        if (operatorOnlyLayer >= 0)
+            foreach (Transform t in marker.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = operatorOnlyLayer;
+
         marker.transform.localScale = scale;
 
         activeMarkers.Add(marker);
