@@ -27,6 +27,10 @@ public class VertexClickTest : MonoBehaviour
     public int patchSize = 64;                                    // 패치 한 변 (프로젝터 픽셀). 0이면 패치 없음
     public PatchSnapshot.Mode patchMode = PatchSnapshot.Mode.Lines; // T 키로 전환
 
+    [Header("Live Calibration")]
+    public bool liveSolve = true;          // L 키: 마커를 놓을 때마다 자동으로 DLT를 다시 풂 (점 6개 이상)
+    public DLT_solve dltSolver;
+
     private Marker[] markers;
     private readonly PatchSnapshot patchSnapshot = new PatchSnapshot();
     private bool alignmentView;          // V 키: 프로젝터에 모델 없이 마커/패치만 표시
@@ -53,6 +57,7 @@ public class VertexClickTest : MonoBehaviour
             GameObject canvasUI = GameObject.Find("CanvasUI");
             if (canvasUI != null) markerManager = canvasUI.GetComponent<MarkerManager>();
         }
+        if (dltSolver == null) dltSolver = GetComponent<DLT_solve>();
         if (projectCam == null) Debug.LogError("[VertexClickTest] projectCam이 지정되지 않았습니다.");
         if (markerManager == null) Debug.LogError("[VertexClickTest] MarkerManager를 찾을 수 없습니다.");
     }
@@ -83,6 +88,47 @@ public class VertexClickTest : MonoBehaviour
         {
             ToggleAlignmentView();
         }
+
+        // 'L' 키: 실시간 재계산 켜기/끄기
+        if (Input.GetKeyDown(KeyCode.L))
+        {
+            liveSolve = !liveSolve;
+            Debug.Log($"[Live] 실시간 재계산: {(liveSolve ? "켜짐" : "꺼짐 (F 키로 직접 계산)")}");
+        }
+    }
+
+    // 마커 드래그가 끝날 때 Marker가 호출한다.
+    public void OnMarkerDragEnd(int slot)
+    {
+        if (liveSolve && dltSolver != null && SelectedCount() >= 6) dltSolver.PerformDLT(false);
+    }
+
+    // DLT 결과가 projectCam에 적용된 뒤 호출된다 (F 키, 실시간 재계산 모두).
+    // 패치를 새 카메라 기준으로 다시 잘라, 그 버텍스 주변의 더 정확한 모양으로 바꾼다.
+    public void OnCameraSolved()
+    {
+        GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
+        if (target == null || patchSize <= 0) return;
+        patchSnapshot.EnsureCaptured(projectCam, target);
+
+        for (int i = 0; i < clickedObjects.Length; i++)
+        {
+            if (clickedObjects[i] == null || markers[i] == null) continue;
+
+            Vector3 projected = projectCam.WorldToScreenPoint(clickedObjects[i].transform.position);
+            Vector2 predicted = new Vector2(projected.x, projected.y);
+            markers[i].SetPatches(
+                patchSnapshot.Crop(PatchSnapshot.Mode.Lines, predicted, patchSize),
+                patchSnapshot.Crop(PatchSnapshot.Mode.Texture, predicted, patchSize),
+                patchMode, patchSize);
+        }
+    }
+
+    private int SelectedCount()
+    {
+        int count = 0;
+        foreach (GameObject o in clickedObjects) if (o != null) count++;
+        return count;
     }
 
     private void OnDestroy()

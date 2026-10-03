@@ -16,6 +16,7 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
     private RectTransform canvasRect;
     private VertexClickTest owner;
     private Vector2 dragOffset;
+    private bool dragging;
 
     // 패치: 마커 주변 모양(선 또는 텍스처). 중심이 대응점이고, 패치 어디를 잡아도 드래그된다.
     // 패치들은 마커들보다 아래 층(PatchLayer)에 모아 둔다. 패치끼리 겹쳐도 점과 번호가 가려지지 않게.
@@ -27,6 +28,18 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
         rectTransform = GetComponent<RectTransform>();
     }
 
+    // 캔버스가 카메라에 붙어 있어서(Screen Space - Camera), 캘리브레이션으로 카메라가 바뀌면
+    // 그대로 둔 마커도 화면에서 위치가 바뀐다. 드래그 중이 아니면 항상 저장된 프로젝터 좌표에 다시 놓는다.
+    void LateUpdate()
+    {
+        if (dragging || owner == null || canvasRect == null) return;
+        if (ScreenToCanvas(owner.verticesStruct[IDX].screenCoordinate, out Vector2 local))
+        {
+            rectTransform.localPosition = new Vector3(local.x, local.y, 0f);
+            SyncPatchPosition();
+        }
+    }
+
     void OnDestroy()
     {
         if (patchImage != null) Destroy(patchImage.gameObject);
@@ -36,6 +49,9 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
 
     public void SetPatches(Texture2D lines, Texture2D texture, PatchSnapshot.Mode mode, int size)
     {
+        // 다시 호출되면(캘리브레이션 후 패치 갱신) 이전 텍스처는 정리
+        if (linesPatch != null && linesPatch != lines) Destroy(linesPatch);
+        if (texturePatch != null && texturePatch != texture) Destroy(texturePatch);
         linesPatch = lines;
         texturePatch = texture;
 
@@ -103,6 +119,7 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
 
     public void OnBeginDrag(PointerEventData eventData)
     {
+        dragging = true;
         // 마커를 잡은 지점과 마커 중심의 차이를 기억해서, 드래그 시작 때 마커가 튀지 않게 한다.
         if (ScreenToCanvas(eventData.position, out Vector2 local))
             dragOffset = (Vector2)rectTransform.localPosition - local;
@@ -125,9 +142,11 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
 
     public void OnEndDrag(PointerEventData eventData)
     {
+        dragging = false;
         var v = owner.verticesStruct[IDX];
         float distance = Vector2.Distance(v.screenCoordinateGT, v.screenCoordinate);
         Debug.Log($"[Marker {IDX + 1}] {v.screenCoordinate} (GT에서 {distance:F2}px 이동)");
+        owner.OnMarkerDragEnd(IDX);
     }
 
     private bool ScreenToCanvas(Vector2 screenPosition, out Vector2 local)
