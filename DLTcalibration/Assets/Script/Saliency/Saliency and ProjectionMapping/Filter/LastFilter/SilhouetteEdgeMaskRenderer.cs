@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.IO;
 
 public class SilhouetteEdgeMaskRenderer : MonoBehaviour
@@ -9,7 +9,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
     [Header("References")]
     public MeshFilter meshFilter;
-    public Camera mainCamera; // º¯¼ö¸í À¯Áö
+    public Camera mainCamera; // ë³€ìˆ˜ëª… ìœ ì§€
 
     [HideInInspector] public RenderTexture silhouetteMask;
     [HideInInspector] public RenderTexture edgeMask;
@@ -25,15 +25,15 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
     public void Init()
     {
-        // ¡Ú [¼öÁ¤] ¿©±â¼­ MeshFilter³ª Camera¸¦ ¹Ì¸® Ã£Áö ¾Ê½À´Ï´Ù.
-        // Ä¶¸®ºê·¹ÀÌÅÍ°¡ Render()¸¦ È£ÃâÇÒ ¶§ ³Ö¾îÁÙ °ÍÀÌ±â ¶§¹®ÀÔ´Ï´Ù.
+        // â˜… [ìˆ˜ì •] ì—¬ê¸°ì„œ MeshFilterë‚˜ Cameraë¥¼ ë¯¸ë¦¬ ì°¾ì§€ ì•ŠìŠµë‹ˆë‹¤.
+        // ìº˜ë¦¬ë¸Œë ˆì´í„°ê°€ Render()ë¥¼ í˜¸ì¶œí•  ë•Œ ë„£ì–´ì¤„ ê²ƒì´ê¸° ë•Œë¬¸ìž…ë‹ˆë‹¤.
 
         if (solidColorShader == null) solidColorShader = Shader.Find("Hidden/SilhouetteSolidColor");
         if (edgeDetectShader == null) edgeDetectShader = Shader.Find("Hidden/SilhouetteEdgeShader");
 
         if (solidColorShader == null || edgeDetectShader == null)
         {
-            Debug.LogError("[Silhouette] ½¦ÀÌ´õ ¿À·ù: Resources Æú´õ¸¦ È®ÀÎÇÏ¼¼¿ä.");
+            Debug.LogError("[Silhouette] ì‰ì´ë” ì˜¤ë¥˜: Resources í´ë”ë¥¼ í™•ì¸í•˜ì„¸ìš”.");
             return;
         }
 
@@ -50,18 +50,21 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
         if (!isInitialized) Init();
         if (!isInitialized) return;
 
-        // ¡Ú [¼öÁ¤] ·»´õ¸µ Á÷Àü¿¡ ÇÒ´çÇÏ°í °Ë»çÇÕ´Ï´Ù.
+        // â˜… [ìˆ˜ì •] ë Œë”ë§ ì§ì „ì— í• ë‹¹í•˜ê³  ê²€ì‚¬í•©ë‹ˆë‹¤.
         this.mainCamera = targetCam;
         this.meshFilter = targetMesh;
 
         if (meshFilter == null || mainCamera == null)
         {
-            // ¾ÆÁ÷ µ¥ÀÌÅÍ°¡ ¾È µé¾î¿ÔÀ¸¸é Á¶¿ëÈ÷ ¸®ÅÏ (¿¡·¯ ·Î±× ³²¹ß ¹æÁö)
+            // ì•„ì§ ë°ì´í„°ê°€ ì•ˆ ë“¤ì–´ì™”ìœ¼ë©´ ì¡°ìš©ížˆ ë¦¬í„´ (ì—ëŸ¬ ë¡œê·¸ ë‚¨ë°œ ë°©ì§€)
             return;
         }
 
-        int w = Screen.width;
-        int h = Screen.height;
+        // ë§ˆìŠ¤í¬ëŠ” ì´ ì¹´ë©”ë¼ì˜ í”½ì…€ í•´ìƒë„ë¡œ ë§Œë“ ë‹¤. ë§ˆìŠ¤í¬ ì¡°íšŒ(SaliencyUtils.FilterVerticesByEdge)ê°€
+        // camera.WorldToScreenPoint í”½ì…€ ì¢Œí‘œë¥¼ ê·¸ëŒ€ë¡œ ì“°ê¸° ë•Œë¬¸.
+        // (ì˜ˆì „ì—ëŠ” Screen í¬ê¸°, ì¦‰ Display 1 í•´ìƒë„ë¡œ ë§Œë“¤ì–´ì„œ í”„ë¡œì í„° í”½ì…€ê³¼ ì „í˜€ ë§žì§€ ì•Šì•˜ìŒ)
+        int w = mainCamera.pixelWidth;
+        int h = mainCamera.pixelHeight;
 
         if (silhouetteMask == null || silhouetteMask.width != w || silhouetteMask.height != h)
         {
@@ -103,7 +106,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
     public RenderTexture GetSilhouetteMask() => silhouetteMask;
 
-    // --- ÀúÀå À¯Æ¿¸®Æ¼ (±âÁ¸ À¯Áö) ---
+    // --- ì €ìž¥ ìœ í‹¸ë¦¬í‹° (ê¸°ì¡´ ìœ ì§€) ---
     public void SaveRenderTextureToPNG(RenderTexture rt, string filename)
     {
         if (rt == null) return;
@@ -120,7 +123,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
         byte[] bytes = tex.EncodeToPNG();
         string path = Path.Combine(Application.dataPath, filename);
         File.WriteAllBytes(path, bytes);
-        Debug.Log($"[Save] ÀúÀå ¿Ï·á: {path}");
+        Debug.Log($"[Save] ì €ìž¥ ì™„ë£Œ: {path}");
     }
 
     public void SaveEdgeMaskToPNG(string filename = "EdgeMaskSnapshot.png")
@@ -137,7 +140,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 //{
 //    public Shader solidColorShader; // SilhouetteSolidColor.shader
 //    public Shader edgeDetectShader; // SilhouetteEdgeShader
-//    public MeshFilter meshFilter;   // Å¸°Ù ¸Þ½¬
+//    public MeshFilter meshFilter;   // íƒ€ê²Ÿ ë©”ì‰¬
 
 //    [HideInInspector] public RenderTexture silhouetteMask;
 //    [HideInInspector] public RenderTexture edgeMask;
@@ -156,10 +159,10 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
 //        if (meshFilter == null || meshFilter.sharedMesh == null)
 //        {
-//            Debug.LogError("[Silhouette] meshFilter°¡ ¼³Á¤µÇÁö ¾Ê¾Ò½À´Ï´Ù.");
+//            Debug.LogError("[Silhouette] meshFilterê°€ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.");
 //            return;
 //        }
-//        // Shader°¡ ºñ¾îÀÖ´Ù¸é ±âº» ÇÒ´ç
+//        // Shaderê°€ ë¹„ì–´ìžˆë‹¤ë©´ ê¸°ë³¸ í• ë‹¹
 //        if (solidColorShader == null)
 //            solidColorShader = Shader.Find("Hidden/SilhouetteSolidColor");
 //        if (edgeDetectShader == null)
@@ -175,7 +178,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
 //        int w = Screen.width;
 //        int h = Screen.height;
-//        // RenderTexture »ý¼º ¹× Å©±â Ã¼Å©
+//        // RenderTexture ìƒì„± ë° í¬ê¸° ì²´í¬
 //        if (silhouetteMask == null || silhouetteMask.width != w || silhouetteMask.height != h)
 //        {
 //            if (silhouetteMask != null) silhouetteMask.Release();
@@ -188,7 +191,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 //            edgeMask = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32) { name = "EdgeMask" };
 //        }
 
-//        // ---------- DrawMesh ¹æ½ÄÀ¸·Î Á÷Á¢ ·»´õ¸µ ----------
+//        // ---------- DrawMesh ë°©ì‹ìœ¼ë¡œ ì§ì ‘ ë Œë”ë§ ----------
 //        var oldRT = RenderTexture.active;
 //        RenderTexture.active = silhouetteMask;
 //        GL.Clear(true, true, Color.black);
@@ -203,7 +206,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 
 //        RenderTexture.active = oldRT;
 
-//        // ---------- Edge Shader Àû¿ë ----------
+//        // ---------- Edge Shader ì ìš© ----------
 //        Graphics.Blit(silhouetteMask, edgeMask, edgeMat);
 //    }
 
@@ -214,7 +217,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 //    {
 //        if (rt == null)
 //        {
-//            Debug.LogError($"[SaveRenderTextureToPNG] {filename} ÀúÀå ½ÇÆÐ: RenderTexture°¡ nullÀÔ´Ï´Ù.");
+//            Debug.LogError($"[SaveRenderTextureToPNG] {filename} ì €ìž¥ ì‹¤íŒ¨: RenderTextureê°€ nullìž…ë‹ˆë‹¤.");
 //            return;
 //        }
 
@@ -227,7 +230,7 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 //        byte[] bytes = tex.EncodeToPNG();
 //        string path = Path.Combine(Application.dataPath, filename);
 //        File.WriteAllBytes(path, bytes);
-//        Debug.Log($"[SaveRenderTextureToPNG] ÀúÀå ¿Ï·á: {path}");
+//        Debug.Log($"[SaveRenderTextureToPNG] ì €ìž¥ ì™„ë£Œ: {path}");
 //    }
 
 //    public void SaveEdgeMaskToPNG(string filename = "EdgeMaskSnapshot.png")
@@ -251,11 +254,11 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 //        {
 //            GameObject go = mf.gameObject;
 
-//            if (!go.activeInHierarchy) continue;                    // ºñÈ°¼ºÈ­µÈ ¿ÀºêÁ§Æ® Á¦¿Ü
-//            if (go.layer == excludedLayer) continue;                // Á¦¿Ü LayerÀÌ¸é ½ºÅµ
+//            if (!go.activeInHierarchy) continue;                    // ë¹„í™œì„±í™”ëœ ì˜¤ë¸Œì íŠ¸ ì œì™¸
+//            if (go.layer == excludedLayer) continue;                // ì œì™¸ Layerì´ë©´ ìŠ¤í‚µ
 
 //            Vector3 toMesh = go.transform.position - cam.transform.position;
-//            float dot = Vector3.Dot(cam.transform.forward, toMesh); // Ä«¸Þ¶ó ¾Õ¿¡ ÀÖ´ÂÁö È®ÀÎ
+//            float dot = Vector3.Dot(cam.transform.forward, toMesh); // ì¹´ë©”ë¼ ì•žì— ìžˆëŠ”ì§€ í™•ì¸
 //            if (dot > 0 && dot < minDist)
 //            {
 //                minDist = dot;
@@ -266,11 +269,11 @@ public class SilhouetteEdgeMaskRenderer : MonoBehaviour
 //        if (selected != null)
 //        {
 //            meshFilter = selected;
-//            Debug.Log($"[Silhouette] ÀÚµ¿ ¼±ÅÃµÈ Mesh: {meshFilter.name}");
+//            Debug.Log($"[Silhouette] ìžë™ ì„ íƒëœ Mesh: {meshFilter.name}");
 //        }
 //        else
 //        {
-//            Debug.LogWarning("[Silhouette] È°¼ºÈ­µÈ ´ë»ó Mesh¸¦ Ã£Áö ¸øÇß½À´Ï´Ù.");
+//            Debug.LogWarning("[Silhouette] í™œì„±í™”ëœ ëŒ€ìƒ Meshë¥¼ ì°¾ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.");
 //        }
 //    }
 //}

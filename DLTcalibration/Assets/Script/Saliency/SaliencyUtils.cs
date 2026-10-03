@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -13,28 +13,32 @@ public static class SaliencyUtils
         Vector3 camPos = camera.transform.position;
         Dictionary<Vector3, bool> uniquePositions = new Dictionary<Vector3, bool>();
 
-        float dotThreshold = 0.5f; // ¡ç ´õ Á¤¸éÀ» ÇâÇÑ Á¤Á¡¸¸ raycast ½Ãµµ
-        float hitTolerance = 0.005f; // °Å¸® ±â¹İ (³Ê¹« µÚ¿¡ ÀÖ¾î¼­ Àß ¾Èº¸ÀÌ´Â vertex Á¦¿Ü)
+        float dotThreshold = 0.5f; // â† ë” ì •ë©´ì„ í–¥í•œ ì •ì ë§Œ raycast ì‹œë„
+        float hitTolerance = 0.005f; // ê±°ë¦¬ ê¸°ë°˜ (ë„ˆë¬´ ë’¤ì— ìˆì–´ì„œ ì˜ ì•ˆë³´ì´ëŠ” vertex ì œì™¸)
+
+        // normals í”„ë¡œí¼í‹°ëŠ” ì ‘ê·¼í•  ë•Œë§ˆë‹¤ ë°°ì—´ ì „ì²´ë¥¼ ë³µì‚¬í•˜ë¯€ë¡œ í•œ ë²ˆë§Œ ì½ëŠ”ë‹¤.
+        // (vertexPositionsì˜ ì¸ë±ìŠ¤ëŠ” sharedMesh.vertices ê¸°ì¤€)
+        Vector3[] normals = meshFilter.sharedMesh.normals;
 
         foreach (var kvp in vertexPositions)
         {
             int vertexIndex = kvp.Key;
             Vector3 vertexWorldPos = meshFilter.transform.TransformPoint(kvp.Value);
 
-            // Áßº¹ Á¦°Å¿ë ÁÂÇ¥ Á¤±ÔÈ­
+            // ì¤‘ë³µ ì œê±°ìš© ì¢Œí‘œ ì •ê·œí™”
             Vector3 roundedVertex = new Vector3(
                 Mathf.Round(vertexWorldPos.x * 1000f) / 1000f,
                 Mathf.Round(vertexWorldPos.y * 1000f) / 1000f,
                 Mathf.Round(vertexWorldPos.z * 1000f) / 1000f
             );
 
-            Vector3 worldNormal = meshFilter.transform.TransformDirection(meshFilter.mesh.normals[vertexIndex]);
+            Vector3 worldNormal = meshFilter.transform.TransformDirection(normals[vertexIndex]);
             Vector3 toCamera = (camPos - vertexWorldPos).normalized;
 
             if (Vector3.Dot(worldNormal, toCamera) <= dotThreshold) continue;
 
             Ray ray = new Ray(camPos, (vertexWorldPos - camPos).normalized);
-            //Mathf.Infinity¸¦ °íÁ¤µÈ ¼öÄ¡·Î º¯°æÇÒÁö °í¹Î
+            //Mathf.Infinityë¥¼ ê³ ì •ëœ ìˆ˜ì¹˜ë¡œ ë³€ê²½í• ì§€ ê³ ë¯¼
             float rayDistance = Vector3.Distance(camPos, vertexWorldPos) * 1.1f;
             if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, visibilityLayerMask))
                 //if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, visibilityLayerMask))
@@ -53,12 +57,12 @@ public static class SaliencyUtils
         return visibleVertices;
     }
 
-    //Silhouette ±â¹İ ÇÊÅÍ ÁøÇàÁß
+    //Silhouette ê¸°ë°˜ í•„í„° ì§„í–‰ì¤‘
     public static List<Vector3> FilterVerticesByEdge(RenderTexture edgeMask, List<Vector3> vertices, Camera camera, float distanceThresholdPixels = 5.0f)
     {
         List<Vector3> filtered = new List<Vector3>();
 
-        // edgeMask ÀĞ±â
+        // edgeMask ì½ê¸°
         Texture2D edgeTex = new Texture2D(edgeMask.width, edgeMask.height, TextureFormat.RGB24, false);
         RenderTexture.active = edgeMask;
         edgeTex.ReadPixels(new Rect(0, 0, edgeMask.width, edgeMask.height), 0, 0);
@@ -71,7 +75,7 @@ public static class SaliencyUtils
         foreach (var vertex in vertices)
         {
             Vector3 screenPos = camera.WorldToScreenPoint(vertex);
-            if (screenPos.z < 0) continue; // Ä«¸Ş¶ó µÚ
+            if (screenPos.z < 0) continue; // ì¹´ë©”ë¼ ë’¤
 
             int x = Mathf.RoundToInt(screenPos.x);
             int y = Mathf.RoundToInt(screenPos.y);
@@ -98,7 +102,7 @@ public static class SaliencyUtils
             if (!isNearEdge)
             {
                 filtered.Add(vertex);
-            //    Debug.Log($"[EdgeFilter] PASS: vertex screen ({x}, {y}) ¡æ retained");
+            //    Debug.Log($"[EdgeFilter] PASS: vertex screen ({x}, {y}) â†’ retained");
             }
             //else
             //{
@@ -106,7 +110,104 @@ public static class SaliencyUtils
             //}
         }
 
+        // í˜¸ì¶œë§ˆë‹¤ ìƒˆë¡œ ë§Œë“¤ë¯€ë¡œ ì •ë¦¬
+        if (Application.isPlaying) Object.Destroy(edgeTex); else Object.DestroyImmediate(edgeTex);
         return filtered;
+    }
+
+    // ì•ˆìª½ ê°€ë¦¼ ê²½ê³„ í•„í„°
+    // ì¹´ë©”ë¼ì—ì„œ ë³¸ ëª¨ë¸ ê¹Šì´ë¥¼ ê·¸ë ¤ì„œ, ì´ì›ƒ í”½ì…€ë¼ë¦¬ ê¹Šì´ê°€ í¬ê²Œ ëŠê¸°ëŠ” ê³³(ì• ë¶€ë¶„ì´ ë’· ë¶€ë¶„ì„ ê°€ë¦¬ëŠ” ê²½ê³„)ì„ ì°¾ê³ 
+    // ê·¸ ê·¼ì²˜(Â±radius px)ì˜ ë²„í…ìŠ¤ë¥¼ ëº€ë‹¤. íˆ¬ì˜ì´ ì¡°ê¸ˆë§Œ ì–´ê¸‹ë‚˜ë„ ë¹›ì´ ì• ë¶€ë¶„ ê°€ì¥ìë¦¬ì— ê±¸ë¦¬ëŠ” ì ë“¤ì´ë‹¤.
+    // ë°”ê¹¥ ìœ¤ê³½ì„ (ëª¨ë¸-ë°°ê²½ ê²½ê³„)ì€ ì‹¤ë£¨ì—£ í•„í„°ê°€ ë‹´ë‹¹í•˜ë¯€ë¡œ ì—¬ê¸°ì„œëŠ” ëª¨ë¸ í”½ì…€ë¼ë¦¬ë§Œ ë¹„êµí•œë‹¤.
+    private static Material _linearDepthMat;
+
+    public static List<Vector3> FilterVerticesByOcclusionEdges(Camera camera, MeshFilter meshFilter, List<Vector3> vertices, float depthRatio, float radiusPixels)
+    {
+        bool[] edge = ComputeOcclusionEdgeMask(camera, meshFilter, depthRatio, out int w, out int h);
+        if (edge == null) return vertices;
+
+        int r = Mathf.CeilToInt(radiusPixels);
+        var result = new List<Vector3>();
+        foreach (var v in vertices)
+        {
+            Vector3 s = camera.WorldToScreenPoint(v);
+            if (s.z < 0) continue;
+            int x = Mathf.RoundToInt(s.x), y = Mathf.RoundToInt(s.y);
+
+            bool near = false;
+            for (int dy = -r; dy <= r && !near; dy++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int px = x + dx, py = y + dy;
+                    if (px >= 0 && px < w && py >= 0 && py < h && edge[py * w + px]) { near = true; break; }
+                }
+            }
+            if (!near) result.Add(v);
+        }
+        return result;
+    }
+
+    // ì¹´ë©”ë¼ í”½ì…€ í•´ìƒë„ì˜ ê°€ë¦¼ ê²½ê³„ ë§ˆìŠ¤í¬ (true = ê²½ê³„ í”½ì…€)
+    public static bool[] ComputeOcclusionEdgeMask(Camera camera, MeshFilter meshFilter, float depthRatio, out int w, out int h)
+    {
+        w = camera.pixelWidth;
+        h = camera.pixelHeight;
+
+        if (_linearDepthMat == null)
+        {
+            Shader shader = Shader.Find("Hidden/LinearDepthColor");
+            if (shader == null)
+            {
+                Debug.LogError("[OcclusionEdge] Hidden/LinearDepthColor ì…°ì´ë”ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
+                return null;
+            }
+            _linearDepthMat = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+        }
+
+        bool useFloat = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RFloat);
+        RenderTexture rt = RenderTexture.GetTemporary(w, h, 24, useFloat ? RenderTextureFormat.RFloat : RenderTextureFormat.RHalf);
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = rt;
+        GL.Clear(true, true, Color.clear); // ë°°ê²½ ê¹Šì´ = 0
+        GL.PushMatrix();
+        GL.LoadIdentity();
+        GL.LoadProjectionMatrix(camera.projectionMatrix * camera.worldToCameraMatrix);
+        _linearDepthMat.SetPass(0);
+        Graphics.DrawMeshNow(meshFilter.sharedMesh, meshFilter.transform.localToWorldMatrix);
+        GL.PopMatrix();
+
+        // ì „ì²´ë¥¼ ì½ëŠ”ë‹¤ (ë¶€ë¶„ ì½ê¸°ëŠ” DX11ì—ì„œ ì„¸ë¡œê°€ ë’¤ì§‘í˜)
+        var tex = new Texture2D(w, h, useFloat ? TextureFormat.RFloat : TextureFormat.RHalf, false);
+        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+        tex.Apply();
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(rt);
+        Color[] pixels = tex.GetPixels();
+        if (Application.isPlaying) Object.Destroy(tex); else Object.DestroyImmediate(tex);
+
+        var edge = new bool[w * h];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                float d = pixels[i].r;
+                if (d <= 0f) continue;
+
+                // ì˜¤ë¥¸ìª½, ìœ„ ì´ì›ƒê³¼ ë¹„êµ (ë‘ í”½ì…€ ëª¨ë‘ ëª¨ë¸ì¼ ë•Œë§Œ)
+                if (x + 1 < w) MarkIfJump(edge, pixels, i, i + 1, d, depthRatio);
+                if (y + 1 < h) MarkIfJump(edge, pixels, i, i + w, d, depthRatio);
+            }
+        }
+        return edge;
+    }
+
+    private static void MarkIfJump(bool[] edge, Color[] pixels, int i, int j, float d, float depthRatio)
+    {
+        float n = pixels[j].r;
+        if (n <= 0f) return;
+        if (Mathf.Abs(d - n) > depthRatio * Mathf.Min(d, n)) edge[i] = edge[j] = true;
     }
 
     // triangle normal filter
@@ -120,7 +221,7 @@ public static class SaliencyUtils
         int[] tris = mesh.triangles;
         Vector3 camPos = camera.transform.position;
 
-        // triangle normal Æò±Õ °è»ê
+        // triangle normal í‰ê·  ê³„ì‚°
         for (int i = 0; i < tris.Length; i += 3)
         {
             Vector3 v0 = meshFilter.transform.TransformPoint(verts[tris[i]]);
@@ -154,7 +255,7 @@ public static class SaliencyUtils
 
 
 
-    // ºĞ»ê + saliency score ºñÀ² º¯°æÇÏ¸ç vertex ÃßÃµ
+    // ë¶„ì‚° + saliency score ë¹„ìœ¨ ë³€ê²½í•˜ë©° vertex ì¶”ì²œ
     public static List<Vector3> SelectHybridDistributedVertices(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float l, int selectionCount, float alpha = 0.5f)
     {
         List<Vector3> selected = new List<Vector3>();
@@ -162,12 +263,12 @@ public static class SaliencyUtils
         if (candidates.Count <= selectionCount)
             return new List<Vector3>(candidates);
 
-        // --- Step 1: °¡Àå ³ôÀº ¿£Æ®·ÎÇÇ¸¦ °¡Áø Á¤Á¡À¸·Î Ã¹ Á¤Á¡ ¼±ÅÃ ---
+        // --- Step 1: ê°€ì¥ ë†’ì€ ì—”íŠ¸ë¡œí”¼ë¥¼ ê°€ì§„ ì •ì ìœ¼ë¡œ ì²« ì •ì  ì„ íƒ ---
         Vector3 first = candidates.OrderByDescending(v => saliencyMap[v]).First();
         selected.Add(first);
         candidates.Remove(first);
 
-        // --- Step 2: Hybrid ºĞ»ê ¼±ÅÃ ---
+        // --- Step 2: Hybrid ë¶„ì‚° ì„ íƒ ---
         while (selected.Count < selectionCount)
         {
             Vector3 bestVertex = Vector3.zero;
@@ -176,7 +277,7 @@ public static class SaliencyUtils
             foreach (var candidate in candidates)
             {
                 float minDist = selected.Min(s => Vector3.Distance(candidate, s));
-                // ÇÏÀÌºê¸®µå Á¡¼ö (alpha Á¶Àı) -> alpha°¡ ³ôÀ»¼ö·Ï saliency¿¡ ´ëÇÑ ¿µÇâ Áõ°¡
+                // í•˜ì´ë¸Œë¦¬ë“œ ì ìˆ˜ (alpha ì¡°ì ˆ) -> alphaê°€ ë†’ì„ìˆ˜ë¡ saliencyì— ëŒ€í•œ ì˜í–¥ ì¦ê°€
                 float score = alpha * saliencyMap[candidate] + (1 - alpha) * (minDist / l);
 
                 if (score > bestScore)
@@ -196,65 +297,65 @@ public static class SaliencyUtils
 
         return selected;
     }
-    //-------------»õ·Î¿î ÃßÃµ ¾Ë°í¸®Áòµé-----------------------------
+    //-------------ìƒˆë¡œìš´ ì¶”ì²œ ì•Œê³ ë¦¬ì¦˜ë“¤-----------------------------
 
     public static List<Vector3> SelectVerticesWithAdaptiveNMS(List<Vector3> candidates, Dictionary<Vector3, float> saliencyMap, float objectSizeL, int targetCount)
     {
-        // 1. ÃÊ±â ¼³Á¤
-        // ¹°Ã¼ Å©±âÀÇ 20% °Å¸®ºÎÅÍ ½ÃÀÛ (³Ê¹« Á¼À¸¸é 0.1f µîÀ¸·Î ¼öÁ¤ °¡´É)
+        // 1. ì´ˆê¸° ì„¤ì •
+        // ë¬¼ì²´ í¬ê¸°ì˜ 20% ê±°ë¦¬ë¶€í„° ì‹œì‘ (ë„ˆë¬´ ì¢ìœ¼ë©´ 0.1f ë“±ìœ¼ë¡œ ìˆ˜ì • ê°€ëŠ¥)
         float currentRadiusRatio = 0.2f;
 
-        // ¹«ÇÑ ·çÇÁ ¹æÁö¿ë ÃÖ´ë ½Ãµµ È½¼ö
+        // ë¬´í•œ ë£¨í”„ ë°©ì§€ìš© ìµœëŒ€ ì‹œë„ íšŸìˆ˜
         int maxRetries = 20;
 
-        // ¿øº» µ¥ÀÌÅÍ¸¦ Saliency ³ôÀº ¼øÀ¸·Î ¹Ì¸® Á¤·Ä (¸Å¹ø Á¤·ÄÇÏÁö ¾Êµµ·Ï ÃÖÀûÈ­)
+        // ì›ë³¸ ë°ì´í„°ë¥¼ Saliency ë†’ì€ ìˆœìœ¼ë¡œ ë¯¸ë¦¬ ì •ë ¬ (ë§¤ë²ˆ ì •ë ¬í•˜ì§€ ì•Šë„ë¡ ìµœì í™”)
         var sortedCandidates = candidates.OrderByDescending(v => saliencyMap[v]).ToList();
 
         for (int i = 0; i < maxRetries; i++)
         {
             float currentRadius = objectSizeL * currentRadiusRatio;
 
-            // NMS ½ÇÇà
+            // NMS ì‹¤í–‰
             List<Vector3> result = RunNMS(sortedCandidates, currentRadius, targetCount);
 
-            // ¼º°ø Á¶°Ç: ¸ñÇ¥ °³¼ö¸¦ Ã¤¿üÀ¸¸é ¹İÈ¯
+            // ì„±ê³µ ì¡°ê±´: ëª©í‘œ ê°œìˆ˜ë¥¼ ì±„ì› ìœ¼ë©´ ë°˜í™˜
             if (result.Count >= targetCount)
             {
                 if (i > 0)
-                    Debug.Log($"[Saliency] {i}¹ø Àç½Ãµµ ³¡¿¡ ¹İ°æ {currentRadiusRatio:F3}L ¿¡¼­ {targetCount}°³ ¼±ÅÃ ¼º°ø.");
+                    Debug.Log($"[Saliency] {i}ë²ˆ ì¬ì‹œë„ ëì— ë°˜ê²½ {currentRadiusRatio:F3}L ì—ì„œ {targetCount}ê°œ ì„ íƒ ì„±ê³µ.");
 
                 return result;
             }
 
-            // ½ÇÆĞ ½Ã: ¹İ°æÀ» 80% ¼öÁØÀ¸·Î ÁÙ¿©¼­ ´Ù½Ã ½Ãµµ
+            // ì‹¤íŒ¨ ì‹œ: ë°˜ê²½ì„ 80% ìˆ˜ì¤€ìœ¼ë¡œ ì¤„ì—¬ì„œ ë‹¤ì‹œ ì‹œë„
             currentRadiusRatio *= 0.8f;
         }
 
-        // 2. [ÃÖÈÄÀÇ ¾ÈÀüÀåÄ¡] 
-        // ¾Æ¹«¸® ¹İ°æÀ» ÁÙ¿©µµ ¾È µÇ¸é(°ÅÀÇ ¾ø°ÚÁö¸¸), ±×³É Saliency 1µîºÎÅÍ 6µî±îÁö Â©¶ó¼­ ¸®ÅÏ
-        Debug.LogWarning($"[Saliency] ÀûÀıÇÑ ºĞ»ê Á¡À» Ã£Áö ¸øÇß½À´Ï´Ù. ´Ü¼øÈ÷ Á¡¼ö°¡ ³ôÀº »óÀ§ {targetCount}°³¸¦ ¹İÈ¯ÇÕ´Ï´Ù.");
+        // 2. [ìµœí›„ì˜ ì•ˆì „ì¥ì¹˜] 
+        // ì•„ë¬´ë¦¬ ë°˜ê²½ì„ ì¤„ì—¬ë„ ì•ˆ ë˜ë©´(ê±°ì˜ ì—†ê² ì§€ë§Œ), ê·¸ëƒ¥ Saliency 1ë“±ë¶€í„° 6ë“±ê¹Œì§€ ì§¤ë¼ì„œ ë¦¬í„´
+        Debug.LogWarning($"[Saliency] ì ì ˆí•œ ë¶„ì‚° ì ì„ ì°¾ì§€ ëª»í–ˆìŠµë‹ˆë‹¤. ë‹¨ìˆœíˆ ì ìˆ˜ê°€ ë†’ì€ ìƒìœ„ {targetCount}ê°œë¥¼ ë°˜í™˜í•©ë‹ˆë‹¤.");
         return sortedCandidates.Take(targetCount).ToList();
     }
 
     /// <summary>
-    /// ½ÇÁ¦ NMS ·ÎÁ÷À» ¼öÇàÇÏ´Â ³»ºÎ ÇÔ¼ö
+    /// ì‹¤ì œ NMS ë¡œì§ì„ ìˆ˜í–‰í•˜ëŠ” ë‚´ë¶€ í•¨ìˆ˜
     /// </summary>
     private static List<Vector3> RunNMS(List<Vector3> sortedCandidates, float radius, int targetCount)
     {
         List<Vector3> selected = new List<Vector3>();
-        // ¿øº» ¸®½ºÆ®¸¦ ÈÑ¼ÕÇÏÁö ¾Ê±â À§ÇØ º¹»çÇØ¼­ »ç¿ë (°Ë»ç ´ë»óµé)
+        // ì›ë³¸ ë¦¬ìŠ¤íŠ¸ë¥¼ í›¼ì†í•˜ì§€ ì•Šê¸° ìœ„í•´ ë³µì‚¬í•´ì„œ ì‚¬ìš© (ê²€ì‚¬ ëŒ€ìƒë“¤)
         List<Vector3> pool = new List<Vector3>(sortedCandidates);
 
-        float sqrRadius = radius * radius; // °Å¸® ºñ±³ ÃÖÀûÈ­ (Sqrt ¿¬»ê ¹æÁö)
+        float sqrRadius = radius * radius; // ê±°ë¦¬ ë¹„êµ ìµœì í™” (Sqrt ì—°ì‚° ë°©ì§€)
 
         while (selected.Count < targetCount && pool.Count > 0)
         {
-            // 1. ÇöÀç Ç®¿¡¼­ Saliency°¡ °¡Àå ³ôÀº Á¡ ¼±ÅÃ
+            // 1. í˜„ì¬ í’€ì—ì„œ Saliencyê°€ ê°€ì¥ ë†’ì€ ì  ì„ íƒ
             Vector3 best = pool[0];
             selected.Add(best);
 
-            // 2. ¼±ÅÃµÈ Á¡°ú ±× ÁÖº¯ ¹İ°æ(radius) ³»¿¡ ÀÖ´Â Á¡µéÀ» ¸ğµÎ Á¦°Å (¾ïÁ¦)
-            // °Å¸® ºñ±³ ½Ã Vector3.Distance ´ë½Å sqrMagnitude »ç¿ëÀÌ ´õ ºü¸§
+            // 2. ì„ íƒëœ ì ê³¼ ê·¸ ì£¼ë³€ ë°˜ê²½(radius) ë‚´ì— ìˆëŠ” ì ë“¤ì„ ëª¨ë‘ ì œê±° (ì–µì œ)
+            // ê±°ë¦¬ ë¹„êµ ì‹œ Vector3.Distance ëŒ€ì‹  sqrMagnitude ì‚¬ìš©ì´ ë” ë¹ ë¦„
             pool.RemoveAll(candidate => (candidate - best).sqrMagnitude < sqrRadius);
         }
 
@@ -266,19 +367,19 @@ public static class SaliencyUtils
     {
         List<Vector3> selected = new List<Vector3>();
 
-        // ¿øº» ¸®½ºÆ® º¸È£¸¦ À§ÇØ º¹»çº» »ç¿ë
+        // ì›ë³¸ ë¦¬ìŠ¤íŠ¸ ë³´í˜¸ë¥¼ ìœ„í•´ ë³µì‚¬ë³¸ ì‚¬ìš©
         List<Vector3> pool = new List<Vector3>(candidates);
 
         if (pool.Count <= selectionCount)
-            return pool; // ÈÄº¸°¡ ¸ñÇ¥º¸´Ù ÀûÀ¸¸é ±×³É ´Ù ¹İÈ¯
+            return pool; // í›„ë³´ê°€ ëª©í‘œë³´ë‹¤ ì ìœ¼ë©´ ê·¸ëƒ¥ ë‹¤ ë°˜í™˜
 
-        // --- Step 1: Ã¹ ¹øÂ° Á¡Àº ¹«Á¶°Ç Saliency 1µî ¼±ÅÃ ---
-        // (±âÁØÁ¡ÀÌ È®½ÇÇØ¾ß ÀÌÈÄ ºĞ»êÀÌ Àß µË´Ï´Ù)
+        // --- Step 1: ì²« ë²ˆì§¸ ì ì€ ë¬´ì¡°ê±´ Saliency 1ë“± ì„ íƒ ---
+        // (ê¸°ì¤€ì ì´ í™•ì‹¤í•´ì•¼ ì´í›„ ë¶„ì‚°ì´ ì˜ ë©ë‹ˆë‹¤)
         Vector3 first = pool.OrderByDescending(v => saliencyMap[v]).First();
         selected.Add(first);
         pool.Remove(first);
 
-        // --- Step 2: ¸ñÇ¥ °³¼ö(6°³) Ã¤¿ï ¶§±îÁö ¹İº¹ ---
+        // --- Step 2: ëª©í‘œ ê°œìˆ˜(6ê°œ) ì±„ìš¸ ë•Œê¹Œì§€ ë°˜ë³µ ---
         while (selected.Count < selectionCount && pool.Count > 0)
         {
             Vector3 bestCandidate = Vector3.zero;
@@ -286,7 +387,7 @@ public static class SaliencyUtils
 
             foreach (var candidate in pool)
             {
-                // 1. ÀÌ¹Ì ¼±ÅÃµÈ Á¡µé°úÀÇ °Å¸® Áß 'ÃÖ¼Ò °Å¸®' °è»ê (°¡Àå °¡±î¿î ¼±ÅÃµÈ Á¡°úÀÇ °Å¸®)
+                // 1. ì´ë¯¸ ì„ íƒëœ ì ë“¤ê³¼ì˜ ê±°ë¦¬ ì¤‘ 'ìµœì†Œ ê±°ë¦¬' ê³„ì‚° (ê°€ì¥ ê°€ê¹Œìš´ ì„ íƒëœ ì ê³¼ì˜ ê±°ë¦¬)
                 float minDistanceToSelected = float.MaxValue;
                 foreach (var s in selected)
                 {
@@ -294,14 +395,14 @@ public static class SaliencyUtils
                     if (d < minDistanceToSelected) minDistanceToSelected = d;
                 }
 
-                // 2. Á¡¼ö °è»ê (ÇÙ½É: °ö¼À ¹æ½Ä)
-                // Saliency(Áß¿äµµ) x NormalizedDistance(Èñ¼Ò¼º)
-                // °Å¸®¸¦ l(ÀüÃ¼Å©±â)·Î ³ª´©¾î 0~1 »çÀÌ·Î Á¤±ÔÈ­ -> ½ºÄÉÀÏ ¿µÇâ Á¦°Å
+                // 2. ì ìˆ˜ ê³„ì‚° (í•µì‹¬: ê³±ì…ˆ ë°©ì‹)
+                // Saliency(ì¤‘ìš”ë„) x NormalizedDistance(í¬ì†Œì„±)
+                // ê±°ë¦¬ë¥¼ l(ì „ì²´í¬ê¸°)ë¡œ ë‚˜ëˆ„ì–´ 0~1 ì‚¬ì´ë¡œ ì •ê·œí™” -> ìŠ¤ì¼€ì¼ ì˜í–¥ ì œê±°
                 float normalizedDist = minDistanceToSelected / l;
                 float saliency = saliencyMap[candidate];
 
-                // *°Å¸® °¡ÁßÄ¡¸¦ ´õ ÁÖ°í ½ÍÀ¸¸é Math.Pow(normalizedDist, 0.5f) µîÀ¸·Î Á¶Àı °¡´ÉÇÏÁö¸¸,
-                // ±âº» °ö¼ÀÀÌ °¡Àå ¹ë·±½º°¡ ÁÁ½À´Ï´Ù.
+                // *ê±°ë¦¬ ê°€ì¤‘ì¹˜ë¥¼ ë” ì£¼ê³  ì‹¶ìœ¼ë©´ Math.Pow(normalizedDist, 0.5f) ë“±ìœ¼ë¡œ ì¡°ì ˆ ê°€ëŠ¥í•˜ì§€ë§Œ,
+                // ê¸°ë³¸ ê³±ì…ˆì´ ê°€ì¥ ë°¸ëŸ°ìŠ¤ê°€ ì¢‹ìŠµë‹ˆë‹¤.
                 float score = saliency * normalizedDist;
 
                 if (score > bestScore)
@@ -311,7 +412,7 @@ public static class SaliencyUtils
                 }
             }
 
-            // ÀÌ¹ø ¶ó¿îµå 1µîÀ» ¼±ÅÃ ¸ñ·Ï¿¡ Ãß°¡ÇÏ°í ÈÄº¸±º¿¡¼­ Á¦°Å
+            // ì´ë²ˆ ë¼ìš´ë“œ 1ë“±ì„ ì„ íƒ ëª©ë¡ì— ì¶”ê°€í•˜ê³  í›„ë³´êµ°ì—ì„œ ì œê±°
             selected.Add(bestCandidate);
             pool.Remove(bestCandidate);
         }
@@ -334,7 +435,7 @@ public static class SaliencyUtils
             r.material.color = color;
         }
     }
-    //Áßº¹ ¾ø¾Ö±â (¼öÁ¤ ÇÊ¿ä¼º? -> ÃßÈÄ È®ÀÎ ¿¹Á¤)
+    //ì¤‘ë³µ ì—†ì• ê¸° (ìˆ˜ì • í•„ìš”ì„±? -> ì¶”í›„ í™•ì¸ ì˜ˆì •)
     public static Vector3[] GetUniqueWorldVertices(MeshFilter meshFilter, int precision = 1000)
     {
         return meshFilter.mesh.vertices
@@ -348,7 +449,7 @@ public static class SaliencyUtils
             .ToArray();
     }
    
-    // ÇÊÅÍ¿¡¼­ »ç¿ëÁß
+    // í•„í„°ì—ì„œ ì‚¬ìš©ì¤‘
     private static Vector3 GetVertexNormal(MeshFilter meshFilter, Vector3 vertexPosition)
     {
         Vector3[] positions = meshFilter.mesh.vertices;
@@ -363,10 +464,10 @@ public static class SaliencyUtils
         return Vector3.zero;
     }
 
-    //----------------------------------neighbor Å½»ö ¼öÁ¤ Áß-----------------------------------------------
+    //----------------------------------neighbor íƒìƒ‰ ìˆ˜ì • ì¤‘-----------------------------------------------
 
     /// <summary>
-    /// Áßº¹ À§Ä¡¸¦ °¡Áø vertex indexµéÀ» Æ÷ÇÔÇÏ¿© topology neighbor È®Àå (depth Á¦ÇÑ Àû¿ë)
+    /// ì¤‘ë³µ ìœ„ì¹˜ë¥¼ ê°€ì§„ vertex indexë“¤ì„ í¬í•¨í•˜ì—¬ topology neighbor í™•ì¥ (depth ì œí•œ ì ìš©)
     /// </summary>
     public static HashSet<int> FindTopologyNeighbors(int startIndex, Dictionary<int, HashSet<int>> adjacency, int maxDepth, Mesh mesh, Transform transform)
     {
@@ -386,7 +487,7 @@ public static class SaliencyUtils
             }
         }
 
-        // Áßº¹ À§Ä¡ Á¤Á¡ º¸Á¤ Æ÷ÇÔ
+        // ì¤‘ë³µ ìœ„ì¹˜ ì •ì  ë³´ì • í¬í•¨
         Dictionary<Vector3, List<int>> positionMap = GetOrBuildPositionToIndicesMap(mesh, transform);
         HashSet<int> expanded = new HashSet<int>(visited);
         foreach (int idx in visited)
@@ -405,7 +506,7 @@ public static class SaliencyUtils
 
 
     /// <summary>
-    /// Euclidean °Å¸® ±â¹İ ÀÌ¿ô Å½»ö (¹İ°æ ³» Á¤Á¡ ¹İÈ¯)
+    /// Euclidean ê±°ë¦¬ ê¸°ë°˜ ì´ì›ƒ íƒìƒ‰ (ë°˜ê²½ ë‚´ ì •ì  ë°˜í™˜)
     /// </summary>
     public static HashSet<int> FindEuclideanNeighbors(Vector3[] worldPositions, int centerIndex, float radius)
     {
@@ -423,7 +524,7 @@ public static class SaliencyUtils
     }
 
     /// <summary>
-    /// Geodesic ±â¹İ ÀÌ¿ô Å½»ö (Dijkstra ¹æ½Ä, °Å¸® Á¦ÇÑ) -> ¾ÆÁ÷Àº ¹Ì»ç¿ë
+    /// Geodesic ê¸°ë°˜ ì´ì›ƒ íƒìƒ‰ (Dijkstra ë°©ì‹, ê±°ë¦¬ ì œí•œ) -> ì•„ì§ì€ ë¯¸ì‚¬ìš©
     /// </summary>
     public static HashSet<int> FindGeodesicNeighbors(int startIndex, Mesh mesh, Transform transform, float maxDistance)
     {
@@ -463,7 +564,7 @@ public static class SaliencyUtils
         return result;
     }
 
-    // ±âÁ¸ adjacency »ı¼º ÇÔ¼ö ±×´ë·Î À¯Áö
+    // ê¸°ì¡´ adjacency ìƒì„± í•¨ìˆ˜ ê·¸ëŒ€ë¡œ ìœ ì§€
     public static Dictionary<int, HashSet<int>> BuildAdjacency(Mesh mesh)
     {
         var adjacency = new Dictionary<int, HashSet<int>>();
@@ -492,7 +593,7 @@ public static class SaliencyUtils
 
 
 
-    //±âÁ¸¿¡ ¼öÁ¤ÁßÀÌ´ø neighbor Å½»ö ¹æ¹ıµé (»ç¿ë ¿©ºÎ È®ÀÎ ¿¹Á¤)
+    //ê¸°ì¡´ì— ìˆ˜ì •ì¤‘ì´ë˜ neighbor íƒìƒ‰ ë°©ë²•ë“¤ (ì‚¬ìš© ì—¬ë¶€ í™•ì¸ ì˜ˆì •)
 
     private static Dictionary<Mesh, Dictionary<int, HashSet<int>>> _adjacencyCache = new();
     private static Dictionary<Mesh, Dictionary<Vector3, List<int>>> _positionMapCache = new();
@@ -510,7 +611,7 @@ public static class SaliencyUtils
    
 
     /// <summary>
-    /// worldPos¿¡ °¡Àå °¡±î¿î Á¤Á¡ index ¹İÈ¯
+    /// worldPosì— ê°€ì¥ ê°€ê¹Œìš´ ì •ì  index ë°˜í™˜
     /// </summary>
     public static int FindNearestVertexIndex(Vector3 worldPos, Vector3[] worldVertices)
     {
@@ -529,7 +630,7 @@ public static class SaliencyUtils
     }
 
     /// <summary>
-    /// µ¿ÀÏ world positionÀ» °øÀ¯ÇÏ´Â vertex index ¸®½ºÆ® »ı¼º
+    /// ë™ì¼ world positionì„ ê³µìœ í•˜ëŠ” vertex index ë¦¬ìŠ¤íŠ¸ ìƒì„±
     /// </summary>
     public static Dictionary<Vector3, List<int>> GetOrBuildPositionToIndicesMap(Mesh mesh, Transform transform)
     {
@@ -611,7 +712,7 @@ public class PriorityQueue<T>
 //    Vector3[] meshVertices = mesh.vertices;
 //    Vector3[] worldVertices = meshVertices.Select(v => meshFilter.transform.TransformPoint(v)).ToArray();
 
-//    // [1] dot ±â¹İ ÇÊÅÍ¸µ ÈÄº¸ µî·Ï
+//    // [1] dot ê¸°ë°˜ í•„í„°ë§ í›„ë³´ ë“±ë¡
 //    HashSet<Vector3> dotSilhouetteVertices = new();
 //    foreach (var v in visibleVertices)
 //    {
@@ -622,7 +723,7 @@ public class PriorityQueue<T>
 //            dotSilhouetteVertices.Add(v);
 //    }
 
-//    // [2] geometry ±â¹İ edge ½Ç·ç¿§ Á¤Á¡ Å½»ö
+//    // [2] geometry ê¸°ë°˜ edge ì‹¤ë£¨ì—£ ì •ì  íƒìƒ‰
 //    HashSet<int> edgeSilhouetteIndices = new();
 //    int[] triangles = mesh.triangles;
 //    Vector3[] triangleNormals = new Vector3[triangles.Length / 3];
@@ -679,7 +780,7 @@ public class PriorityQueue<T>
 //        edgeSilhouettePositions.Add(worldVertices[i]);
 //    }
 
-//    // [3] ÃÖÁ¾ Á¦°Å
+//    // [3] ìµœì¢… ì œê±°
 //    foreach (var v in visibleVertices)
 //    {
 //        bool isDotSilhouette = dotSilhouetteVertices.Contains(v);

@@ -88,6 +88,14 @@
             "cfsDataPath": "CfSCNN/Statue_v1_L2_Venus_saliency",
             "texDataPath": "TexMesh/Statue_v1_L2_Venus_vertex_saliency"
         },
+        {
+            "id": "TheRock",
+            "displayName": "TheRock (Low poly)",
+            "isBuiltIn": true,
+            "meshPath": "Meshes/TheRock/TheRock",
+            "cfsDataPath": "",
+            "texDataPath": ""
+        },
 	{
 	    "id": "MyExternalModel",
 	    "displayName": "Test External OBJ",

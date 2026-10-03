@@ -1,21 +1,29 @@
-using System.Collections.Generic;
-using UnityEngine; // [Áß¿ä] Vector3¸¦ ¾²·Á¸é ÀÌ°Ô ²À ÇÊ¿äÇÕ´Ï´Ù!
+ï»¿using System.Collections.Generic;
+using UnityEngine; // [ì¤‘ìš”] Vector3ë¥¼ ì“°ë ¤ë©´ ì´ê²Œ ê¼­ í•„ìš”í•©ë‹ˆë‹¤!
 
 [System.Serializable]
 public class MeshEntry
 {
-    public string id;           // °íÀ¯ ID
-    public string displayName;  // ÀÌ¸§
-    public bool isBuiltIn;      // ³»Àå ¿©ºÎ
+    public string id;           // ê³ ìœ  ID
+    public string displayName;  // ì´ë¦„
+    public bool isBuiltIn;      // ë‚´ì¥ ì—¬ë¶€
 
-    // ¡å¡å¡å [¿©±â¿¡ Ãß°¡] Å©±â¿Í È¸Àü º¯¼ö ¡å¡å¡å
-    public Vector3 initialScale = Vector3.one;      // ±âº»°ª (1,1,1)
-    public Vector3 initialRotation = Vector3.zero;  // ±âº»°ª (0,0,0)
-    // ¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã
+    // â–¼â–¼â–¼ [ì—¬ê¸°ì— ì¶”ê°€] í¬ê¸°ì™€ íšŒì „ ë³€ìˆ˜ â–¼â–¼â–¼
+    public Vector3 initialScale = Vector3.one;      // ê¸°ë³¸ê°’ (1,1,1)
+    public Vector3 initialRotation = Vector3.zero;  // ê¸°ë³¸ê°’ (0,0,0)
+    // â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²
 
-    public string meshPath;     // ¸ğµ¨ °æ·Î
-    public string cfsDataPath;  // µ¥ÀÌÅÍ °æ·Î 1
-    public string texDataPath;  // µ¥ÀÌÅÍ °æ·Î 2
+    public string meshPath;     // ëª¨ë¸ ê²½ë¡œ
+    public string cfsDataPath;  // ë°ì´í„° ê²½ë¡œ 1
+    public string texDataPath;  // ë°ì´í„° ê²½ë¡œ 2
+
+    // 4D í…ìŠ¤ì²˜(ì´ë¯¸ì§€ ì‹œí€€ìŠ¤). ë¹„ì›Œ ë‘ë©´ Resources/4D_Textures/<id> í´ë”ê°€ ìˆì„ ë•Œ ìë™ìœ¼ë¡œ ì‚¬ìš©.
+    // Resources ê¸°ì¤€ ê²½ë¡œ ë˜ëŠ” ë””ìŠ¤í¬ ì ˆëŒ€ ê²½ë¡œ. ìì„¸í•œ ê·œì¹™ì€ TextureSequenceAnimator ì°¸ê³ .
+    public string animatedTexturePath;
+    public float animatedTextureFps;   // 0ì´ë©´ ê¸°ë³¸ê°’(24fps)
+
+    // íŒ¨ì¹˜ ì„  ëª¨ë“œì—ì„œ ì´ ê°ë„(ë„)ë³´ë‹¤ í¬ê²Œ êº¾ì¸ ëª¨ì„œë¦¬ë¥¼ ê·¸ë¦¼. 0ì´ë©´ ëª¨ì„œë¦¬ ê°ë„ ë¶„í¬ë¡œ ìë™ ê²°ì •.
+    public float patchCreaseAngle;
 }
 
 [System.Serializable]

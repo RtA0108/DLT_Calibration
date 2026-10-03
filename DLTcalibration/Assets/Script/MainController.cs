@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.IO;
 
 public class MainController : MonoBehaviour
@@ -10,12 +10,13 @@ public class MainController : MonoBehaviour
 
     [Header("Target Info")]
     public GameObject targetMesh;
+    [System.NonSerialized] public MeshEntry currentEntry; // ì§€ê¸ˆ ë¶ˆëŸ¬ì˜¨ ëª¨ë¸ì˜ ë¼ì´ë¸ŒëŸ¬ë¦¬ í•­ëª© (ê²½ë¡œë¡œ ì§ì ‘ ë¶ˆëŸ¬ì˜¤ë©´ ì„ì‹œ í•­ëª©)
 
     [SerializeField] private string _currentObjPath;
-    [SerializeField] private string _currentCfsPath; // »ç¿ëÀÚ°¡ ÀÔ·ÂÇÑ CfS °æ·Î (¾øÀ» ¼ö ÀÖÀ½)
-    [SerializeField] private string _currentTexPath; // ÅØ½ºÃ³ ÀÌ¹ÌÁö °æ·Î
+    [SerializeField] private string _currentCfsPath; // ì‚¬ìš©ìê°€ ì…ë ¥í•œ CfS ê²½ë¡œ (ì—†ì„ ìˆ˜ ìˆìŒ)
+    [SerializeField] private string _currentTexPath; // í…ìŠ¤ì²˜ ì´ë¯¸ì§€ ê²½ë¡œ
 
-    // ÀÚµ¿ »ı¼ºµÈ °á°ú ÆÄÀÏ °æ·ÎµéÀ» ÀúÀåÇÒ º¯¼ö
+    // ìë™ ìƒì„±ëœ ê²°ê³¼ íŒŒì¼ ê²½ë¡œë“¤ì„ ì €ì¥í•  ë³€ìˆ˜
     [SerializeField] private string _generatedCfsPath;
     [SerializeField] private string _generatedTexSaliencyPath;
 
@@ -23,10 +24,24 @@ public class MainController : MonoBehaviour
     public ProjectionMappingCalibrator currentCalibrator;
     public SaliencyMapVisualizer currentVisualizer;
 
-    // »óÅÂ º¯¼ö
+    [Header("Recommendation")]
+    [Range(6, VertexClickTest.MaxPoints)]
+    public int recommendedVertexCount = 6; // ì¶”ì²œì  ê°œìˆ˜. ì‹¤í–‰ ì¤‘ì—ëŠ” -/= í‚¤ë¡œ ì¡°ì ˆ
+
+    [Header("Load")]
+    public bool autoFitOnLoad = true;                      // ëª¨ë¸ì„ ë¶ˆëŸ¬ì˜¬ ë•Œ í”„ë¡œì í„° í™”ë©´ì— ë§ê²Œ í¬ê¸° ì¡°ì ˆ
+    [Range(0.1f, 0.9f)] public float autoFitFraction = 0.5f; // í”„ë¡œì í„° í™”ë©´ì—ì„œ ëª¨ë¸ì´ ì°¨ì§€í•  ë¹„ìœ¨
+
+    // ìƒíƒœ ë³€ìˆ˜
     public bool IsCalibrationActive = false;
     public bool IsSaliencyActive = false;
     public bool IsRecommendationActive = false;
+
+    // ì§€ê¸ˆ ëª¨ë¸ì˜ saliency ë°±ê·¸ë¼ìš´ë“œ ê³„ì‚° (ê²°ê³¼ íŒŒì¼ì´ ì—†ëŠ” ìƒˆ ëª¨ë¸, ë˜ëŠ” F5).
+    // ê³„ì‚° ì¤‘ì—ëŠ” ì¶”ì²œì ê³¼ íˆíŠ¸ë§µì„ ë‚´ë ¤ ë‘ê³ , ëë‚˜ë©´ ì¼œì ¸ ìˆë˜ ê²ƒì„ ìë™ìœ¼ë¡œ ë‹¤ì‹œ ê³„ì‚°í•œë‹¤.
+    private SaliencyJob saliencyJob;
+    public SaliencyJob CurrentSaliencyJob => saliencyJob;
+    public bool IsSaliencyPending => saliencyJob != null && !saliencyJob.IsDone;
 
     private void Awake()
     {
@@ -42,32 +57,102 @@ public class MainController : MonoBehaviour
     void Update()
     {
         if (currentCalibrator == null || currentVisualizer == null) return;
+        if (HotkeyGuard.Blocked) return; // ì…ë ¥ì¹¸ì— ê¸€ìë¥¼ ì¹˜ëŠ” ì¤‘
 
         if (Input.GetKeyDown(KeyCode.Alpha1)) ToggleCalibration();
         if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleSaliency();
         if (Input.GetKeyDown(KeyCode.Alpha3)) ToggleRecommendation();
 
-        // (ºñ»ó¿ë) F5Å°·Î ¼öµ¿ °è»ê °¡´É
-        if (Input.GetKeyDown(KeyCode.F5)) StartCoroutine(ManualRunSaliency());
+        // (ë¹„ìƒìš©) F5í‚¤ë¡œ ìˆ˜ë™ ê³„ì‚° ê°€ëŠ¥
+        if (Input.GetKeyDown(KeyCode.F5)) ManualRunSaliency();
+
+        // '-' / '=' í‚¤: ì¶”ì²œì  ê°œìˆ˜ ì¤„ì´ê¸°/ëŠ˜ë¦¬ê¸°
+        if (Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus)) SetRecommendedVertexCount(recommendedVertexCount - 1);
+        if (Input.GetKeyDown(KeyCode.Equals) || Input.GetKeyDown(KeyCode.KeypadPlus)) SetRecommendedVertexCount(recommendedVertexCount + 1);
+    }
+
+    // ì¶”ì²œì  ê°œìˆ˜ë¥¼ ë°”ê¾¸ê³ , ì¶”ì²œì ì´ í‘œì‹œ ì¤‘ì´ë©´ ë°”ë¡œ ë‹¤ì‹œ ê³ ë¥¸ë‹¤.
+    // (DLT ìµœì†Œ ì¡°ê±´ 6ê°œ ~ ëŒ€ì‘ì  ìŠ¬ë¡¯ ìˆ˜ê¹Œì§€)
+    public void SetRecommendedVertexCount(int count)
+    {
+        recommendedVertexCount = Mathf.Clamp(count, 6, VertexClickTest.MaxPoints);
+        if (currentCalibrator == null) return;
+
+        currentCalibrator.recommendedVertexCount = recommendedVertexCount;
+        if (IsCalibrationActive && IsRecommendationActive) currentCalibrator.Reselect();
+        Debug.Log($"[Recommend] ì¶”ì²œì  ê°œìˆ˜: {recommendedVertexCount}");
+    }
+
+    // ëª¨ë¸ì´ í”„ë¡œì í„° í™”ë©´ì—ì„œ autoFitFractionë§Œí¼ ì°¨ì§€í•˜ë„ë¡ í¬ê¸°ë¥¼ ë§ì¶˜ë‹¤.
+    // DLT ê²°ê³¼ëŠ” ëª¨ë¸ í¬ê¸°ì™€ ë¬´ê´€í•˜ì§€ë§Œ, ë„ˆë¬´ ì‘ìœ¼ë©´ ì¶”ì²œì ê³¼ ë§ˆì»¤ê°€ ê²¹ì³ì„œ ë§ì¶œ ìˆ˜ ì—†ë‹¤.
+    private void FitToProjectorView(GameObject model, Camera cam)
+    {
+        if (model == null || cam == null) return;
+
+        for (int iter = 0; iter < 3; iter++) // ì›ê·¼ ë•Œë¬¸ì— í•œ ë²ˆì— ë”± ë§ì§€ ì•Šì•„ì„œ ëª‡ ë²ˆ ë°˜ë³µ
+        {
+            if (!TryGetScreenRect(model, cam, out Rect rect)) break;
+            float fraction = Mathf.Max(rect.width / cam.pixelWidth, rect.height / cam.pixelHeight);
+            if (fraction <= 0f) break;
+            model.transform.localScale *= autoFitFraction / fraction;
+        }
+
+        float scale = model.transform.localScale.x;
+        if (UIManager.Instance != null) UIManager.Instance.SetScaleWithoutNotify(scale);
+
+        if (TryGetScreenRect(model, cam, out Rect fitted) &&
+            (fitted.xMin < 0 || fitted.yMin < 0 || fitted.xMax > cam.pixelWidth || fitted.yMax > cam.pixelHeight))
+            Debug.LogWarning("[Load] ëª¨ë¸ ì¼ë¶€ê°€ í”„ë¡œì í„° í™”ë©´ ë°–ì— ìˆìŠµë‹ˆë‹¤. íšŒì „ ìŠ¬ë¼ì´ë”ë‚˜ ì¹´ë©”ë¼ ìœ„ì¹˜ë¥¼ í™•ì¸í•˜ì„¸ìš”.");
+        Debug.Log($"[Load] í”„ë¡œì í„° í™”ë©´ì— ë§ì¶° ìŠ¤ì¼€ì¼ {scale:F2}ë¡œ ì¡°ì •í–ˆìŠµë‹ˆë‹¤.");
+    }
+
+    // ëª¨ë¸(ê°™ì€ ë ˆì´ì–´ì˜ ë Œë”ëŸ¬ë§Œ)ì˜ ë°”ìš´ë”© ë°•ìŠ¤ë¥¼ í”„ë¡œì í„° í™”ë©´ì— íˆ¬ì˜í•œ ì‚¬ê°í˜•
+    private static bool TryGetScreenRect(GameObject model, Camera cam, out Rect rect)
+    {
+        rect = default;
+        bool hasBounds = false;
+        Bounds b = default;
+        foreach (Renderer r in model.GetComponentsInChildren<Renderer>())
+        {
+            if (r.gameObject.layer != model.layer) continue;
+            if (!hasBounds) { b = r.bounds; hasBounds = true; }
+            else b.Encapsulate(r.bounds);
+        }
+        if (!hasBounds) return false;
+
+        Vector2 min = new Vector2(float.MaxValue, float.MaxValue), max = new Vector2(float.MinValue, float.MinValue);
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 corner = new Vector3(
+                (i & 1) == 0 ? b.min.x : b.max.x,
+                (i & 2) == 0 ? b.min.y : b.max.y,
+                (i & 4) == 0 ? b.min.z : b.max.z);
+            Vector3 s = cam.WorldToScreenPoint(corner);
+            if (s.z <= 0f) return false; // ì¹´ë©”ë¼ ë’¤
+            min = Vector2.Min(min, s);
+            max = Vector2.Max(max, s);
+        }
+        rect = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        return true;
     }
 
     // ==================================================================================
-    // ¡Ú [ÇÙ½É] ¸Ş½¬ µî·Ï & ÀÚµ¿ °è»ê & ÃÊ±âÈ­ ÅëÇÕ ÇÔ¼ö
+    // â˜… [í•µì‹¬] ë©”ì‰¬ ë“±ë¡ & ìë™ ê³„ì‚° & ì´ˆê¸°í™” í†µí•© í•¨ìˆ˜
     // ==================================================================================
-    // RegisterNewMesh ÇÔ¼ö ºÎºĞ¸¸ ±³Ã¼ÇÏ¼¼¿ä
+    // RegisterNewMesh í•¨ìˆ˜ ë¶€ë¶„ë§Œ êµì²´í•˜ì„¸ìš”
 
     //public void RegisterNewMesh(GameObject newMesh, string objPath, string inputCfsPath, string texPath)
     //{
     //    // =========================================================
-    //    // ¡Ú [±ä±Ş ¼öÁ¤] ¸®¼Ò½º °æ·Î -> ½ÇÁ¦ Àı´ë °æ·Î·Î º¯È¯
+    //    // â˜… [ê¸´ê¸‰ ìˆ˜ì •] ë¦¬ì†ŒìŠ¤ ê²½ë¡œ -> ì‹¤ì œ ì ˆëŒ€ ê²½ë¡œë¡œ ë³€í™˜
     //    // =========================================================
-    //    // ÅØ½ºÃ³ °æ·Î°¡ ÀÖ°í, Àı´ë °æ·Î(C:\...)°¡ ¾Æ´Ï¶ó¸é ¸®¼Ò½º °æ·Î·Î °£ÁÖ
+    //    // í…ìŠ¤ì²˜ ê²½ë¡œê°€ ìˆê³ , ì ˆëŒ€ ê²½ë¡œ(C:\...)ê°€ ì•„ë‹ˆë¼ë©´ ë¦¬ì†ŒìŠ¤ ê²½ë¡œë¡œ ê°„ì£¼
     //    if (!string.IsNullOrEmpty(texPath) && !Path.IsPathRooted(texPath))
     //    {
-    //        // 1. Resources Æú´õÀÇ ½ÇÁ¦ À§Ä¡ Ã£±â
+    //        // 1. Resources í´ë”ì˜ ì‹¤ì œ ìœ„ì¹˜ ì°¾ê¸°
     //        string resourcesPath = Path.Combine(Application.dataPath, "Resources");
 
-    //        // 2. ÅØ½ºÃ³ È®ÀåÀÚ Ã£±â (jpg, png µî ½Ãµµ)
+    //        // 2. í…ìŠ¤ì²˜ í™•ì¥ì ì°¾ê¸° (jpg, png ë“± ì‹œë„)
     //        string fullPath = Path.Combine(resourcesPath, texPath);
 
     //        if (File.Exists(fullPath + ".jpg")) texPath = fullPath + ".jpg";
@@ -75,10 +160,10 @@ public class MainController : MonoBehaviour
     //        else if (File.Exists(fullPath + ".jpeg")) texPath = fullPath + ".jpeg";
     //        else if (File.Exists(fullPath + ".tga")) texPath = fullPath + ".tga";
 
-    //        Debug.Log($"[Path Fix] ¸®¼Ò½º °æ·Î º¯È¯µÊ: {texPath}");
+    //        Debug.Log($"[Path Fix] ë¦¬ì†ŒìŠ¤ ê²½ë¡œ ë³€í™˜ë¨: {texPath}");
     //    }
     //    // 0. CCTV
-    //    Debug.LogWarning("================ [RegisterNewMesh Áø´Ü] ================");
+    //    Debug.LogWarning("================ [RegisterNewMesh ì§„ë‹¨] ================");
     //    Debug.Log($"1. Obj: {objPath}");
     //    Debug.Log($"2. Tex: {texPath}");
 
@@ -90,19 +175,19 @@ public class MainController : MonoBehaviour
     //    string meshDir = Path.GetDirectoryName(objPath);
     //    string meshName = Path.GetFileNameWithoutExtension(objPath);
 
-    //    // ¡Ú [¼öÁ¤ 1] ¿ø·¡ ÀÌ¸§ ±ÔÄ¢ÀÎ "_saliency.txt"·Î ¿ø»ó º¹±¸!
+    //    // â˜… [ìˆ˜ì • 1] ì›ë˜ ì´ë¦„ ê·œì¹™ì¸ "_saliency.txt"ë¡œ ì›ìƒ ë³µêµ¬!
     //    string expectedCfsFile = Path.Combine(meshDir, $"{meshName}_saliency.txt");
 
-    //    // TexSaliency ±ÔÄ¢
+    //    // TexSaliency ê·œì¹™
     //    string expectedTexFile = Path.Combine(meshDir, $"{meshName}_vertex_saliency.txt");
 
-    //    // ÆÄÀÏ Á¸Àç ¿©ºÎ È®ÀÎ
+    //    // íŒŒì¼ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
     //    bool cfsExists = File.Exists(expectedCfsFile);
     //    bool texExists = File.Exists(expectedTexFile);
-    //    Debug.Log($"3. ÆÄÀÏ È®ÀÎ -> CfS({cfsExists}): {Path.GetFileName(expectedCfsFile)}");
+    //    Debug.Log($"3. íŒŒì¼ í™•ì¸ -> CfS({cfsExists}): {Path.GetFileName(expectedCfsFile)}");
     //    Debug.Log($"            -> Tex({texExists}): {Path.GetFileName(expectedTexFile)}");
 
-    //    // °è»ê ÇÊ¿ä ¿©ºÎ (ÀÔ·Â °æ·Îµµ ¾ø°í, ¿¹»ó ÆÄÀÏµµ ¾øÀ¸¸é °è»ê)
+    //    // ê³„ì‚° í•„ìš” ì—¬ë¶€ (ì…ë ¥ ê²½ë¡œë„ ì—†ê³ , ì˜ˆìƒ íŒŒì¼ë„ ì—†ìœ¼ë©´ ê³„ì‚°)
     //    //bool needCfsCalc = string.IsNullOrEmpty(inputCfsPath) && !cfsExists;
     //    //bool needTexCalc = !string.IsNullOrEmpty(texPath) && !texExists;
     //    bool needCfsCalc = !cfsExists;
@@ -113,36 +198,36 @@ public class MainController : MonoBehaviour
 
     //    if (needCfsCalc || needTexCalc)
     //    {
-    //        Debug.LogWarning("4. ÀÚµ¿ °è»ê ½ÃÀÛ...");
-    //        // °è»ê ½ÇÇà
+    //        Debug.LogWarning("4. ìë™ ê³„ì‚° ì‹œì‘...");
+    //        // ê³„ì‚° ì‹¤í–‰
     //        PythonProcessManager.Instance.RunSaliencyCalculation(objPath, texPath, meshDir);
     //    }
     //    else
     //    {
-    //        Debug.Log("4. °è»ê °Ç³Ê¶Ü (ÀÌ¹Ì ÆÄÀÏÀÌ ÀÖ°Å³ª Á¶°Ç ºÒÃæÁ·)");
+    //        Debug.Log("4. ê³„ì‚° ê±´ë„ˆëœ€ (ì´ë¯¸ íŒŒì¼ì´ ìˆê±°ë‚˜ ì¡°ê±´ ë¶ˆì¶©ì¡±)");
     //    }
 
     //    // -----------------------------------------------------------
-    //    // 5. ÃÖÁ¾ °æ·Î ÇÒ´ç (ÆÄÀÏÀÌ ÁøÂ¥ »ı°å´ÂÁö ´Ù½Ã Ã¼Å©)
+    //    // 5. ìµœì¢… ê²½ë¡œ í• ë‹¹ (íŒŒì¼ì´ ì§„ì§œ ìƒê²¼ëŠ”ì§€ ë‹¤ì‹œ ì²´í¬)
 
     //    if (File.Exists(expectedCfsFile)) _generatedCfsPath = expectedCfsFile;
-    //    else _generatedCfsPath = inputCfsPath; // ¾øÀ¸¸é »ç¿ëÀÚ ÀÔ·Â°ª À¯Áö (¾øÀ¸¸é ºóÄ­)
+    //    else _generatedCfsPath = inputCfsPath; // ì—†ìœ¼ë©´ ì‚¬ìš©ì ì…ë ¥ê°’ ìœ ì§€ (ì—†ìœ¼ë©´ ë¹ˆì¹¸)
 
     //    if (File.Exists(expectedTexFile)) _generatedTexSaliencyPath = expectedTexFile;
     //    else _generatedTexSaliencyPath = "";
 
-    //    // ½ÇÆĞ ½Ã ¿¡·¯ ·Î±×
+    //    // ì‹¤íŒ¨ ì‹œ ì—ëŸ¬ ë¡œê·¸
     //    if (needCfsCalc && !File.Exists(expectedCfsFile))
-    //        Debug.LogError($"[MainController] X CfS ÆÄÀÏ »ı¼º ½ÇÆĞ! ({expectedCfsFile})");
+    //        Debug.LogError($"[MainController] X CfS íŒŒì¼ ìƒì„± ì‹¤íŒ¨! ({expectedCfsFile})");
 
     //    if (needTexCalc && !File.Exists(expectedTexFile))
-    //        Debug.LogError($"[MainController] X TexSaliency ÆÄÀÏ »ı¼º ½ÇÆĞ! ({expectedTexFile})");
+    //        Debug.LogError($"[MainController] X TexSaliency íŒŒì¼ ìƒì„± ì‹¤íŒ¨! ({expectedTexFile})");
 
     //    // -----------------------------------------------------------
-    //    // 6. Calibrator ¼³Á¤
+    //    // 6. Calibrator ì„¤ì •
     //    if (currentCalibrator != null)
     //    {
-    //        // ÀÌÁ¦ ¿ø·¡ ÀÌ¸§´ë·Î µé¾î°¡¹Ç·Î Calibratorµµ Á¤»ó ÀÛµ¿ÇÒ °ÍÀÔ´Ï´Ù.
+    //        // ì´ì œ ì›ë˜ ì´ë¦„ëŒ€ë¡œ ë“¤ì–´ê°€ë¯€ë¡œ Calibratorë„ ì •ìƒ ì‘ë™í•  ê²ƒì…ë‹ˆë‹¤.
     //        currentCalibrator.SetPaths(objPath, _generatedCfsPath, _generatedTexSaliencyPath);
 
     //        if (File.Exists(_generatedTexSaliencyPath))
@@ -151,29 +236,29 @@ public class MainController : MonoBehaviour
     //            currentCalibrator.saliencyMode = SaliencyMode.CFSCNN;
     //    }
 
-    //    // 7. ±¸Ã¼ »ı¼º
+    //    // 7. êµ¬ì²´ ìƒì„±
     //    if (sphereGenerator != null) sphereGenerator.GenerateSpheres(newMesh);
 
-    //    // 8. ÃÊ±âÈ­
+    //    // 8. ì´ˆê¸°í™”
     //    IsCalibrationActive = false; IsSaliencyActive = false; IsRecommendationActive = false;
     //    ApplyStates();
 
     //    if (currentCalibrator != null) currentCalibrator.Init();
 
-    //    Debug.Log($"[RegisterNewMesh] ¿Ï·á. (CfS: {Path.GetFileName(_generatedCfsPath)})");
+    //    Debug.Log($"[RegisterNewMesh] ì™„ë£Œ. (CfS: {Path.GetFileName(_generatedCfsPath)})");
     //}
     public void RegisterNewMesh(GameObject newMesh, string objPath, string inputCfsPath, string texPath)
     {
         // =========================================================
-        // ¡Ú [±ä±Ş ¼öÁ¤] ¸®¼Ò½º °æ·Î -> ½ÇÁ¦ Àı´ë °æ·Î·Î º¯È¯
+        // â˜… [ê¸´ê¸‰ ìˆ˜ì •] ë¦¬ì†ŒìŠ¤ ê²½ë¡œ -> ì‹¤ì œ ì ˆëŒ€ ê²½ë¡œë¡œ ë³€í™˜
         // =========================================================
-        // ÅØ½ºÃ³ °æ·Î°¡ ÀÖ°í, Àı´ë °æ·Î(C:\...)°¡ ¾Æ´Ï¶ó¸é ¸®¼Ò½º °æ·Î·Î °£ÁÖ
+        // í…ìŠ¤ì²˜ ê²½ë¡œê°€ ìˆê³ , ì ˆëŒ€ ê²½ë¡œ(C:\...)ê°€ ì•„ë‹ˆë¼ë©´ ë¦¬ì†ŒìŠ¤ ê²½ë¡œë¡œ ê°„ì£¼
         if (!string.IsNullOrEmpty(texPath) && !Path.IsPathRooted(texPath))
         {
-            // 1. Resources Æú´õÀÇ ½ÇÁ¦ À§Ä¡ Ã£±â
+            // 1. Resources í´ë”ì˜ ì‹¤ì œ ìœ„ì¹˜ ì°¾ê¸°
             string resPath = Path.Combine(Application.dataPath, "Resources");
 
-            // 2. ÅØ½ºÃ³ È®ÀåÀÚ Ã£±â (jpg, png µî ½Ãµµ)
+            // 2. í…ìŠ¤ì²˜ í™•ì¥ì ì°¾ê¸° (jpg, png ë“± ì‹œë„)
             string fullPath = Path.Combine(resPath, texPath);
 
             if (File.Exists(fullPath + ".jpg")) texPath = fullPath + ".jpg";
@@ -181,11 +266,11 @@ public class MainController : MonoBehaviour
             else if (File.Exists(fullPath + ".jpeg")) texPath = fullPath + ".jpeg";
             else if (File.Exists(fullPath + ".tga")) texPath = fullPath + ".tga";
 
-            Debug.Log($"[Path Fix] ¸®¼Ò½º °æ·Î º¯È¯µÊ: {texPath}");
+            Debug.Log($"[Path Fix] ë¦¬ì†ŒìŠ¤ ê²½ë¡œ ë³€í™˜ë¨: {texPath}");
         }
 
         // 0. CCTV
-        Debug.LogWarning("================ [RegisterNewMesh Áø´Ü] ================");
+        Debug.LogWarning("================ [RegisterNewMesh ì§„ë‹¨] ================");
         Debug.Log($"1. Obj: {objPath}");
         Debug.Log($"2. Tex: {texPath}");
 
@@ -194,130 +279,140 @@ public class MainController : MonoBehaviour
         _currentCfsPath = inputCfsPath;
         _currentTexPath = texPath;
 
-        string meshDir = Path.GetDirectoryName(objPath);
-        string meshName = Path.GetFileNameWithoutExtension(objPath);
+        // ê²°ê³¼ íŒŒì¼ (Resources/Result_CfS, Result_Texì— OBJ ì´ë¦„ìœ¼ë¡œ ì €ì¥ë¨)
+        string expectedCfsFile = CfsResultPath(objPath);
+        string expectedTexFile = TexResultPath(objPath);
 
-        // =========================================================
-        // ¡Ú [°æ·Î ºĞ¸®] Result_CfS ¿Í Result_Tex Àü¿ë Æú´õ ¼³Á¤
-        // =========================================================
-        string resourcesPath = Path.Combine(Application.dataPath, "Resources");
-
-        // »õ °á°ú Æú´õ °æ·Î ÁöÁ¤
-        string cfsOutDir = Path.Combine(resourcesPath, "Result_CfS");
-        string texOutDir = Path.Combine(resourcesPath, "Result_Tex");
-
-        // Æú´õ°¡ ¾øÀ¸¸é ÀÚµ¿À¸·Î »ı¼º
-        if (!Directory.Exists(cfsOutDir)) Directory.CreateDirectory(cfsOutDir);
-        if (!Directory.Exists(texOutDir)) Directory.CreateDirectory(texOutDir);
-
-        // ¿¹»óµÇ´Â °á°ú ÆÄÀÏÀÇ ÃÖÁ¾ Àı´ë °æ·Î
-        string expectedCfsFile = Path.Combine(cfsOutDir, $"{meshName}_saliency.txt");
-        string expectedTexFile = Path.Combine(texOutDir, $"{meshName}_vertex_saliency.txt");
-        // =========================================================
-
-        // ÆÄÀÏ Á¸Àç ¿©ºÎ È®ÀÎ
+        // íŒŒì¼ ì¡´ì¬ ì—¬ë¶€ í™•ì¸
         bool cfsExists = File.Exists(expectedCfsFile);
         bool texExists = File.Exists(expectedTexFile);
-        Debug.Log($"3. ÆÄÀÏ È®ÀÎ -> CfS({cfsExists}): {Path.GetFileName(expectedCfsFile)}");
+        Debug.Log($"3. íŒŒì¼ í™•ì¸ -> CfS({cfsExists}): {Path.GetFileName(expectedCfsFile)}");
         Debug.Log($"            -> Tex({texExists}): {Path.GetFileName(expectedTexFile)}");
-
-        // °è»ê ÇÊ¿ä ¿©ºÎ (¹«Á¶°Ç °á°ú ÆÄÀÏÀÌ ¾øÀ¸¸é °è»ê!)
-        bool needCfsCalc = !cfsExists;
-        bool needTexCalc = !texExists;
 
         // -----------------------------------------------------------
         currentCalibrator = newMesh.GetComponent<ProjectionMappingCalibrator>();
         currentVisualizer = newMesh.GetComponent<SaliencyMapVisualizer>();
 
-        if (needCfsCalc || needTexCalc)
+        // 4. ê²°ê³¼ íŒŒì¼ì´ ì—†ìœ¼ë©´ ë°±ê·¸ë¼ìš´ë“œì—ì„œ ê³„ì‚° (ì—†ëŠ” ê²ƒë§Œ). ê·¸ë™ì•ˆ ëª¨ë¸ì€ ë°”ë¡œ ì“¸ ìˆ˜ ìˆë‹¤.
+        saliencyJob = null; // ì´ì „ ëª¨ë¸ì˜ ê³„ì‚°ì€ ê³„ì† ëŒì•„ì„œ íŒŒì¼ë§Œ ë‚¨ê¸´ë‹¤
+        if (!cfsExists || !texExists)
         {
-            Debug.LogWarning($"4. ÀÚµ¿ °è»ê ½ÃÀÛ... (CfS ÇÊ¿ä: {needCfsCalc}, Tex ÇÊ¿ä: {needTexCalc})");
-            // ¡Ú [¼öÁ¤µÊ] ¸Å´ÏÀú¿¡°Ô ¾Æ¿ôÇ² Æú´õ¸¦ µû·Îµû·Î 2°³ ³Ñ°ÜÁİ´Ï´Ù.
-            PythonProcessManager.Instance.RunSaliencyCalculation(objPath, texPath, cfsOutDir, texOutDir);
+            Debug.LogWarning($"4. saliency ê²°ê³¼ê°€ ì—†ì–´ ë°±ê·¸ë¼ìš´ë“œì—ì„œ ê³„ì‚°í•©ë‹ˆë‹¤ (CfS í•„ìš”: {!cfsExists}, Tex í•„ìš”: {!texExists}). ëë‚˜ë©´ ìë™ìœ¼ë¡œ ë°˜ì˜ë©ë‹ˆë‹¤.");
+            StartSaliencyJob(newMesh, objPath, inputCfsPath, !cfsExists, !texExists);
         }
         else
         {
-            Debug.Log("4. °è»ê °Ç³Ê¶Ü (ÀÌ¹Ì Result_CfS¿Í Result_Tex Æú´õ¿¡ ÆÄÀÏÀÌ Á¸ÀçÇÔ)");
+            Debug.Log("4. ê³„ì‚° ê±´ë„ˆëœ€ (ì´ë¯¸ Result_CfSì™€ Result_Tex í´ë”ì— íŒŒì¼ì´ ì¡´ì¬í•¨)");
         }
 
-        // -----------------------------------------------------------
-        // 5. ÃÖÁ¾ °æ·Î ÇÒ´ç (ÆÄÀÏÀÌ ÁøÂ¥ »ı°å´ÂÁö ´Ù½Ã Ã¼Å©)
+        // 5~6. ì§€ê¸ˆ ìˆëŠ” ê²°ê³¼ íŒŒì¼ë¡œ ê²½ë¡œì™€ ëª¨ë“œ ì„¤ì • (ê³„ì‚°ì´ ëë‚˜ë©´ ë‹¤ì‹œ ì„¤ì •)
+        AssignSaliencyPaths(objPath, inputCfsPath);
 
-        if (File.Exists(expectedCfsFile)) _generatedCfsPath = expectedCfsFile;
-        else _generatedCfsPath = inputCfsPath; // ¾øÀ¸¸é »ç¿ëÀÚ ÀÔ·Â°ª À¯Áö (¾øÀ¸¸é ºóÄ­)
+        // 7. í”„ë¡œì í„° í™”ë©´ì— ë§ê²Œ í¬ê¸° ì¡°ì ˆ (êµ¬ ìƒì„± ì „ì— í•´ì•¼ êµ¬ í¬ê¸° ë³´ì •ì´ í•œ ë²ˆì— ë§ìŒ)
+        if (autoFitOnLoad && currentCalibrator != null) FitToProjectorView(newMesh, currentCalibrator.targetCamera);
 
-        if (File.Exists(expectedTexFile)) _generatedTexSaliencyPath = expectedTexFile;
-        else _generatedTexSaliencyPath = "";
+        // êµ¬ì²´ ìƒì„±
+        if (sphereGenerator != null) sphereGenerator.GenerateSpheres(newMesh);
 
-        // ½ÇÆĞ ½Ã ¿¡·¯ ·Î±×
-        if (needCfsCalc && !File.Exists(expectedCfsFile))
-            Debug.LogError($"[MainController] CfS ÆÄÀÏ »ı¼º ½ÇÆĞ! ({expectedCfsFile})");
+        // 8. ì´ˆê¸°í™”
+        IsCalibrationActive = false; IsSaliencyActive = false; IsRecommendationActive = false;
+        ApplyStates();
 
-        if (needTexCalc && !File.Exists(expectedTexFile))
-            Debug.LogError($"[MainController] TexSaliency ÆÄÀÏ »ı¼º ½ÇÆĞ! ({expectedTexFile})");
+        if (currentCalibrator != null) currentCalibrator.Init();
 
-        // -----------------------------------------------------------
-        // 6. Calibrator ¼³Á¤
+        Debug.Log($"[RegisterNewMesh] ì™„ë£Œ. (CfS: {Path.GetFileName(_generatedCfsPath)})");
+    }
+
+    // (ìˆ˜ë™ ì‹¤í–‰ìš©) ì§€ê¸ˆ ëª¨ë¸ì˜ CfS, TexMeshë¥¼ ë‘˜ ë‹¤ ë‹¤ì‹œ ê³„ì‚°í•œë‹¤. ëë‚˜ë©´ ìë™ìœ¼ë¡œ ë°˜ì˜.
+    private void ManualRunSaliency()
+    {
+        if (string.IsNullOrEmpty(_currentObjPath) || targetMesh == null) return;
+        if (IsSaliencyPending)
+        {
+            Debug.LogWarning("[Saliency] ì´ë¯¸ ê³„ì‚° ì¤‘ì…ë‹ˆë‹¤.");
+            return;
+        }
+        StartSaliencyJob(targetMesh, _currentObjPath, _currentCfsPath, true, true);
+        ApplyStates(); // ê³„ì‚° ì¤‘ì—ëŠ” ì¶”ì²œì ê³¼ íˆíŠ¸ë§µì„ ë‚´ë¦¼
+    }
+
+    // ==================================================================================
+    // saliency ê²°ê³¼ íŒŒì¼ê³¼ ë°±ê·¸ë¼ìš´ë“œ ê³„ì‚°
+    // ==================================================================================
+    private static string ResultDir(string folder)
+    {
+        string dir = Path.Combine(Application.dataPath, "Resources", folder);
+        if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static string CfsResultPath(string objPath) =>
+        Path.Combine(ResultDir("Result_CfS"), $"{Path.GetFileNameWithoutExtension(objPath)}_saliency.txt");
+
+    private static string TexResultPath(string objPath) =>
+        Path.Combine(ResultDir("Result_Tex"), $"{Path.GetFileNameWithoutExtension(objPath)}_vertex_saliency.txt");
+
+    // ìˆëŠ” ê²°ê³¼ íŒŒì¼ë¡œ ê³„ì‚°ê¸°ì™€ íˆíŠ¸ë§µì˜ ê²½ë¡œ/ëª¨ë“œë¥¼ ì •í•œë‹¤. TexMeshê°€ ìˆìœ¼ë©´ TexMesh, ì—†ìœ¼ë©´ CfS.
+    private void AssignSaliencyPaths(string objPath, string inputCfsPath)
+    {
+        string cfsFile = CfsResultPath(objPath);
+        string texFile = TexResultPath(objPath);
+        _generatedCfsPath = File.Exists(cfsFile) ? cfsFile : inputCfsPath; // ì—†ìœ¼ë©´ ì‚¬ìš©ì ì…ë ¥ê°’ ìœ ì§€ (ì—†ìœ¼ë©´ ë¹ˆì¹¸)
+        _generatedTexSaliencyPath = File.Exists(texFile) ? texFile : "";
+
         if (currentCalibrator != null)
         {
-            // ÀÌÁ¦ ¿ø·¡ ÀÌ¸§´ë·Î µé¾î°¡¹Ç·Î Calibratorµµ Á¤»ó ÀÛµ¿ÇÒ °ÍÀÔ´Ï´Ù.
             currentCalibrator.SetPaths(objPath, _generatedCfsPath, _generatedTexSaliencyPath);
-
-            if (File.Exists(_generatedTexSaliencyPath))
-                currentCalibrator.saliencyMode = SaliencyMode.TexMesh;
-            else
-                currentCalibrator.saliencyMode = SaliencyMode.CFSCNN;
+            currentCalibrator.saliencyMode = File.Exists(_generatedTexSaliencyPath) ? SaliencyMode.TexMesh : SaliencyMode.CFSCNN;
+            currentCalibrator.recommendedVertexCount = recommendedVertexCount;
         }
-        // Visualizer¿¡°Ôµµ ¹æ±İ ¸¸µé¾îÁø ÆÄÀÏ ÁÖ¼Ò¸¦ Á¤È®È÷ ³Ñ°ÜÁİ´Ï´Ù!
         if (currentVisualizer != null)
         {
             currentVisualizer.cfsObjPath = objPath;
             currentVisualizer.cfsTxtPath = _generatedCfsPath;
             currentVisualizer.texObjPath = objPath;
             currentVisualizer.texTxtPath = _generatedTexSaliencyPath;
+
+            // íˆíŠ¸ë§µ(í‚¤ 2)ë„ ì¶”ì²œì ê³¼ ê°™ì€ saliencyë¡œ ë³´ì—¬ì¤€ë‹¤. (ì˜ˆì „ì—ëŠ” ê¸°ë³¸ê°’ Entropyë¡œ ë‚¨ì•„ ìˆì–´ì„œ
+            // íˆíŠ¸ë§µê³¼ ì‹¤ì œ ì¶”ì²œ ê·¼ê±°ê°€ ì„œë¡œ ë‹¬ëìŒ)
+            if (currentCalibrator != null) currentVisualizer.saliencyMode = currentCalibrator.saliencyMode;
         }
-        // 7. ±¸Ã¼ »ı¼º
-        if (sphereGenerator != null) sphereGenerator.GenerateSpheres(newMesh);
-
-        // 8. ÃÊ±âÈ­
-        IsCalibrationActive = false; IsSaliencyActive = false; IsRecommendationActive = false;
-        ApplyStates();
-
-        if (currentCalibrator != null) currentCalibrator.Init();
-
-        Debug.Log($"[RegisterNewMesh] ¿Ï·á. (CfS: {Path.GetFileName(_generatedCfsPath)})");
     }
 
-    // (¼öµ¿ ½ÇÇà¿ë)
-    private System.Collections.IEnumerator ManualRunSaliency()
+    private void StartSaliencyJob(GameObject mesh, string objPath, string inputCfsPath, bool runCfs, bool runTex)
     {
-        if (string.IsNullOrEmpty(_currentObjPath)) yield break;
-
-        // =========================================================
-        // ¡Ú [°æ·Î ºĞ¸®] ¼öµ¿ °è»ê ½Ã¿¡µµ ¶È°°ÀÌ Æú´õ 2°³·Î ³ª´¯´Ï´Ù.
-        // =========================================================
-        string resourcesPath = Path.Combine(Application.dataPath, "Resources");
-        string cfsOutDir = Path.Combine(resourcesPath, "Result_CfS");
-        string texOutDir = Path.Combine(resourcesPath, "Result_Tex");
-
-        if (!Directory.Exists(cfsOutDir)) Directory.CreateDirectory(cfsOutDir);
-        if (!Directory.Exists(texOutDir)) Directory.CreateDirectory(texOutDir);
-
-        // ¡Ú [¼öÁ¤µÊ] ÀÌÁ¦ 3°³°¡ ¾Æ´Ï¶ó 4°³ÀÇ ÀÎÀÚ(obj, tex, cfsÆú´õ, texÆú´õ)¸¦ Á¤È®È÷ ³Ñ°ÜÁİ´Ï´Ù!
-        bool success = PythonProcessManager.Instance.RunSaliencyCalculation(_currentObjPath, _currentTexPath, cfsOutDir, texOutDir);
-
-        if (success && currentCalibrator != null)
+        if (PythonProcessManager.Instance == null)
         {
-            // °æ·Î °»½Å ¹× Àç·Îµù
-            currentCalibrator.Init();
-            currentCalibrator.Run();
-            Debug.Log("[MainController] ¼öµ¿ °è»ê ¹× °»½Å ¿Ï·á.");
+            Debug.LogError("[Saliency] ì”¬ì— PythonProcessManagerê°€ ì—†ì–´ saliencyë¥¼ ê³„ì‚°í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
+            return;
         }
-        yield return null;
+        saliencyJob = PythonProcessManager.Instance.StartSaliencyCalculation(
+            objPath, ResultDir("Result_CfS"), ResultDir("Result_Tex"), runCfs, runTex);
+        StartCoroutine(WaitForSaliency(saliencyJob, mesh, objPath, inputCfsPath));
+    }
+
+    private System.Collections.IEnumerator WaitForSaliency(SaliencyJob job, GameObject mesh, string objPath, string inputCfsPath)
+    {
+        while (!job.IsDone) yield return null;
+
+        if (job.runCfs && !job.CfsSucceeded) Debug.LogError($"[MainController] CfS íŒŒì¼ ìƒì„± ì‹¤íŒ¨! ({job.CfsResultPath})");
+        if (job.runTex && !job.TexSucceeded) Debug.LogError($"[MainController] TexSaliency íŒŒì¼ ìƒì„± ì‹¤íŒ¨! ({job.TexResultPath})");
+        Debug.Log($"[Saliency] {Path.GetFileName(objPath)} ê³„ì‚° ë ({job.ElapsedSeconds:F0}ì´ˆ)");
+
+        if (mesh == null || mesh != targetMesh)
+        {
+            Debug.Log("[Saliency] ê·¸ ì‚¬ì´ ë‹¤ë¥¸ ëª¨ë¸ë¡œ ë°”ë€Œì–´ì„œ ê²°ê³¼ íŒŒì¼ë§Œ ì €ì¥í–ˆìŠµë‹ˆë‹¤.");
+            yield break;
+        }
+        if (saliencyJob == job) saliencyJob = null;
+
+        SaliencyDataLoader.ClearCache(); // F5ë¡œ ê°™ì€ ê²½ë¡œì˜ íŒŒì¼ì„ ë‹¤ì‹œ ì¼ì„ ìˆ˜ ìˆìŒ
+        AssignSaliencyPaths(objPath, inputCfsPath);
+        ApplyStates(); // ì¼œì ¸ ìˆë˜ ì¶”ì²œì /íˆíŠ¸ë§µì„ ìƒˆ ê²°ê³¼ë¡œ ê³„ì‚°
     }
 
     // ==================================================================================
-    // Åä±Û ÇÔ¼öµé
+    // í† ê¸€ í•¨ìˆ˜ë“¤
     // ==================================================================================
     public void ToggleCalibration() { ToggleCalibration(!IsCalibrationActive); }
     public void ToggleCalibration(bool isOn) { IsCalibrationActive = isOn; ApplyStates(); }
@@ -330,18 +425,23 @@ public class MainController : MonoBehaviour
 
     private void ApplyStates()
     {
+        // saliency ê³„ì‚° ì¤‘ì´ë©´ ì¶”ì²œì ê³¼ íˆíŠ¸ë§µì€ ê³„ì‚°ì´ ëë‚œ ë’¤ì— (WaitForSaliencyê°€ ë‹¤ì‹œ ë¶€ë¦„)
+        bool waiting = IsSaliencyPending;
+        if (waiting && ((IsCalibrationActive && IsRecommendationActive) || IsSaliencyActive))
+            Debug.Log("[Saliency] ê³„ì‚° ì¤‘ì´ë¼ ì¶”ì²œì /íˆíŠ¸ë§µì€ ê³„ì‚°ì´ ëë‚˜ë©´ í‘œì‹œë©ë‹ˆë‹¤.");
+
         if (currentCalibrator != null)
         {
-            currentCalibrator.enabled = IsCalibrationActive;
+            currentCalibrator.enabled = IsCalibrationActive && !waiting;
             currentCalibrator.visualized = IsRecommendationActive;
 
-            if (IsCalibrationActive) currentCalibrator.Run();
+            if (IsCalibrationActive && !waiting) currentCalibrator.Run();
             else currentCalibrator.ClearMarkers();
         }
 
         if (currentVisualizer != null)
         {
-            currentVisualizer.enabled = IsSaliencyActive;
+            currentVisualizer.enabled = IsSaliencyActive && !waiting;
         }
 
         if (UIManager.Instance != null)

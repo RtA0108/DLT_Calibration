@@ -20,6 +20,8 @@ public class DLT_solve : MonoBehaviour
     [DllImport("DLT_Rezero.dll", EntryPoint = "projectPoints")]
     private static extern void projectPoints(double[] worldPoints, double[] projectionMatrix, double[] rtMatrix, double[] resultPoints, float camPos);
     #endregion
+    private const double InconsistencyWarnPixels = 3.0; // 실시간 재계산에서 이보다 크게 어긋나면 경고
+
     [Header("References")]
     public VertexClickTest vertexClickTest;      // 클릭 데이터
     public CreateSphereAtVertex createSphereAtVertex; // 전체 버텍스 정보 (focal length 보정에 필요하다면 사용)
@@ -48,16 +50,17 @@ public class DLT_solve : MonoBehaviour
     void Update()
     {
         // 'F' 키를 누르면 DLT 계산 시작
-        if (Input.GetKeyDown(KeyCode.F))
+        if (Input.GetKeyDown(KeyCode.F) && !HotkeyGuard.Blocked)
         {
             PerformDLT();
         }
     }
 
     /// <summary>
-    /// 유효한 점들을 수집하여 DLT 계산을 수행하는 메인 함수
+    /// 유효한 점들을 수집하여 DLT 계산을 수행하는 메인 함수.
+    /// verbose = false는 마커를 옮길 때마다 자동으로 다시 푸는 경우로, 로그를 한 줄만 남긴다.
     /// </summary>
-    private void PerformDLT()
+    public bool PerformDLT(bool verbose = true)
     {
         // 1. 선택된 점 수집.
         //    3D 좌표는 클릭 시점 값이 아니라 구의 현재 위치를 쓴다 (클릭 후 슬라이더로 메쉬를 움직였을 수 있음).
@@ -77,30 +80,49 @@ public class DLT_solve : MonoBehaviour
         // DLT는 최소 6개의 점이 필요함 (6개를 넘으면 전부 써서 최소제곱으로 푼다)
         if (pointCount < 6)
         {
-            Debug.LogError($"[DLT Error] 점이 부족합니다. (현재: {pointCount}개 / 최소: 6개)");
-            return;
+            if (verbose) Debug.LogError($"[DLT Error] 점이 부족합니다. (현재: {pointCount}개 / 최소: 6개)");
+            return false;
         }
 
         // 점들이 한 평면 위에 있으면 DLT 해가 하나로 정해지지 않는다.
-        if (PlanarityScore(world) < 1e-3)
+        bool nearlyPlanar = PlanarityScore(world) < 1e-3;
+        if (nearlyPlanar && verbose)
             Debug.LogWarning("[DLT] 선택한 점들이 거의 한 평면(또는 직선) 위에 있습니다. 결과가 매우 불안정할 수 있습니다.");
 
-        Debug.Log($"[DLT Start] 점 {pointCount}개로 계산을 시작합니다...");
+        if (verbose) Debug.Log($"[DLT Start] 점 {pointCount}개로 계산을 시작합니다...");
 
         // 2. DLT 계산 및 분해
         if (!TryDecompose(SolveDLT(world, image), world, out CameraParams cam))
         {
             Debug.LogError("[DLT Error] 투영 행렬을 카메라 파라미터로 분해하지 못했습니다.");
-            return;
+            return false;
         }
 
         // 3. projCam에 적용
-        ApplyToCamera(cam, projCam);
+        ApplyToCamera(cam, projCam, verbose);
 
         // 4. 결과 분석
-        Debug.Log("--- [Result Analysis] ---");
-        ReportResult(cam, world, image, imageGT);
-        Debug.Log("-------------------------");
+        if (verbose)
+        {
+            Debug.Log("--- [Result Analysis] ---");
+            ReportResult(cam, world, image, imageGT);
+            Debug.Log("-------------------------");
+        }
+        else
+        {
+            ReprojectionError(world, image, out double rmse, out double max);
+            Debug.Log($"[Live] 점 {pointCount}개로 다시 계산: 재투영 RMSE {rmse:F2}px, 최대 {max:F2}px{(nearlyPlanar ? " (점들이 거의 한 평면!)" : "")}");
+
+            // 점이 7개 이상이면 서로 맞지 않는 마커가 있는지 전체 일관성으로만 알린다.
+            // 어느 마커인지는 지목하지 않는다: 미지수가 11개라 점 10개 이하에서는 최소제곱이 오차를
+            // 다른 점들에 나눠 떠넘겨서, 잘못 놓인 마커가 아닌 다른 마커가 가장 크게 나오는 경우가 많다.
+            if (pointCount > 6 && max > InconsistencyWarnPixels)
+                Debug.LogWarning($"[Live] 마커들이 서로 {max:F1}px까지 맞지 않습니다. 투영된 모양을 보고 어긋난 부분의 마커를 다시 맞추세요.");
+        }
+
+        // 마커 패치와 어긋남 표시를 새 카메라 기준으로 갱신
+        vertexClickTest.OnCameraSolved();
+        return true;
     }
 
     #region --- Math & Calibration Logic ---
@@ -227,7 +249,7 @@ public class DLT_solve : MonoBehaviour
         return true;
     }
 
-    private static void ApplyToCamera(CameraParams p, Camera cam)
+    private static void ApplyToCamera(CameraParams p, Camera cam, bool verbose)
     {
         cam.transform.SetPositionAndRotation(p.position, p.Rotation);
 
@@ -236,7 +258,7 @@ public class DLT_solve : MonoBehaviour
         //  프로젝터 해상도와도 맞지 않았음. 되돌리려면 cam.ResetProjectionMatrix())
         cam.projectionMatrix = BuildProjectionMatrix(p, cam.pixelWidth, cam.pixelHeight, cam.nearClipPlane, cam.farClipPlane);
 
-        Debug.Log("[Camera Update] 카메라 파라미터가 적용되었습니다.");
+        if (verbose) Debug.Log("[Camera Update] 카메라 파라미터가 적용되었습니다.");
     }
 
     // 픽셀 단위 K를 Unity(OpenGL 규약) 투영 행렬로 옮긴다. 뷰 공간에서 카메라는 -z를 바라본다.
@@ -262,17 +284,8 @@ public class DLT_solve : MonoBehaviour
         Debug.Log($"[Calibration Info] fx {cam.fx:F2}, fy {cam.fy:F2}, skew {cam.skew:F3}, 주점 ({cam.cx:F2}, {cam.cy:F2}) px  (화면 {projCam.pixelWidth}x{projCam.pixelHeight})");
         Debug.Log($"[Calibration Info] 위치 {cam.position}, 회전 {cam.Rotation.eulerAngles}");
 
-        // 재투영 오차: 적용된 projCam으로 3D 점을 다시 투영해 마커 위치와 비교한다.
-        // (점이 6개면 식 12개에 미지수 11개라 거의 0으로 나온다. 점이 많을수록 의미 있는 값이 된다)
-        double sumSq = 0, max = 0;
-        for (int i = 0; i < n; i++)
-        {
-            Vector3 s = projCam.WorldToScreenPoint(world[i]);
-            double d = Vector2.Distance(new Vector2(s.x, s.y), image[i]);
-            sumSq += d * d;
-            max = Math.Max(max, d);
-        }
-        Debug.Log($"[Reprojection] RMSE {Math.Sqrt(sumSq / n):F3}px, 최대 {max:F3}px");
+        ReprojectionError(world, image, out double rmse, out double max);
+        Debug.Log($"[Reprojection] RMSE {rmse:F3}px, 최대 {max:F3}px");
 
         // 마커 이동량: 클릭 당시 투영 위치(GT)에서 마커를 얼마나 옮겼는지
         double moved = 0;
@@ -286,6 +299,22 @@ public class DLT_solve : MonoBehaviour
             float rotErr = Quaternion.Angle(cam.Rotation, gt.Rotation);
             Debug.Log($"[Sim] GT 대비 카메라 위치 오차 {posErr:F3}, 회전 오차 {rotErr:F3}°, fx 차이 {cam.fx - gt.fx:F2}px");
         }
+    }
+
+    // 재투영 오차: 적용된 projCam으로 3D 점을 다시 투영해 마커 위치와 비교한다.
+    // (점이 6개면 식 12개에 미지수 11개라 거의 0으로 나온다. 점이 많을수록 의미 있는 값이 된다)
+    private void ReprojectionError(List<Vector3> world, List<Vector2> image, out double rmse, out double max)
+    {
+        double sumSq = 0;
+        max = 0;
+        for (int i = 0; i < world.Count; i++)
+        {
+            Vector3 s = projCam.WorldToScreenPoint(world[i]);
+            double d = Vector2.Distance(new Vector2(s.x, s.y), image[i]);
+            sumSq += d * d;
+            max = Math.Max(max, d);
+        }
+        rmse = Math.Sqrt(sumSq / world.Count);
     }
 
     // 점 분포의 공분산으로 평면성을 잰다. 0이면 완전히 한 평면(또는 직선), 고르게 퍼져 있으면 1에 가깝다.

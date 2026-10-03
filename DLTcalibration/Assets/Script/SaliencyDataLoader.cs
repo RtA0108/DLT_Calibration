@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using System.Linq;
@@ -10,17 +10,73 @@ public static class SaliencyDataLoader
 
     private static Dictionary<Vector3, float> _fullLocalSaliencyMap;
     private static Dictionary<Vector3, Vector3> _unityToObjCoordMap;
+    private static PointGrid _unityKeyGrid;
     private static string _loadedObjPath;
     private static string _loadedTxtPath;
+
+    // "ê°€ì¥ ê°€ê¹Œìš´ ì ì´ MATCH_THRESHOLD ì´ë‚´ì¸ê°€"ë¥¼ ë¹ ë¥´ê²Œ ì°¾ê¸° ìœ„í•œ ê²©ì.
+    // ì¹¸ í¬ê¸°ë¥¼ MATCH_THRESHOLDë¡œ ë‘ë©´, ê·¸ ê±°ë¦¬ ì•ˆì˜ ì ì€ ë°˜ë“œì‹œ ì£¼ë³€ 27ì¹¸ ì•ˆì— ìˆë‹¤.
+    // (ì˜ˆì „ì—ëŠ” ëª¨ë“  ì ê³¼ í•˜ë‚˜ì”© ê±°ë¦¬ë¥¼ ë¹„êµí•´ì„œ Chick ê¸°ì¤€ ì¡°íšŒ í•œ ë²ˆì— ìˆ˜ì–µ ë²ˆ ê³„ì‚°í–ˆìŒ)
+    private class PointGrid
+    {
+        private readonly Dictionary<(int, int, int), List<Vector3>> cells = new Dictionary<(int, int, int), List<Vector3>>();
+
+        public PointGrid(IEnumerable<Vector3> points)
+        {
+            foreach (Vector3 p in points)
+            {
+                var key = Cell(p);
+                if (!cells.TryGetValue(key, out var list)) cells[key] = list = new List<Vector3>();
+                list.Add(p);
+            }
+        }
+
+        // MATCH_THRESHOLD ì´ë‚´ì—ì„œ ê°€ì¥ ê°€ê¹Œìš´ ì . ì—†ìœ¼ë©´ false.
+        public bool TryFindNearest(Vector3 p, out Vector3 nearest)
+        {
+            nearest = default;
+            float best = float.MaxValue;
+            var (cx, cy, cz) = Cell(p);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (!cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var list)) continue;
+                        foreach (Vector3 q in list)
+                        {
+                            float d = Vector3.Distance(p, q);
+                            if (d < best) { best = d; nearest = q; }
+                        }
+                    }
+            return best < MATCH_THRESHOLD;
+        }
+
+        private static (int, int, int) Cell(Vector3 p)
+        {
+            return (Mathf.FloorToInt(p.x / MATCH_THRESHOLD), Mathf.FloorToInt(p.y / MATCH_THRESHOLD), Mathf.FloorToInt(p.z / MATCH_THRESHOLD));
+        }
+    }
+
+    // ìºì‹œëŠ” ê²½ë¡œë¡œë§Œ êµ¬ë¶„í•˜ë¯€ë¡œ, ê°™ì€ ê²½ë¡œì˜ íŒŒì¼ì„ ë‹¤ì‹œ ê³„ì‚°í–ˆìœ¼ë©´ ì´ê±¸ ë¶ˆëŸ¬ ìƒˆë¡œ ì½ê²Œ í•œë‹¤.
+    public static void ClearCache()
+    {
+        _fullLocalSaliencyMap = null;
+        _unityToObjCoordMap = null;
+        _unityKeyGrid = null;
+        _loadedObjPath = null;
+        _loadedTxtPath = null;
+    }
+
     public static Dictionary<Vector3, float> GetSaliencyMap(MeshFilter meshFilter, List<Vector3> filteredWorldVertices, string objPath, string txtPath)
     {
-        // Ä³½Ì ·ÎÁ÷
+        // ìºì‹± ë¡œì§
         if (_fullLocalSaliencyMap == null || _loadedObjPath != objPath || _loadedTxtPath != txtPath)
         {
             _fullLocalSaliencyMap = LoadFullSaliencyMapFromSource(objPath, txtPath);
             if (_fullLocalSaliencyMap.Count == 0) return new Dictionary<Vector3, float>();
 
             BuildUnityToObjMap(meshFilter);
+            _unityKeyGrid = new PointGrid(_unityToObjCoordMap.Keys);
             _loadedObjPath = objPath;
             _loadedTxtPath = txtPath;
         }
@@ -30,22 +86,12 @@ public static class SaliencyDataLoader
 
         if (_unityToObjCoordMap == null || _unityToObjCoordMap.Count == 0) return filteredSaliencyMap;
 
-        List<Vector3> unityMapKeys = _unityToObjCoordMap.Keys.ToList();
-
         foreach (Vector3 worldPos in filteredWorldVertices)
         {
             Vector3 localPos = transform.InverseTransformPoint(worldPos);
-            Vector3 closestKey = unityMapKeys[0];
-            float minDistance = Vector3.Distance(localPos, closestKey);
 
-            // °¡Àå °¡±î¿î Á¡ Ã£±â
-            for (int i = 1; i < unityMapKeys.Count; i++)
-            {
-                float d = Vector3.Distance(localPos, unityMapKeys[i]);
-                if (d < minDistance) { minDistance = d; closestKey = unityMapKeys[i]; }
-            }
-
-            if (minDistance < MATCH_THRESHOLD)
+            // ê°€ì¥ ê°€ê¹Œìš´ ì  ì°¾ê¸°
+            if (_unityKeyGrid.TryFindNearest(localPos, out Vector3 closestKey))
             {
                 Vector3 objCoordKey = _unityToObjCoordMap[closestKey];
                 if (_fullLocalSaliencyMap.ContainsKey(objCoordKey))
@@ -61,13 +107,13 @@ public static class SaliencyDataLoader
     {
         var map = new Dictionary<Vector3, float>();
 
-        // ObjMeshImporter°¡ XÃà ¹İÀü ¾øÀÌ ÀĞ¾î¿È
+        // ObjMeshImporterê°€ Xì¶• ë°˜ì „ ì—†ì´ ì½ì–´ì˜´
         List<Vector3> vertices = ObjMeshImporter.LoadVertices(objPath);
         List<float> scores = LoadScoresRobust(txtPath);
 
         if (vertices.Count == 0 || scores.Count == 0)
         {
-            Debug.LogError($"[Data Error] µ¥ÀÌÅÍ ·Îµå ½ÇÆĞ. OBJ: {vertices.Count}, TXT: {scores.Count}");
+            Debug.LogError($"[Data Error] ë°ì´í„° ë¡œë“œ ì‹¤íŒ¨. OBJ: {vertices.Count}, TXT: {scores.Count}");
             return map;
         }
 
@@ -83,26 +129,26 @@ public static class SaliencyDataLoader
     {
         List<float> scores = new List<float>();
 
-        // ¡Ú [CCTV 1] °æ·Î°¡ ¾Æ¿¹ ÅÖ ºñ¾î¼­ µé¾î¿Ô´ÂÁö È®ÀÎ
+        // â˜… [CCTV 1] ê²½ë¡œê°€ ì•„ì˜ˆ í…… ë¹„ì–´ì„œ ë“¤ì–´ì™”ëŠ”ì§€ í™•ì¸
         if (string.IsNullOrEmpty(path))
         {
-            Debug.LogError("[SaliencyDataLoader] Àü´Ş¹ŞÀº TXT °æ·Î°¡ ÅÖ ºñ¾îÀÖ½À´Ï´Ù! (ÆÄÀÌ½ãÀÌ ÆÄÀÏÀ» »ı¼ºÇÏÁö ¾Ê¾ÒÀ» È®·ü 99%)");
+            Debug.LogError("[SaliencyDataLoader] ì „ë‹¬ë°›ì€ TXT ê²½ë¡œê°€ í…… ë¹„ì–´ìˆìŠµë‹ˆë‹¤! (íŒŒì´ì¬ì´ íŒŒì¼ì„ ìƒì„±í•˜ì§€ ì•Šì•˜ì„ í™•ë¥  99%)");
             return scores;
         }
 
-        Debug.LogWarning($"[SaliencyDataLoader] ÀĞ±â ½Ãµµ °æ·Î: {path}");
+        Debug.LogWarning($"[SaliencyDataLoader] ì½ê¸° ì‹œë„ ê²½ë¡œ: {path}");
 
         string[] lines = null;
         string diskPath = path.EndsWith(".txt") ? path : path + ".txt";
 
         if (File.Exists(diskPath))
         {
-            Debug.Log($"[SaliencyDataLoader] ·ÎÄÃ ÆÄÀÏ ¹ß°ß: {diskPath}");
+            Debug.Log($"[SaliencyDataLoader] ë¡œì»¬ íŒŒì¼ ë°œê²¬: {diskPath}");
             lines = File.ReadAllLines(diskPath);
         }
         else
         {
-            Debug.LogWarning($"[SaliencyDataLoader] ·ÎÄÃ ÆÄÀÏ ¾øÀ½, Resources¿¡¼­ Ã£±â ½Ãµµ: {diskPath}");
+            Debug.LogWarning($"[SaliencyDataLoader] ë¡œì»¬ íŒŒì¼ ì—†ìŒ, Resourcesì—ì„œ ì°¾ê¸° ì‹œë„: {diskPath}");
             string resPath = RemoveExtensionAndPrefix(path);
             TextAsset asset = Resources.Load<TextAsset>(resPath);
             if (asset != null) lines = asset.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -110,7 +156,7 @@ public static class SaliencyDataLoader
 
         if (lines == null)
         {
-            Debug.LogError("[SaliencyDataLoader] ÆÄÀÏÀ» ÃÖÁ¾ÀûÀ¸·Î Ã£Áö ¸øÇß½À´Ï´Ù.");
+            Debug.LogError("[SaliencyDataLoader] íŒŒì¼ì„ ìµœì¢…ì ìœ¼ë¡œ ì°¾ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.");
             return scores;
         }
 
@@ -140,32 +186,26 @@ public static class SaliencyDataLoader
     {
         _unityToObjCoordMap = new Dictionary<Vector3, Vector3>();
         Vector3[] unityVertices = meshFilter.mesh.vertices;
-        List<Vector3> objVertices = _fullLocalSaliencyMap.Keys.ToList();
 
-        if (objVertices.Count == 0) return;
+        if (_fullLocalSaliencyMap.Count == 0) return;
+        var objGrid = new PointGrid(_fullLocalSaliencyMap.Keys);
 
-        // ¸ÅÄª ·ÎÁ÷
+        // ë§¤ì¹­ ë¡œì§: ìœ ë‹ˆí‹° ë²„í…ìŠ¤ë§ˆë‹¤ MATCH_THRESHOLD ì´ë‚´ì˜ ê°€ì¥ ê°€ê¹Œìš´ OBJ ë²„í…ìŠ¤
+        int matched = 0;
         foreach (var unityVert in unityVertices)
         {
-            Vector3 closest = objVertices[0];
-            float minDst = Vector3.Distance(unityVert, closest);
-
-            for (int i = 1; i < objVertices.Count; i++)
+            if (objGrid.TryFindNearest(unityVert, out Vector3 closest))
             {
-                float d = Vector3.Distance(unityVert, objVertices[i]);
-                if (d < minDst) { minDst = d; closest = objVertices[i]; }
-            }
-
-            if (minDst < MATCH_THRESHOLD)
-            {
+                matched++;
                 if (!_unityToObjCoordMap.ContainsKey(unityVert))
                     _unityToObjCoordMap.Add(unityVert, closest);
             }
         }
 
-        float rate = (float)_unityToObjCoordMap.Count / unityVertices.Length * 100f;
+        // ë¹„ìœ¨ì€ ë²„í…ìŠ¤ ìˆ˜ ê¸°ì¤€ (ê°ì§„ ë©”ì‰¬ëŠ” í•œ ìœ„ì¹˜ì— ë²„í…ìŠ¤ê°€ ì—¬ëŸ¬ ê°œë¼, ìœ„ì¹˜ ìˆ˜ë¡œ ë‚˜ëˆ„ë©´ ë‚®ê²Œ ë³´ì˜€ìŒ)
+        float rate = (float)matched / unityVertices.Length * 100f;
         string color = rate > 90f ? "lime" : "red";
-        Debug.Log($"<b><color={color}>[SaliencyDataLoader] ¸ÊÇÎ ¿Ï·á: {unityVertices.Length}°³ Áß {_unityToObjCoordMap.Count}°³ ¿¬°áµÊ ({rate:F1}%)</color></b>");
+        Debug.Log($"<b><color={color}>[SaliencyDataLoader] ë§µí•‘ ì™„ë£Œ: ë²„í…ìŠ¤ {unityVertices.Length}ê°œ ì¤‘ {matched}ê°œ ì—°ê²°ë¨ ({rate:F1}%, ìœ„ì¹˜ {_unityToObjCoordMap.Count}ê³³)</color></b>");
     }
 }
 
@@ -176,25 +216,25 @@ public static class SaliencyDataLoader
 //using System.Globalization;
 
 ///// <summary>
-///// CfS-CNNÀÇ Saliency µ¥ÀÌÅÍ¸¦ ·ÎµåÇÏ°í Unity ¸Ş½¬¿¡ ¸ÅÄª½ÃÅ°´Â ¸ğµç ·ÎÁ÷À» ´ã´çÇÕ´Ï´Ù.
+///// CfS-CNNì˜ Saliency ë°ì´í„°ë¥¼ ë¡œë“œí•˜ê³  Unity ë©”ì‰¬ì— ë§¤ì¹­ì‹œí‚¤ëŠ” ëª¨ë“  ë¡œì§ì„ ë‹´ë‹¹í•©ë‹ˆë‹¤.
 ///// </summary>
 //public static class SaliencyDataLoader
 //{
-//    // Á¤¹Ğµµ ¹®Á¦ ÇØ°áÀ» À§ÇÑ ¸ÅÄª Çã¿ë ¿ÀÂ÷.
-//    // DebugMatcher¿¡¼­ 100% ¼º°øÇß´ø °ªÀ¸·Î ¼³Á¤ÇØÁÖ¼¼¿ä. (¿¹: 0.01f)
+//    // ì •ë°€ë„ ë¬¸ì œ í•´ê²°ì„ ìœ„í•œ ë§¤ì¹­ í—ˆìš© ì˜¤ì°¨.
+//    // DebugMatcherì—ì„œ 100% ì„±ê³µí–ˆë˜ ê°’ìœ¼ë¡œ ì„¤ì •í•´ì£¼ì„¸ìš”. (ì˜ˆ: 0.01f)
 //    private const float MATCH_THRESHOLD = 0.001f;
 
-//    // ÇÑ ¹ø ·ÎµåÇÑ µ¥ÀÌÅÍ´Â ´Ù½Ã ÀĞÁö ¾Êµµ·Ï Ä³½ÌÇÕ´Ï´Ù.
+//    // í•œ ë²ˆ ë¡œë“œí•œ ë°ì´í„°ëŠ” ë‹¤ì‹œ ì½ì§€ ì•Šë„ë¡ ìºì‹±í•©ë‹ˆë‹¤.
 //    private static Dictionary<Vector3, float> _fullLocalSaliencyMap;
 //    private static Dictionary<Vector3, Vector3> _unityToObjCoordMap; // Key: Unity local, Value: OBJ local
 //    private static string _loadedObjPath;
 
 //    /// <summary>
-//    /// ÃÖÁ¾ÀûÀ¸·Î »ç¿ëÇÒ Saliency MapÀ» ¹İÈ¯ÇÕ´Ï´Ù.
+//    /// ìµœì¢…ì ìœ¼ë¡œ ì‚¬ìš©í•  Saliency Mapì„ ë°˜í™˜í•©ë‹ˆë‹¤.
 //    /// </summary>
 //    public static Dictionary<Vector3, float> GetSaliencyMap(MeshFilter meshFilter, List<Vector3> filteredWorldVertices, string objPath, string txtPath)
 //    {
-//        // µ¥ÀÌÅÍ°¡ ·ÎµåµÇÁö ¾Ê¾Ò°Å³ª ´Ù¸¥ ÆÄÀÏÀÌ¸é »õ·Î ·Îµå
+//        // ë°ì´í„°ê°€ ë¡œë“œë˜ì§€ ì•Šì•˜ê±°ë‚˜ ë‹¤ë¥¸ íŒŒì¼ì´ë©´ ìƒˆë¡œ ë¡œë“œ
 //        if (_fullLocalSaliencyMap == null || _loadedObjPath != objPath)
 //        {
 //            _fullLocalSaliencyMap = LoadFullSaliencyMapFromSource(objPath, txtPath);
@@ -209,7 +249,7 @@ public static class SaliencyDataLoader
 //        List<Vector3> unityMapKeys = _unityToObjCoordMap.Keys.ToList();
 //        if (unityMapKeys.Count == 0)
 //        {
-//            Debug.LogError("[SaliencyDataLoader] '¹Ù·Î°¡±â ¸Ê'ÀÌ ºñ¾îÀÖ½À´Ï´Ù. BuildUnityToObjMap ½ÇÆĞ.");
+//            Debug.LogError("[SaliencyDataLoader] 'ë°”ë¡œê°€ê¸° ë§µ'ì´ ë¹„ì–´ìˆìŠµë‹ˆë‹¤. BuildUnityToObjMap ì‹¤íŒ¨.");
 //            return filteredSaliencyMap;
 //        }
 //        int successCount = 0;
@@ -231,7 +271,7 @@ public static class SaliencyDataLoader
 //                }
 //            }
 
-//            // °¡Àå °¡±î¿î Å°¿ÍÀÇ °Å¸®°¡ Çã¿ë ¿ÀÂ÷ ³»¿¡ ÀÖ´Ù¸é ¼º°øÀ¸·Î °£ÁÖ
+//            // ê°€ì¥ ê°€ê¹Œìš´ í‚¤ì™€ì˜ ê±°ë¦¬ê°€ í—ˆìš© ì˜¤ì°¨ ë‚´ì— ìˆë‹¤ë©´ ì„±ê³µìœ¼ë¡œ ê°„ì£¼
 //            if (minDistance < MATCH_THRESHOLD)
 //            {
 //                Vector3 objCoordKey = _unityToObjCoordMap[closestKey];
@@ -240,39 +280,39 @@ public static class SaliencyDataLoader
 //            }
 //            else
 //            {
-//                Debug.LogError($"[SaliencyDataLoader] Á¶È¸ ½ÇÆĞ! °¡Àå °¡±î¿î Å°({closestKey:F8})¿ÍÀÇ °Å¸®°¡ ³Ê¹« ¸Ù´Ï´Ù. Distance: {minDistance:F8}, Key: {localPos:F8}");
+//                Debug.LogError($"[SaliencyDataLoader] ì¡°íšŒ ì‹¤íŒ¨! ê°€ì¥ ê°€ê¹Œìš´ í‚¤({closestKey:F8})ì™€ì˜ ê±°ë¦¬ê°€ ë„ˆë¬´ ë©‰ë‹ˆë‹¤. Distance: {minDistance:F8}, Key: {localPos:F8}");
 //            }
 //        }
-//        Debug.Log($"<b><color=lime>[SaliencyDataLoader] Á¶È¸ ¿Ï·á. ÃÑ {filteredWorldVertices.Count}°³ÀÇ ÈÄº¸ Áß {successCount}°³°¡ ¼º°øÀûÀ¸·Î ¸ÅÄªµÇ¾ú½À´Ï´Ù.</color></b>");
+//        Debug.Log($"<b><color=lime>[SaliencyDataLoader] ì¡°íšŒ ì™„ë£Œ. ì´ {filteredWorldVertices.Count}ê°œì˜ í›„ë³´ ì¤‘ {successCount}ê°œê°€ ì„±ê³µì ìœ¼ë¡œ ë§¤ì¹­ë˜ì—ˆìŠµë‹ˆë‹¤.</color></b>");
 //        return filteredSaliencyMap;
 //    }
 
 
-//    // LoadFullSaliencyMapFromSource¿Í BuildUnityToObjMap ÇÔ¼ö´Â ÀÌÀü 'ÀüÃ¼ ÄÚµå' ´äº¯°ú µ¿ÀÏÇÕ´Ï´Ù.
+//    // LoadFullSaliencyMapFromSourceì™€ BuildUnityToObjMap í•¨ìˆ˜ëŠ” ì´ì „ 'ì „ì²´ ì½”ë“œ' ë‹µë³€ê³¼ ë™ì¼í•©ë‹ˆë‹¤.
 //    private static Dictionary<Vector3, float> LoadFullSaliencyMapFromSource(string objPath, string saliencyTxtPath)
 //    {
 //        var saliencyMap = new Dictionary<Vector3, float>();
 
 //        if (!File.Exists(objPath) || !File.Exists(saliencyTxtPath))
 //        {
-//            Debug.LogError($"¼Ò½º ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù: OBJ({File.Exists(objPath)}), TXT({File.Exists(saliencyTxtPath)})");
+//            Debug.LogError($"ì†ŒìŠ¤ íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤: OBJ({File.Exists(objPath)}), TXT({File.Exists(saliencyTxtPath)})");
 //            return saliencyMap;
 //        }
 
 //        List<Vector3> localVertices = ObjMeshImporter.LoadVertices(objPath);
-//        // --- ¼öÁ¤µÈ ºÎºĞ ½ÃÀÛ ---
+//        // --- ìˆ˜ì •ëœ ë¶€ë¶„ ì‹œì‘ ---
 //        List<float> scores = new List<float>();
 //        string[] lines = File.ReadAllLines(saliencyTxtPath);
 
 //        for (int i = 0; i < lines.Length; i++)
 //        {
-//            // 1. ¾ÕµÚ °ø¹é Á¦°Å
+//            // 1. ì•ë’¤ ê³µë°± ì œê±°
 //            string line = lines[i].Trim();
 
-//            // 2. ºó ÁÙ °Ç³Ê¶Ù±â
+//            // 2. ë¹ˆ ì¤„ ê±´ë„ˆë›°ê¸°
 //            if (string.IsNullOrWhiteSpace(line)) continue;
 
-//            // 3. BOM(Byte Order Mark) Á¦°Å (ÆÄÀÏ Ã¹ ÁÙ¿¡ ¼û¾îÀÖ´Â °æ¿ì°¡ ¸¹À½)
+//            // 3. BOM(Byte Order Mark) ì œê±° (íŒŒì¼ ì²« ì¤„ì— ìˆ¨ì–´ìˆëŠ” ê²½ìš°ê°€ ë§ìŒ)
 //            if (i == 0 && line.Length > 0 && line[0] == '\uFEFF')
 //            {
 //                line = line.Substring(1);
@@ -280,20 +320,20 @@ public static class SaliencyDataLoader
 
 //            try
 //            {
-//                // 4. NumberStyles.Any¸¦ »ç¿ëÇÏ¿© Áö¼ö Ç¥±â¹ı(E-05)ÀÌ³ª ¼¯ÀÎ °ø¹é±îÁö Çã¿ë
+//                // 4. NumberStyles.Anyë¥¼ ì‚¬ìš©í•˜ì—¬ ì§€ìˆ˜ í‘œê¸°ë²•(E-05)ì´ë‚˜ ì„ì¸ ê³µë°±ê¹Œì§€ í—ˆìš©
 //                float val = float.Parse(line, NumberStyles.Any, CultureInfo.InvariantCulture);
 //                scores.Add(val);
 //            }
 //            catch (System.FormatException)
 //            {
-//                // 5. Á¤È®È÷ ¾î¶² ¹®ÀÚ¿­ ¶§¹®¿¡ Á×¾ú´ÂÁö ·Î±× Ãâ·Â (µğ¹ö±ë¿ë ÇÙ½É)
-//                Debug.LogError($"[SaliencyDataLoader] Æ÷¸Ë ¿¡·¯ ¹ß»ı! Line {i + 1}: '{line}' (¿øº»: '{lines[i]}')");
-//                // ¹®Á¦°¡ µÈ ÁÙÀº 0À¸·Î Ã³¸®ÇÏ°Å³ª, throw¸¦ ÇØ¼­ ¸ØÃâÁö °áÁ¤ (¿©±â¼± 0À¸·Î ³Ö°í ÁøÇà)
+//                // 5. ì •í™•íˆ ì–´ë–¤ ë¬¸ìì—´ ë•Œë¬¸ì— ì£½ì—ˆëŠ”ì§€ ë¡œê·¸ ì¶œë ¥ (ë””ë²„ê¹…ìš© í•µì‹¬)
+//                Debug.LogError($"[SaliencyDataLoader] í¬ë§· ì—ëŸ¬ ë°œìƒ! Line {i + 1}: '{line}' (ì›ë³¸: '{lines[i]}')");
+//                // ë¬¸ì œê°€ ëœ ì¤„ì€ 0ìœ¼ë¡œ ì²˜ë¦¬í•˜ê±°ë‚˜, throwë¥¼ í•´ì„œ ë©ˆì¶œì§€ ê²°ì • (ì—¬ê¸°ì„  0ìœ¼ë¡œ ë„£ê³  ì§„í–‰)
 //                // scores.Add(0f); 
-//                throw; // ¿¡·¯¸¦ È®½ÇÈ÷ Àâ±â À§ÇØ ÀÏ´Ü ¸ØÃä´Ï´Ù.
+//                throw; // ì—ëŸ¬ë¥¼ í™•ì‹¤íˆ ì¡ê¸° ìœ„í•´ ì¼ë‹¨ ë©ˆì¶¥ë‹ˆë‹¤.
 //            }
 //        }
-//        // --- ¼öÁ¤µÈ ºÎºĞ ³¡ ---
+//        // --- ìˆ˜ì •ëœ ë¶€ë¶„ ë ---
 //        //float[] scores = File.ReadAllLines(saliencyTxtPath)
 //        //                       .Where(line => !string.IsNullOrWhiteSpace(line))
 //        //                       .Select(s => float.Parse(s, CultureInfo.InvariantCulture))
@@ -301,7 +341,7 @@ public static class SaliencyDataLoader
 
 //        if (localVertices.Count != scores.Count || localVertices.Count == 0)
 //        {
-//            Debug.LogError($"Á¤Á¡({localVertices.Count})°ú Á¡¼ö({scores.Count}) °³¼ö°¡ ´Ù¸£°Å³ª, µ¥ÀÌÅÍ°¡ ¾ø½À´Ï´Ù.");
+//            Debug.LogError($"ì •ì ({localVertices.Count})ê³¼ ì ìˆ˜({scores.Count}) ê°œìˆ˜ê°€ ë‹¤ë¥´ê±°ë‚˜, ë°ì´í„°ê°€ ì—†ìŠµë‹ˆë‹¤.");
 //            return saliencyMap;
 //        }
 
@@ -346,6 +386,6 @@ public static class SaliencyDataLoader
 //                }
 //            }
 //        }
-//        Debug.Log($"[SaliencyDataLoader] '¹Ù·Î°¡±â ¸Ê' »ı¼º ¿Ï·á. ÃÑ {meshFilter.mesh.vertexCount}°³ÀÇ Á¤Á¡ Áß {_unityToObjCoordMap.Count}°³°¡ ¿¬°áµÇ¾ú½À´Ï´Ù.");
+//        Debug.Log($"[SaliencyDataLoader] 'ë°”ë¡œê°€ê¸° ë§µ' ìƒì„± ì™„ë£Œ. ì´ {meshFilter.mesh.vertexCount}ê°œì˜ ì •ì  ì¤‘ {_unityToObjCoordMap.Count}ê°œê°€ ì—°ê²°ë˜ì—ˆìŠµë‹ˆë‹¤.");
 //    }
 //}

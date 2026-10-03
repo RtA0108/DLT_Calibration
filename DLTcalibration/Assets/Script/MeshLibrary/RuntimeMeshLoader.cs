@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -63,7 +63,7 @@ public class RuntimeMeshLoader : MonoBehaviour
 
         try
         {
-            // 1. ¸ğµ¨ ·Îµå
+            // 1. ëª¨ë¸ ë¡œë“œ
             if (entry.isBuiltIn)
             {
                 GameObject prefab = Resources.Load<GameObject>(entry.meshPath);
@@ -76,9 +76,9 @@ public class RuntimeMeshLoader : MonoBehaviour
                 if (File.Exists(path)) { loadedObj = SimpleObjLoader.Load(path); entry.meshPath = path; }
             }
 
-            if (loadedObj == null) throw new System.Exception("·Îµå ½ÇÆĞ");
+            if (loadedObj == null) throw new System.Exception("ë¡œë“œ ì‹¤íŒ¨");
 
-            // 2. Transform ¼³Á¤
+            // 2. Transform ì„¤ì •
             CurrentLoadedObject = loadedObj;
             CurrentLoadedObject.transform.position = Vector3.zero;
             CurrentLoadedObject.transform.localScale = entry.initialScale;
@@ -87,7 +87,7 @@ public class RuntimeMeshLoader : MonoBehaviour
             try { loadedObj.tag = "something"; }
             catch { }
 
-            // 3. ÀÚ½Ä ¼¼ÆÃ
+            // 3. ìì‹ ì„¸íŒ…
             int meshLayer = LayerMask.NameToLayer("Meshes");
             if (meshLayer == -1) meshLayer = LayerMask.NameToLayer("Default");
 
@@ -106,7 +106,7 @@ public class RuntimeMeshLoader : MonoBehaviour
                 }
             }
 
-            // 4. °æ·Î ÁØºñ (¡Ú CFSCNN ¿À·ù ÇØ°á ÇÙ½É)
+            // 4. ê²½ë¡œ ì¤€ë¹„ (â˜… CFSCNN ì˜¤ë¥˜ í•´ê²° í•µì‹¬)
             string objPath = entry.meshPath;
             string cfsPath = "", texPath = "";
 
@@ -115,9 +115,9 @@ public class RuntimeMeshLoader : MonoBehaviour
                 cfsPath = entry.cfsDataPath;
                 texPath = entry.texDataPath;
 
-                // ¡Ú [¼öÁ¤] Resources °æ·Î´Â ½ÇÁ¦ ÆÄÀÏ °æ·Î°¡ ¾Æ´Ô ("Folder/File").
-                // CFSCNNÀº ½ÇÁ¦ .obj ÆÄÀÏÀÇ µğ½ºÅ© °æ·Î¸¦ ¿øÇÏ¹Ç·Î, À¯´ÏÆ¼ ÇÁ·ÎÁ§Æ® °æ·Î¸¦ Á¶ÇÕÇØÁÜ.
-                // (ÁÖÀÇ: ¿¡µğÅÍ È¯°æ ±âÁØ. ºôµå ½Ã¿¡´Â StreamingAssets µîÀ» »ç¿ëÇØ¾ß ÇÒ ¼ö ÀÖÀ½)
+                // â˜… [ìˆ˜ì •] Resources ê²½ë¡œëŠ” ì‹¤ì œ íŒŒì¼ ê²½ë¡œê°€ ì•„ë‹˜ ("Folder/File").
+                // CFSCNNì€ ì‹¤ì œ .obj íŒŒì¼ì˜ ë””ìŠ¤í¬ ê²½ë¡œë¥¼ ì›í•˜ë¯€ë¡œ, ìœ ë‹ˆí‹° í”„ë¡œì íŠ¸ ê²½ë¡œë¥¼ ì¡°í•©í•´ì¤Œ.
+                // (ì£¼ì˜: ì—ë””í„° í™˜ê²½ ê¸°ì¤€. ë¹Œë“œ ì‹œì—ëŠ” StreamingAssets ë“±ì„ ì‚¬ìš©í•´ì•¼ í•  ìˆ˜ ìˆìŒ)
 
                 string fullResourcePath = Path.Combine(Application.dataPath, "Resources", entry.meshPath + ".obj");
                 if (File.Exists(fullResourcePath))
@@ -126,14 +126,14 @@ public class RuntimeMeshLoader : MonoBehaviour
                 }
                 else
                 {
-                    // .obj°¡ ¾øÀ¸¸é .fbxÀÏ ¼öµµ ÀÖÀ½
+                    // .objê°€ ì—†ìœ¼ë©´ .fbxì¼ ìˆ˜ë„ ìˆìŒ
                     string fbxPath = Path.Combine(Application.dataPath, "Resources", entry.meshPath + ".fbx");
                     if (File.Exists(fbxPath)) objPath = fbxPath;
                     else
                     {
-                        // ±×·¡µµ ¾øÀ¸¸é ÀÏ´Ü ¿øº» ¹®ÀÚ¿­À» ³Ñ±âµÇ °æ°í
-                        // (´Ü¼ø ÇÁ¸®ÆÕ¸¸ ÀÖ°í ¿øº» ¸ğµ¨ÆÄÀÏÀÌ Resources¿¡ ¾øÀ¸¸é ÀĞ±â ½ÇÆĞÇÔ)
-                        Debug.LogWarning($"[Loader] Resources ¿øº» ¸ğµ¨ ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù: {fullResourcePath}");
+                        // ê·¸ë˜ë„ ì—†ìœ¼ë©´ ì¼ë‹¨ ì›ë³¸ ë¬¸ìì—´ì„ ë„˜ê¸°ë˜ ê²½ê³ 
+                        // (ë‹¨ìˆœ í”„ë¦¬íŒ¹ë§Œ ìˆê³  ì›ë³¸ ëª¨ë¸íŒŒì¼ì´ Resourcesì— ì—†ìœ¼ë©´ ì½ê¸° ì‹¤íŒ¨í•¨)
+                        Debug.LogWarning($"[Loader] Resources ì›ë³¸ ëª¨ë¸ íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤: {fullResourcePath}");
                     }
                 }
             }
@@ -147,7 +147,7 @@ public class RuntimeMeshLoader : MonoBehaviour
                 texPath = File.Exists(texFile) ? texFile : "";
             }
 
-            // 5. ÄÄÆ÷³ÍÆ® ºÎÂø
+            // 5. ì»´í¬ë„ŒíŠ¸ ë¶€ì°©
             var calib = loadedObj.AddComponent<ProjectionMappingCalibrator>();
             calib.enabled = false;
             calib.SetPaths(objPath, cfsPath, texPath);
@@ -157,11 +157,18 @@ public class RuntimeMeshLoader : MonoBehaviour
             var vis = loadedObj.AddComponent<SaliencyMapVisualizer>();
             vis.enabled = false;
             vis.mainCamera = Camera.main;
-            vis.meshFilter = loadedObj.GetComponentInChildren<MeshFilter>(); // ¾ÈÀüÀåÄ¡
+            vis.meshFilter = loadedObj.GetComponentInChildren<MeshFilter>(); // ì•ˆì „ì¥ì¹˜
             vis.Init(objPath, cfsPath, objPath, texPath, visibilityMask);
 
             if (MainController.Instance != null)
+            {
+                MainController.Instance.currentEntry = entry;
                 MainController.Instance.RegisterNewMesh(loadedObj, objPath, cfsPath, texPath);
+            }
+
+            // ëª¨ë¸ë³„ 4D í…ìŠ¤ì²˜ (ìˆìœ¼ë©´ ì¬ìƒ, ì—†ìœ¼ë©´ ì›ë˜ í…ìŠ¤ì²˜)
+            if (TextureSequenceAnimator.Instance != null)
+                TextureSequenceAnimator.Instance.Apply(loadedObj, entry);
         }
         catch (System.Exception e)
         {
@@ -240,7 +247,7 @@ public class RuntimeMeshLoader : MonoBehaviour
 
 //        try
 //        {
-//            // 1. ¸ğµ¨ ·Îµå (ºÎ¸ğ ²®µ¥±â »ı¼º)
+//            // 1. ëª¨ë¸ ë¡œë“œ (ë¶€ëª¨ ê»ë°ê¸° ìƒì„±)
 //            if (entry.isBuiltIn)
 //            {
 //                GameObject prefab = Resources.Load<GameObject>(entry.meshPath);
@@ -253,44 +260,44 @@ public class RuntimeMeshLoader : MonoBehaviour
 //                if (File.Exists(path)) { loadedObj = SimpleObjLoader.Load(path); entry.meshPath = path; }
 //            }
 
-//            if (loadedObj == null) throw new System.Exception("·Îµå ½ÇÆĞ");
+//            if (loadedObj == null) throw new System.Exception("ë¡œë“œ ì‹¤íŒ¨");
 
-//            // 2. Transform ¼³Á¤ (ºÎ¸ğ ±âÁØ)
+//            // 2. Transform ì„¤ì • (ë¶€ëª¨ ê¸°ì¤€)
 //            CurrentLoadedObject = loadedObj;
 //            CurrentLoadedObject.transform.position = Vector3.zero;
 //            CurrentLoadedObject.transform.localScale = entry.initialScale;
 //            CurrentLoadedObject.transform.localEulerAngles = entry.initialRotation;
 
 //            // =========================================================
-//            // ¡Ú [ÇÙ½É ¼öÁ¤] ÀÚ½Äµé±îÁö ¿Ïº®ÇÏ°Ô ¼¼ÆÃ (Layer & Collider)
+//            // â˜… [í•µì‹¬ ìˆ˜ì •] ìì‹ë“¤ê¹Œì§€ ì™„ë²½í•˜ê²Œ ì„¸íŒ… (Layer & Collider)
 //            // =========================================================
 
 //            int meshLayer = LayerMask.NameToLayer("Meshes");
 //            if (meshLayer == -1) meshLayer = LayerMask.NameToLayer("Default");
 
-//            // ºÎ¸ğ ·¹ÀÌ¾î ¼³Á¤
+//            // ë¶€ëª¨ ë ˆì´ì–´ ì„¤ì •
 //            loadedObj.layer = meshLayer;
 
-//            // ÀÚ½Äµé(½ÇÁ¦ ¸Ş½¬) ¼øÈ¸ÇÏ¸ç ¼¼ÆÃ
+//            // ìì‹ë“¤(ì‹¤ì œ ë©”ì‰¬) ìˆœíšŒí•˜ë©° ì„¸íŒ…
 //            MeshFilter[] filters = loadedObj.GetComponentsInChildren<MeshFilter>();
 
 //            foreach (var mf in filters)
 //            {
 //                GameObject child = mf.gameObject;
 
-//                // 1. ·¹ÀÌ¾î ÅëÀÏ
+//                // 1. ë ˆì´ì–´ í†µì¼
 //                child.layer = meshLayer;
 
-//                // 2. MeshCollider ºÎÂø (¾øÀ¸¸é)
+//                // 2. MeshCollider ë¶€ì°© (ì—†ìœ¼ë©´)
 //                if (child.GetComponent<Collider>() == null)
 //                {
 //                    var mc = child.AddComponent<MeshCollider>();
-//                    mc.sharedMesh = mf.sharedMesh; // ¸Ş½¬ µ¥ÀÌÅÍ ¿¬°á
+//                    mc.sharedMesh = mf.sharedMesh; // ë©”ì‰¬ ë°ì´í„° ì—°ê²°
 //                }
 //            }
 //            // =========================================================
 
-//            // 4. °æ·Î ÁØºñ
+//            // 4. ê²½ë¡œ ì¤€ë¹„
 //            string objPath = entry.meshPath;
 //            string cfsPath = "", texPath = "";
 
@@ -314,23 +321,23 @@ public class RuntimeMeshLoader : MonoBehaviour
 //                texPath = File.Exists(texFile) ? texFile : "";
 //            }
 
-//            // 5. ÄÄÆ÷³ÍÆ® ºÎÂø
+//            // 5. ì»´í¬ë„ŒíŠ¸ ë¶€ì°©
 //            LayerMask visibilityMask = 1 << meshLayer;
 
-//            // (A) Calibrator (ºÎ¸ğ¿¡ ºÎÂø)
+//            // (A) Calibrator (ë¶€ëª¨ì— ë¶€ì°©)
 //            var calib = loadedObj.AddComponent<ProjectionMappingCalibrator>();
 //            calib.SetPaths(objPath, cfsPath, texPath);
-//            calib.Init(); // ÃÊ±âÈ­ Áö½Ã
+//            calib.Init(); // ì´ˆê¸°í™” ì§€ì‹œ
 //            calib.enabled = false;
 
 //            // (B) Visualizer
 //            var vis = loadedObj.AddComponent<SaliencyMapVisualizer>();
 //            vis.enabled = false;
-//            vis.meshFilter = loadedObj.GetComponentInChildren<MeshFilter>(); // ÀÚ½Ä ÇÊÅÍ ¿¬°á
+//            vis.meshFilter = loadedObj.GetComponentInChildren<MeshFilter>(); // ìì‹ í•„í„° ì—°ê²°
 //            vis.mainCamera = Camera.main;
 //            vis.Init(objPath, cfsPath, objPath, texPath, visibilityMask);
 
-//            // 6. MainController¿¡ º¸°í
+//            // 6. MainControllerì— ë³´ê³ 
 //            if (MainController.Instance != null)
 //            {
 //                MainController.Instance.RegisterNewMesh(loadedObj, objPath, cfsPath, texPath);

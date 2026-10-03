@@ -1,24 +1,28 @@
-using UnityEngine;
-using System.Diagnostics;
+ï»¿using UnityEngine;
 using System.IO;
-using System;
 
+// saliency Python ê³„ì‚° ì„¤ì •ê³¼ ì‹œìž‘. ì‹¤ì œ ì‹¤í–‰ì€ SaliencyJobì´ ë°±ê·¸ë¼ìš´ë“œì—ì„œ í•œë‹¤.
+// (ì˜ˆì „ì—ëŠ” ë©”ì¸ ìŠ¤ë ˆë“œì—ì„œ í”„ë¡œì„¸ìŠ¤ê°€ ëë‚  ë•Œê¹Œì§€ ê¸°ë‹¤ë ¤ì„œ, ìƒˆ ëª¨ë¸ì„ ë¶ˆëŸ¬ì˜¤ë©´ Unityê°€ 15ì´ˆì¯¤ ë©ˆì·„ìŒ)
 public class PythonProcessManager : MonoBehaviour
 {
     public static PythonProcessManager Instance;
 
-    [Header("Local Settings (CfS-CNN)")]
-    public string localPythonPath = "python";
-    public string localScriptName = "bridge_cfs.py";
+    public const string DefaultLocalPython = "python";
+    public const string DefaultLocalScript = "bridge_cfs.py";
+    public const string DefaultScriptDirectory = "PythonScripts";
 
-    // WSL Conda Python °æ·Î
+    [Header("Local Settings (CfS-CNN)")]
+    public string localPythonPath = DefaultLocalPython;
+    public string localScriptName = DefaultLocalScript;
+
+    // WSL Conda Python ê²½ë¡œ
     private const string WSL_PYTHON_PATH = "/home/minsu/miniconda3/envs/textured_saliency/bin/python";
-    // WSL ½ÇÇà ½ºÅ©¸³Æ® °æ·Î
+    // WSL ì‹¤í–‰ ìŠ¤í¬ë¦½íŠ¸ ê²½ë¡œ
     private const string WSL_SCRIPT_PATH = "/home/minsu/TexMeshSaliency/bridge_tex.py";
 
     [Header("Common")]
-    // ÇÁ·ÎÁ§Æ® ·çÆ® ±âÁØ Æú´õ¸í (Assets Æú´õ¿Í °°Àº ·¹º§¿¡ ÀÖ´Â Æú´õ)
-    public string scriptDirectory = "PythonScripts";
+    // í”„ë¡œì íŠ¸ ë£¨íŠ¸ ê¸°ì¤€ í´ë”ëª… (Assets í´ë”ì™€ ê°™ì€ ë ˆë²¨ì— ìžˆëŠ” í´ë”)
+    public string scriptDirectory = DefaultScriptDirectory;
 
     void Awake()
     {
@@ -26,124 +30,25 @@ public class PythonProcessManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
-    // =========================================================
-    // ¡Ú [¼öÁ¤ ¿Ï·á] ÀÎÀÚ 4°³¸¦ ¹Þ¾Æ¼­ °¢ÀÚÀÇ µµ¿ì¹Ì ÇÔ¼ö·Î Á¤È®È÷ ºÐ¹èÇÕ´Ï´Ù.
-    // =========================================================
-
-    public bool RunSaliencyCalculation(string objPath, string texPath, string cfsOutDir, string texOutDir)
+    // CfSì™€ TexMesh ê²°ê³¼ë¥¼ ê° í´ë”ì— ë§Œë“ ë‹¤. ë°”ë¡œ ëŒì•„ì˜¤ê³ , ëë‚¬ëŠ”ì§€ëŠ” job.IsDoneìœ¼ë¡œ í™•ì¸.
+    public SaliencyJob StartSaliencyCalculation(string objPath, string cfsOutDir, string texOutDir, bool runCfs = true, bool runTex = true)
     {
-        UnityEngine.Debug.Log("[PythonProcessManager] Saliency °è»ê ÇÁ·Î¼¼½º ½ÃÀÛ (°æ·Î ºÐ¸® Àû¿ë)");
-
-        // 1. CfS-CNN (Local Windows)
-        bool resultLocal = RunLocalProcess(objPath, cfsOutDir);
-
-        // =========================================================
-        // ¡Ú [¼öÁ¤µÊ] ÅØ½ºÃ³ °æ·Î°¡ ¾ø¾îµµ ÆÄÀÌ½ãÀÌ ¾Ë¾Æ¼­ Ã£°Ô²û ¹«Á¶°Ç ½ÇÇà!
-        // =========================================================
-        // ¸¸¾à ºóÄ­À¸·Î ¿À¸é ÆÄÀÌ½ã¿¡°Ô "³×°¡ ¾Ë¾Æ¼­ Ã£¾Æ(AUTO_FIND)"¶ó°í ´øÁ®ÁÝ´Ï´Ù.
-        string safeTexPath = string.IsNullOrEmpty(texPath) ? "AUTO_FIND" : texPath;
-
-        bool resultWsl = RunWslProcess(objPath, safeTexPath, texOutDir);
-
-        return resultLocal && resultWsl;
+        Debug.Log($"[PythonProcessManager] Saliency ê³„ì‚° ì‹œìž‘ (ë°±ê·¸ë¼ìš´ë“œ, CfS: {runCfs}, Tex: {runTex})");
+        return SaliencyJob.Start(objPath, cfsOutDir, texOutDir, runCfs, runTex, SettingsFrom(this));
     }
-    // ---------------------------------------------------------
-    // 1. À©µµ¿ì ·ÎÄÃ ÇÁ·Î¼¼½º ½ÇÇà (CfS-CNN)
-    // ---------------------------------------------------------
-    private bool RunLocalProcess(string meshPath, string outputDir)
+
+    // ì—ë””í„° ë„êµ¬ì²˜ëŸ¼ í”Œë ˆì´ ì¤‘ì´ ì•„ë‹ ë•Œë„ ì“°ë„ë¡ static. managerê°€ nullì´ë©´ ê¸°ë³¸ê°’.
+    public static SaliencyJob.Settings SettingsFrom(PythonProcessManager manager)
     {
         string projectRoot = Directory.GetParent(Application.dataPath).FullName;
-        string scriptPath = Path.Combine(projectRoot, scriptDirectory, localScriptName);
-
-        if (!File.Exists(scriptPath))
+        string directory = manager != null ? manager.scriptDirectory : DefaultScriptDirectory;
+        string script = manager != null ? manager.localScriptName : DefaultLocalScript;
+        return new SaliencyJob.Settings
         {
-            UnityEngine.Debug.LogError($"[Local Error] ½ºÅ©¸³Æ® ÆÄÀÏÀÌ ¾ø½À´Ï´Ù! °æ·Î¸¦ È®ÀÎÇÏ¼¼¿ä: {scriptPath}");
-            return false;
-        }
-
-        ProcessStartInfo start = new ProcessStartInfo();
-        start.FileName = localPythonPath;
-        // ÀÎÀÚ: "½ºÅ©¸³Æ®°æ·Î" "¸Þ½¬°æ·Î" "Ãâ·ÂÆú´õ"
-        start.Arguments = $"\"{scriptPath}\" \"{meshPath}\" \"{outputDir}\"";
-
-        start.UseShellExecute = false;
-        start.RedirectStandardOutput = true;
-        start.RedirectStandardError = true;
-        start.CreateNoWindow = true;
-
-        return ExecuteProcess(start, "Local(CfS)");
-    }
-
-    // ---------------------------------------------------------
-    // 2. WSL ÇÁ·Î¼¼½º ½ÇÇà (TexSaliency)
-    // ---------------------------------------------------------
-    private bool RunWslProcess(string meshPath, string texturePath, string outputDir)
-    {
-        // ¡Ú [ÇÙ½É] À©µµ¿ì °æ·Î¸¦ WSL °æ·Î(/mnt/c/...)·Î ¿Ïº®ÇÏ°Ô º¯È¯!
-        string wslMesh = ConvertToWslPath(meshPath);
-        string wslTex = ConvertToWslPath(texturePath);
-        string wslOut = ConvertToWslPath(outputDir);
-
-        ProcessStartInfo start = new ProcessStartInfo();
-        start.FileName = "wsl";
-
-        // ¸í·É¾î ±¸Á¶: wsl [ÆÄÀÌ½ã°æ·Î] [½ºÅ©¸³Æ®°æ·Î] --mesh [¸Þ½¬] --tex [ÅØ½ºÃ³] --out [Ãâ·Â]
-        start.Arguments = $"{WSL_PYTHON_PATH} \"{WSL_SCRIPT_PATH}\" --mesh \"{wslMesh}\" --tex \"{wslTex}\" --out \"{wslOut}\"";
-
-        start.UseShellExecute = false;
-        start.RedirectStandardOutput = true;
-        start.RedirectStandardError = true;
-        start.CreateNoWindow = true;
-
-        return ExecuteProcess(start, "WSL(Tex)");
-    }
-
-    // ---------------------------------------------------------
-    // °øÅë ½ÇÇà±â ¹× °æ·Î º¯È¯±â (±âÁ¸ ÄÚµå ¿Ïº® À¯Áö)
-    // ---------------------------------------------------------
-    private bool ExecuteProcess(ProcessStartInfo startInfo, string label)
-    {
-        UnityEngine.Debug.Log($"[{label}] ¸í·É¾î ½ÇÇà:\n{startInfo.FileName} {startInfo.Arguments}");
-
-        try
-        {
-            using (Process process = Process.Start(startInfo))
-            {
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                process.WaitForExit();
-
-                if (!string.IsNullOrEmpty(output))
-                    UnityEngine.Debug.Log($"[{label} Output]\n{output}");
-
-                if (!string.IsNullOrEmpty(error))
-                    UnityEngine.Debug.LogError($"[{label} Error / StdErr]\n{error}");
-
-                if (process.ExitCode != 0)
-                {
-                    UnityEngine.Debug.LogError($"[{label}] ÇÁ·Î¼¼½º ºñÁ¤»ó Á¾·á (ExitCode: {process.ExitCode})");
-                    return false;
-                }
-
-                return true;
-            }
-        }
-        catch (Exception e)
-        {
-            UnityEngine.Debug.LogError($"[{label}] ½ÇÇà ½ÇÆÐ (Exception): {e.Message}");
-            return false;
-        }
-    }
-
-    private string ConvertToWslPath(string windowsPath)
-    {
-        if (string.IsNullOrEmpty(windowsPath)) return "";
-        string path = windowsPath.Replace("\\", "/");
-        if (path.Length > 1 && path[1] == ':')
-        {
-            char driveLetter = char.ToLower(path[0]);
-            path = $"/mnt/{driveLetter}{path.Substring(2)}";
-        }
-        return path;
+            localPython = manager != null ? manager.localPythonPath : DefaultLocalPython,
+            cfsScriptPath = Path.Combine(projectRoot, directory, script),
+            wslPython = WSL_PYTHON_PATH,
+            wslScriptPath = WSL_SCRIPT_PATH,
+        };
     }
 }

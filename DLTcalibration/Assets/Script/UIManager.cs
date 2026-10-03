@@ -1,14 +1,14 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 
 public class UIManager : MonoBehaviour
 {
-    // ¡å¡å¡å [ÇÙ½É] ÀÌ ºÎºĞÀÌ ¾ø¾î¼­ ¿¡·¯°¡ ³­ °ÍÀÔ´Ï´Ù! ¡å¡å¡å
-    // MainController°¡ ÀÌ º¯¼ö¸¦ ÅëÇØ UIManager¿¡°Ô ¸»À» °Ì´Ï´Ù.
+    // â–¼â–¼â–¼ [í•µì‹¬] ì´ ë¶€ë¶„ì´ ì—†ì–´ì„œ ì—ëŸ¬ê°€ ë‚œ ê²ƒì…ë‹ˆë‹¤! â–¼â–¼â–¼
+    // MainControllerê°€ ì´ ë³€ìˆ˜ë¥¼ í†µí•´ UIManagerì—ê²Œ ë§ì„ ê²ë‹ˆë‹¤.
     public static UIManager Instance;
-    // ¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã
+    // â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²
 
     [Header("UI References")]
     public TMP_Dropdown modelDropdown;
@@ -25,13 +25,13 @@ public class UIManager : MonoBehaviour
     private List<string> _meshIDs = new List<string>();
     private bool _isUpdatingUI = false;
 
-    // ¡å¡å¡å [ÇÙ½É] °ÔÀÓ ½ÃÀÛÇÏÀÚ¸¶ÀÚ "³»°¡ Instance´Ù"¶ó°í µî·Ï ¡å¡å¡å
+    // â–¼â–¼â–¼ [í•µì‹¬] ê²Œì„ ì‹œì‘í•˜ìë§ˆì "ë‚´ê°€ Instanceë‹¤"ë¼ê³  ë“±ë¡ â–¼â–¼â–¼
     private void Awake()
     {
         if (Instance == null) Instance = this;
-        else Destroy(gameObject); // Áßº¹ ¹æÁö
+        else Destroy(gameObject); // ì¤‘ë³µ ë°©ì§€
     }
-    // ¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã
+    // â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²
 
     void Start()
     {
@@ -60,7 +60,7 @@ public class UIManager : MonoBehaviour
     {
         modelDropdown.onValueChanged.AddListener(OnModelSelected);
 
-        // Åä±Û ¸®½º³Ê
+        // í† ê¸€ ë¦¬ìŠ¤ë„ˆ
         calibrationToggle.onValueChanged.AddListener((isOn) => {
             if (_isUpdatingUI) return;
             MainController.Instance.ToggleCalibration(isOn);
@@ -76,11 +76,11 @@ public class UIManager : MonoBehaviour
             MainController.Instance.ToggleRecommendation(isOn);
         });
 
-        // ½½¶óÀÌ´õ ¸®½º³Ê ¿¬°á
+        // ìŠ¬ë¼ì´ë” ë¦¬ìŠ¤ë„ˆ ì—°ê²°
         SetupTransformListeners();
     }
 
-    // ½½¶óÀÌ´õ/ÀÎÇ²ÇÊµå ¸®½º³Ê ¼¼ÆÃ
+    // ìŠ¬ë¼ì´ë”/ì¸í’‹í•„ë“œ ë¦¬ìŠ¤ë„ˆ ì„¸íŒ…
     void SetupTransformListeners()
     {
         // Scale
@@ -100,18 +100,18 @@ public class UIManager : MonoBehaviour
         rotZInput.onEndEdit.AddListener((str) => OnInputChanged(str, rotZSlider, Vector3.forward));
     }
 
-    // ¡å¡å¡å MainController°¡ È£ÃâÇÏ´Â µ¿±âÈ­ ÇÔ¼ö ¡å¡å¡å
+    // â–¼â–¼â–¼ MainControllerê°€ í˜¸ì¶œí•˜ëŠ” ë™ê¸°í™” í•¨ìˆ˜ â–¼â–¼â–¼
     public void SyncToggles(bool calib, bool saliency, bool recommend)
     {
-        _isUpdatingUI = true; // ÀÌº¥Æ® ·çÇÁ Â÷´Ü
+        _isUpdatingUI = true; // ì´ë²¤íŠ¸ ë£¨í”„ ì°¨ë‹¨
 
         calibrationToggle.isOn = calib;
         saliencyToggle.isOn = saliency;
         recommendToggle.isOn = recommend;
 
-        _isUpdatingUI = false; // Â÷´Ü ÇØÁ¦
+        _isUpdatingUI = false; // ì°¨ë‹¨ í•´ì œ
     }
-    // ¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã¡ã
+    // â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²â–²
 
     public void OnModelSelected(int index)
     {
@@ -120,7 +120,7 @@ public class UIManager : MonoBehaviour
         SyncUIValues(_meshIDs[index]);
     }
 
-    // ½½¶óÀÌ´õ µ¿ÀÛ ÇÔ¼öµé
+    // ìŠ¬ë¼ì´ë” ë™ì‘ í•¨ìˆ˜ë“¤
     void OnSliderChanged(float value, TMP_InputField targetInput, Vector3 axis)
     {
         if (_isUpdatingUI) return;
@@ -150,6 +150,15 @@ public class UIManager : MonoBehaviour
 
         // Rotation
         t.localRotation = Quaternion.Euler(rotXSlider.value, rotYSlider.value, rotZSlider.value);
+    }
+
+    // ì½”ë“œì—ì„œ ì •í•œ ìŠ¤ì¼€ì¼(ì˜ˆ: ë¡œë“œ ì‹œ ìë™ ë§ì¶¤)ì„ ìŠ¬ë¼ì´ë”/ì…ë ¥ì¹¸ì— í‘œì‹œë§Œ í•œë‹¤.
+    public void SetScaleWithoutNotify(float scale)
+    {
+        if (scale > scaleSlider.maxValue) scaleSlider.maxValue = scale * 2f;
+        if (scale < scaleSlider.minValue) scaleSlider.minValue = scale * 0.5f;
+        scaleSlider.SetValueWithoutNotify(scale);
+        scaleInput.SetTextWithoutNotify(scale.ToString("F2"));
     }
 
     void SyncUIValues(string id)
