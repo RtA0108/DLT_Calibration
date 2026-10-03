@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -28,7 +28,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     [Range(0.1f, 5.0f)] public float saliencyWeightAlpha = 1.0f;
 
     [Header("Visualization")]
-    public float markerScale = 1.75f; // È­¸é¿¡ º¸ÀÌ´Â ½ÇÁ¦ Å©±â (Á¶Àı °¡´É)
+    public float markerScale = 1.75f; // í™”ë©´ì— ë³´ì´ëŠ” ì‹¤ì œ í¬ê¸° (ì¡°ì ˆ ê°€ëŠ¥)
     public GameObject markerPrefab;
 
     [Header("References")]
@@ -47,7 +47,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
     private Dictionary<int, Vector3> vertexPositions;
     private LayerMask visibilityLayerMask;
-    private GameObject markerRoot; // GameObject Å¸ÀÔÀÓ
+    private GameObject markerRoot; // GameObject íƒ€ì…ì„
     private List<GameObject> activeMarkers = new List<GameObject>();
     private bool isInitialized = false;
 
@@ -59,12 +59,12 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
     public void SetPaths(string obj, string cfs, string tex) { this.objPath = obj; this.cfsSaliencyPath = cfs; this.texSaliencyPath = tex; }
 
-    // ¡Ú [¼öÁ¤µÊ] .transformÀ» ÅëÇØ lossyScale Á¢±Ù
+    // â˜… [ìˆ˜ì •ë¨] .transformì„ í†µí•´ lossyScale ì ‘ê·¼
     private void Update()
     {
         if (!visualized || activeMarkers.Count == 0 || markerRoot == null) return;
 
-        // GameObject¿¡´Â lossyScaleÀÌ ¾øÀ¸¹Ç·Î transform.lossyScale »ç¿ë
+        // GameObjectì—ëŠ” lossyScaleì´ ì—†ìœ¼ë¯€ë¡œ transform.lossyScale ì‚¬ìš©
         Vector3 currentScale = markerRoot.transform.lossyScale;
 
         if (Vector3.Distance(currentScale, _lastLossyScale) > 0.0001f)
@@ -83,7 +83,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         }
     }
 
-    // ¡Ú [¼öÁ¤µÊ] .transformÀ» ÅëÇØ lossyScale Á¢±Ù
+    // â˜… [ìˆ˜ì •ë¨] .transformì„ í†µí•´ lossyScale ì ‘ê·¼
     private Vector3 CalculateInverseScale()
     {
         if (markerRoot == null) return Vector3.one * markerScale;
@@ -140,7 +140,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         ClearMarkers();
         if (!this.enabled || !_visualized || meshFilter == null || targetCamera == null) return;
 
-        // (A) ½Ç·ç¿§ ·»´õ¸µ
+        // (A) ì‹¤ë£¨ì—£ ë Œë”ë§
         RenderTexture rtMask = null;
         if (silhouetteRenderer != null)
         {
@@ -148,7 +148,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
             rtMask = silhouetteRenderer.GetEdgeMask();
         }
 
-        // (B) °¡½Ã¼º Ã¼Å©
+        // (B) ê°€ì‹œì„± ì²´í¬
         var visible = SaliencyUtils.GetVisibleVertices(targetCamera, meshFilter, vertexPositions, visibilityLayerMask);
         if (visible.Count == 0) return;
 
@@ -160,7 +160,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
         if (filtered.Count == 0) return;
 
-        // (C) Saliency °è»ê
+        // (C) Saliency ê³„ì‚°
         Dictionary<Vector3, float> localMap = new Dictionary<Vector3, float>();
 
         Vector3 originalPos = transform.localPosition;
@@ -267,21 +267,21 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         Vector3 initialScale = CalculateInverseScale();
         for (int i = 0; i < final.Count; i++) CreateMarker(final[i], initialScale);
 
-        // ¡Ú [¼öÁ¤µÊ] lossyScale Á¢±Ù ½Ã .transform »ç¿ë
+        // â˜… [ìˆ˜ì •ë¨] lossyScale ì ‘ê·¼ ì‹œ .transform ì‚¬ìš©
         if (markerRoot != null) _lastLossyScale = markerRoot.transform.lossyScale;
     }
 
     void PrepareData() { if (vertexPositions != null && vertexPositions.Count > 0) return; vertexPositions = new Dictionary<int, Vector3>(); Vector3[] positions = meshFilter.sharedMesh.vertices; for (int i = 0; i < positions.Length; i++) vertexPositions[i] = positions[i]; }
     void CreateMarkerRoot() { if (markerRoot == null) { markerRoot = new GameObject("MarkerHolder"); markerRoot.transform.SetParent(this.transform, false); markerRoot.transform.localPosition = Vector3.zero; } }
 
-    // ¡Ú [¼öÁ¤µÊ] ºÎ¸ğ ¼³Á¤ ½Ã .transform ¸í½Ã
+    // â˜… [ìˆ˜ì •ë¨] ë¶€ëª¨ ì„¤ì • ì‹œ .transform ëª…ì‹œ
     void CreateMarker(Vector3 position, Vector3 scale)
     {
         GameObject marker;
         if (markerPrefab != null) marker = Instantiate(markerPrefab);
         else { marker = GameObject.CreatePrimitive(PrimitiveType.Sphere); Destroy(marker.GetComponent<Collider>()); var r = marker.GetComponent<Renderer>(); if (r) { Shader s = Shader.Find("Universal Render Pipeline/Lit"); if (s == null) s = Shader.Find("Standard"); if (s != null) { r.material = new Material(s); r.material.color = Color.red; } else { r.material.color = Color.red; } } }
         marker.transform.position = position;
-        marker.transform.SetParent(markerRoot.transform, true); // transform ¸í½Ã
+        marker.transform.SetParent(markerRoot.transform, true); // transform ëª…ì‹œ
 
         marker.transform.localScale = scale;
 
@@ -472,22 +472,22 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
 //        Dictionary<Vector3, float> roundedLocalMap = new Dictionary<Vector3, float>();
 
-//        // ¡Ú [¿©±â°¡ ¼öÁ¤µÊ] Áßº¹ Å° °æ°í ¹æÁö ·ÎÁ÷
+//        // â˜… [ì—¬ê¸°ê°€ ìˆ˜ì •ë¨] ì¤‘ë³µ í‚¤ ê²½ê³  ë°©ì§€ ë¡œì§
 //        foreach (var kvp in localMap)
 //        {
-//            // ¼Ò¼öÁ¡ 3ÀÚ¸® ¹İ¿Ã¸² ½Ã ÁÂÇ¥ Ãæµ¹ °¡´É¼º ÀÖÀ½
+//            // ì†Œìˆ˜ì  3ìë¦¬ ë°˜ì˜¬ë¦¼ ì‹œ ì¢Œí‘œ ì¶©ëŒ ê°€ëŠ¥ì„± ìˆìŒ
 //            Vector3 k = new Vector3(
 //                (float)System.Math.Round(kvp.Key.x, 3),
 //                (float)System.Math.Round(kvp.Key.y, 3),
 //                (float)System.Math.Round(kvp.Key.z, 3)
 //            );
 
-//            // ContainsKey·Î ¸ÕÀú È®ÀÎÇÏ¿© °æ°í/¿¡·¯ ¹æÁö
+//            // ContainsKeyë¡œ ë¨¼ì € í™•ì¸í•˜ì—¬ ê²½ê³ /ì—ëŸ¬ ë°©ì§€
 //            if (!roundedLocalMap.ContainsKey(k))
 //            {
 //                roundedLocalMap.Add(k, kvp.Value);
 //            }
-//            // ÀÌ¹Ì ÀÖÀ¸¸é ±×³É ¹«½Ã (Ã¹ ¹øÂ° °ª »ç¿ë)
+//            // ì´ë¯¸ ìˆìœ¼ë©´ ê·¸ëƒ¥ ë¬´ì‹œ (ì²« ë²ˆì§¸ ê°’ ì‚¬ìš©)
 //        }
 
 //        foreach (var worldPos in filtered)
@@ -499,7 +499,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //                (float)System.Math.Round(localPos.z, 3)
 //            );
 
-//            // TryGetValue´Â Å°°¡ ¾ø¾îµµ ¿¡·¯ ¾È ³¿ (°æ°í ¾È ¶ä)
+//            // TryGetValueëŠ” í‚¤ê°€ ì—†ì–´ë„ ì—ëŸ¬ ì•ˆ ëƒ„ (ê²½ê³  ì•ˆ ëœ¸)
 //            if (roundedLocalMap.TryGetValue(key, out float val))
 //            {
 //                float norm = (val - minVal) / range;
@@ -555,7 +555,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //    public DebugEdgeMaskRenderer debugRenderer;
 //    [Range(0f, 1f)] public float topSaliencyPercentage = 0.5f;
 
-//    [¼öÁ¤] CFSCNN ¸ğµåÀÏ ¶§ »ç¿ëÇÒ ¿øº» ÆÄÀÏ °æ·Î
+//    [ìˆ˜ì •] CFSCNN ëª¨ë“œì¼ ë•Œ ì‚¬ìš©í•  ì›ë³¸ íŒŒì¼ ê²½ë¡œ
 //   [Header("CFSCNN Source File Paths")]
 //    public string cfsSaliencyObjPath = "Assets/Meshes/Chick_Tri.obj";
 //    public string cfsSaliencyTxtPath = "Assets/Resources/CfSCNN/Chick_Tri_saliency.txt";
@@ -578,7 +578,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
 //    void Prepare()
 //    {
-//        Layer ¼³Á¤ º¹¿ø
+//        Layer ì„¤ì • ë³µì›
 //        int vertexLayer = LayerMask.NameToLayer("Meshes");
 //        if (vertexLayer != -1)
 //            visibilityLayerMask = (1 << vertexLayer);
@@ -602,7 +602,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //        var edgeMask = silhouetteRenderer.GetEdgeMask();
 //        silhouetteRenderer.SaveSilhouetteMaskToPNG();
 //        silhouetteRenderer.SaveEdgeMaskToPNG("SavedSilhouette.png");
-//        debugRenderer.edgeMask = edgeMask; // µğ¹ö±×¿ë ¿¬°á
+//        debugRenderer.edgeMask = edgeMask; // ë””ë²„ê·¸ìš© ì—°ê²°
 
 //        var visible = SaliencyUtils.GetVisibleVertices(mainCamera, meshFilter, vertexPositions, visibilityLayerMask);
 //        if (visualized)
@@ -621,7 +621,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //            foreach (var vertex in filtered)
 //                SaliencyUtils.HighlightVertex(vertex, Color.green, 4.0f, false);
 //        }
-//        Saliency °è»ê
+//        Saliency ê³„ì‚°
 //        Dictionary<Vector3, float> saliencyMap = saliencyMode switch
 //        {
 //            SaliencyMode.Entropy => EntropySaliencyComputer.Compute(meshFilter, filtered, l),
@@ -635,7 +635,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 
 //        var topCandidates = filtered;
 
-//        (Optional)entropyMap°ú filtered ¸ÅÄª Ã¼Å©(µğ¹ö±ë¿ë)
+//        (Optional)entropyMapê³¼ filtered ë§¤ì¹­ ì²´í¬(ë””ë²„ê¹…ìš©)
 //        EntropySaliencyComputer.CheckFilteredVerticesMatch(saliencyMap, filtered);
 
 //        var final = SaliencyUtils.SelectHybridDistributedVertices(topCandidates, saliencyMap, l, recommendedVertexCount, topSaliencyPercentage); //1
@@ -653,7 +653,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //    {
 //        Debug.Log("========== FINAL ASSET IDENTITY CHECK ==========");
 
-//        // 1. Inspector¿¡ ÇÒ´çµÈ ¸Ş½¬
+//        // 1. Inspectorì— í• ë‹¹ëœ ë©”ì‰¬
 //        Mesh inspectorMesh = meshFilter.sharedMesh;
 //        Debug.Log($"[Inspector Mesh] Name: {inspectorMesh.name}, Instance ID: {inspectorMesh.GetInstanceID()}");
 //        if (inspectorMesh.vertexCount > 0)
@@ -661,8 +661,8 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //            Debug.Log($"- Vertex 0: {inspectorMesh.vertices[0]:F6}");
 //        }
 
-//        // 2. ÆÄÀÏ °æ·Î¿¡¼­ Á÷Á¢ ¿¡¼Â ·Îµå
-//        // AssetDatabase´Â ¿¡µğÅÍ¿¡¼­¸¸ µ¿ÀÛÇÏ´Â ±â´ÉÀÔ´Ï´Ù.
+//        // 2. íŒŒì¼ ê²½ë¡œì—ì„œ ì§ì ‘ ì—ì…‹ ë¡œë“œ
+//        // AssetDatabaseëŠ” ì—ë””í„°ì—ì„œë§Œ ë™ì‘í•˜ëŠ” ê¸°ëŠ¥ì…ë‹ˆë‹¤.
 //        var loadedObject = AssetDatabase.LoadAssetAtPath<GameObject>(cfsSaliencyObjPath);
 //        if (loadedObject != null)
 //        {
@@ -676,7 +676,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //                    Debug.Log($"- Vertex 0: {pathMesh.vertices[0]:F6}");
 //                }
 
-//                // 3. µÎ ¿¡¼ÂÀÇ Instance ID ºñ±³
+//                // 3. ë‘ ì—ì…‹ì˜ Instance ID ë¹„êµ
 //                if (inspectorMesh.GetInstanceID() == pathMesh.GetInstanceID())
 //                {
 //                    Debug.Log("[Check Result] The two meshes are the EXACT SAME asset.");
@@ -689,7 +689,7 @@ public class ProjectionMappingCalibrator : MonoBehaviour
 //        }
 //        else
 //        {
-//            Debug.LogError($"[Path Check] ÀÌ °æ·Î¿¡¼­ ¿¡¼ÂÀ» ·ÎµåÇÒ ¼ö ¾ø½À´Ï´Ù: {cfsSaliencyObjPath}");
+//            Debug.LogError($"[Path Check] ì´ ê²½ë¡œì—ì„œ ì—ì…‹ì„ ë¡œë“œí•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤: {cfsSaliencyObjPath}");
 //        }
 //        Debug.Log("================================================");
 //    }
