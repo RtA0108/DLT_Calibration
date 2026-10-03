@@ -18,6 +18,7 @@ public class PatchSnapshot
     private int capturedFrame = -1;
     private Matrix4x4 capturedViewProj;
     private GameObject capturedTarget;
+    private float capturedCreaseAngle;
 
     private Material depthMat, lineMat;
     private readonly Dictionary<Mesh, EdgeCache> edgeCaches = new Dictionary<Mesh, EdgeCache>();
@@ -29,14 +30,17 @@ public class PatchSnapshot
         public List<int> a = new List<int>(), b = new List<int>();     // 모서리 양 끝 버텍스
         public List<int> t1 = new List<int>(), t2 = new List<int>();   // 양쪽 면 (경계면 t2 = -1)
         public List<bool> crease = new List<bool>();                  // 각진 모서리 여부
+        public List<bool> multiFace = new List<bool>();               // 면 3개 이상이 공유 (항상 그림)
         public Vector3[] faceNormals, faceCenters;
+        public float creaseAngle = -1f;                               // crease를 계산할 때 쓴 기준 각도
     }
 
     // 같은 프레임에 같은 카메라/모델이면 다시 그리지 않는다 (R로 여러 점을 한 번에 고를 때).
     public void EnsureCaptured(Camera cam, GameObject target)
     {
         Matrix4x4 viewProj = cam.projectionMatrix * cam.worldToCameraMatrix;
-        if (capturedFrame == Time.frameCount && capturedTarget == target && capturedViewProj == viewProj) return;
+        if (capturedFrame == Time.frameCount && capturedTarget == target && capturedViewProj == viewProj
+            && capturedCreaseAngle == creaseAngle) return;
 
         int w = cam.pixelWidth, h = cam.pixelHeight;
         EnsureTexture(ref textureFrame, w, h, "PatchTextureFrame");
@@ -53,6 +57,7 @@ public class PatchSnapshot
         capturedFrame = Time.frameCount;
         capturedTarget = target;
         capturedViewProj = viewProj;
+        capturedCreaseAngle = creaseAngle;
     }
 
     // center(스크린 픽셀, 좌하단 원점)를 중심으로 size x size를 잘라낸다. 화면 밖은 검정.
@@ -193,7 +198,11 @@ public class PatchSnapshot
 
     private EdgeCache GetEdges(Mesh mesh)
     {
-        if (edgeCaches.TryGetValue(mesh, out EdgeCache cache)) return cache;
+        if (edgeCaches.TryGetValue(mesh, out EdgeCache cache))
+        {
+            if (cache.creaseAngle != creaseAngle) UpdateCreases(cache); // 기준 각도만 바뀌었으면 각진 모서리만 다시 판정
+            return cache;
+        }
 
         cache = new EdgeCache();
         Vector3[] verts = mesh.vertices;
@@ -232,7 +241,7 @@ public class PatchSnapshot
                 if (edgeIndex.TryGetValue(key, out int e))
                 {
                     if (cache.t2[e] < 0) cache.t2[e] = f;
-                    else cache.crease[e] = true; // 면 3개 이상이 공유하는 모서리는 항상 그림
+                    else cache.multiFace[e] = true; // 면 3개 이상이 공유하는 모서리는 항상 그림
                 }
                 else
                 {
@@ -240,19 +249,25 @@ public class PatchSnapshot
                     cache.a.Add(i0); cache.b.Add(i1);
                     cache.t1.Add(f); cache.t2.Add(-1);
                     cache.crease.Add(false);
+                    cache.multiFace.Add(false);
                 }
             }
         }
 
+        UpdateCreases(cache);
+        edgeCaches.Add(mesh, cache);
+        return cache;
+    }
+
+    private void UpdateCreases(EdgeCache cache)
+    {
         for (int e = 0; e < cache.a.Count; e++)
         {
             int f2 = cache.t2[e];
-            if (f2 >= 0 && Vector3.Angle(cache.faceNormals[cache.t1[e]], cache.faceNormals[f2]) > creaseAngle)
-                cache.crease[e] = true;
+            cache.crease[e] = cache.multiFace[e]
+                || (f2 >= 0 && Vector3.Angle(cache.faceNormals[cache.t1[e]], cache.faceNormals[f2]) > creaseAngle);
         }
-
-        edgeCaches.Add(mesh, cache);
-        return cache;
+        cache.creaseAngle = creaseAngle;
     }
 
     private void EnsureMaterials()

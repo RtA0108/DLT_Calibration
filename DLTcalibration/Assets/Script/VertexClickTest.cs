@@ -26,6 +26,9 @@ public class VertexClickTest : MonoBehaviour
     [Header("Patch Marker")]
     public int patchSize = 64;                                    // 패치 한 변 (프로젝터 픽셀). 0이면 패치 없음
     public PatchSnapshot.Mode patchMode = PatchSnapshot.Mode.Lines; // T 키로 전환
+    // 선 모드에서 이 각도(도)보다 크게 꺾인 모서리를 그린다. 매끈한 high poly는 35 정도,
+    // 면이 각진 low poly는 15~20 정도가 실물의 면 경계와 잘 맞는다. (TheRock: 정면 모서리 중앙값 약 17도)
+    [Range(5f, 90f)] public float patchCreaseAngle = 35f;
 
     [Header("Live Calibration")]
     public bool liveSolve = true;          // L 키: 마커를 놓을 때마다 자동으로 DLT를 다시 풂 (점 6개 이상)
@@ -118,6 +121,7 @@ public class VertexClickTest : MonoBehaviour
     {
         GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
         if (target == null || patchSize <= 0) return;
+        patchSnapshot.creaseAngle = patchCreaseAngle;
         patchSnapshot.EnsureCaptured(projectCam, target);
 
         for (int i = 0; i < clickedObjects.Length; i++)
@@ -173,6 +177,7 @@ public class VertexClickTest : MonoBehaviour
         GameObject target = MainController.Instance != null ? MainController.Instance.targetMesh : null;
         if (marker == null || target == null || patchSize <= 0) return;
 
+        patchSnapshot.creaseAngle = patchCreaseAngle;
         patchSnapshot.EnsureCaptured(projectCam, target);
         marker.SetPatches(
             patchSnapshot.Crop(PatchSnapshot.Mode.Lines, screen, patchSize),

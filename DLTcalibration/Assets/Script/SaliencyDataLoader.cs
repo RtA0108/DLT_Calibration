@@ -181,18 +181,21 @@ public static class SaliencyDataLoader
         var objGrid = new PointGrid(_fullLocalSaliencyMap.Keys);
 
         // 매칭 로직: 유니티 버텍스마다 MATCH_THRESHOLD 이내의 가장 가까운 OBJ 버텍스
+        int matched = 0;
         foreach (var unityVert in unityVertices)
         {
             if (objGrid.TryFindNearest(unityVert, out Vector3 closest))
             {
+                matched++;
                 if (!_unityToObjCoordMap.ContainsKey(unityVert))
                     _unityToObjCoordMap.Add(unityVert, closest);
             }
         }
 
-        float rate = (float)_unityToObjCoordMap.Count / unityVertices.Length * 100f;
+        // 비율은 버텍스 수 기준 (각진 메쉬는 한 위치에 버텍스가 여러 개라, 위치 수로 나누면 낮게 보였음)
+        float rate = (float)matched / unityVertices.Length * 100f;
         string color = rate > 90f ? "lime" : "red";
-        Debug.Log($"<b><color={color}>[SaliencyDataLoader] 맵핑 완료: {unityVertices.Length}개 중 {_unityToObjCoordMap.Count}개 연결됨 ({rate:F1}%)</color></b>");
+        Debug.Log($"<b><color={color}>[SaliencyDataLoader] 맵핑 완료: 버텍스 {unityVertices.Length}개 중 {matched}개 연결됨 ({rate:F1}%, 위치 {_unityToObjCoordMap.Count}곳)</color></b>");
     }
 }
 
