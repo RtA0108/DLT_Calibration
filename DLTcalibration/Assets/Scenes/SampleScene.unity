@@ -13149,6 +13149,10 @@ MonoBehaviour:
   verticesStruct: []
   projectCam: {fileID: 808022739}
   markerManager: {fileID: 1487993647}
+  patchSize: 64
+  patchMode: 0
+  liveSolve: 1
+  dltSolver: {fileID: 0}
 --- !u!1001 &2105277072
 PrefabInstance:
   m_ObjectHideFlags: 0
