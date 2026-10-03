@@ -275,6 +275,10 @@ public class MainController : MonoBehaviour
             currentVisualizer.cfsTxtPath = _generatedCfsPath;
             currentVisualizer.texObjPath = objPath;
             currentVisualizer.texTxtPath = _generatedTexSaliencyPath;
+
+            // 히트맵(키 2)도 추천점과 같은 saliency로 보여준다. (예전에는 기본값 Entropy로 남아 있어서
+            // 히트맵과 실제 추천 근거가 서로 달랐음)
+            if (currentCalibrator != null) currentVisualizer.saliencyMode = currentCalibrator.saliencyMode;
         }
         // 7. 구체 생성
         if (sphereGenerator != null) sphereGenerator.GenerateSpheres(newMesh);
