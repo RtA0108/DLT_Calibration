@@ -10,8 +10,53 @@ public static class SaliencyDataLoader
 
     private static Dictionary<Vector3, float> _fullLocalSaliencyMap;
     private static Dictionary<Vector3, Vector3> _unityToObjCoordMap;
+    private static PointGrid _unityKeyGrid;
     private static string _loadedObjPath;
     private static string _loadedTxtPath;
+
+    // "가장 가까운 점이 MATCH_THRESHOLD 이내인가"를 빠르게 찾기 위한 격자.
+    // 칸 크기를 MATCH_THRESHOLD로 두면, 그 거리 안의 점은 반드시 주변 27칸 안에 있다.
+    // (예전에는 모든 점과 하나씩 거리를 비교해서 Chick 기준 조회 한 번에 수억 번 계산했음)
+    private class PointGrid
+    {
+        private readonly Dictionary<(int, int, int), List<Vector3>> cells = new Dictionary<(int, int, int), List<Vector3>>();
+
+        public PointGrid(IEnumerable<Vector3> points)
+        {
+            foreach (Vector3 p in points)
+            {
+                var key = Cell(p);
+                if (!cells.TryGetValue(key, out var list)) cells[key] = list = new List<Vector3>();
+                list.Add(p);
+            }
+        }
+
+        // MATCH_THRESHOLD 이내에서 가장 가까운 점. 없으면 false.
+        public bool TryFindNearest(Vector3 p, out Vector3 nearest)
+        {
+            nearest = default;
+            float best = float.MaxValue;
+            var (cx, cy, cz) = Cell(p);
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (!cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var list)) continue;
+                        foreach (Vector3 q in list)
+                        {
+                            float d = Vector3.Distance(p, q);
+                            if (d < best) { best = d; nearest = q; }
+                        }
+                    }
+            return best < MATCH_THRESHOLD;
+        }
+
+        private static (int, int, int) Cell(Vector3 p)
+        {
+            return (Mathf.FloorToInt(p.x / MATCH_THRESHOLD), Mathf.FloorToInt(p.y / MATCH_THRESHOLD), Mathf.FloorToInt(p.z / MATCH_THRESHOLD));
+        }
+    }
+
     public static Dictionary<Vector3, float> GetSaliencyMap(MeshFilter meshFilter, List<Vector3> filteredWorldVertices, string objPath, string txtPath)
     {
         // 캐싱 로직
@@ -21,6 +66,7 @@ public static class SaliencyDataLoader
             if (_fullLocalSaliencyMap.Count == 0) return new Dictionary<Vector3, float>();
 
             BuildUnityToObjMap(meshFilter);
+            _unityKeyGrid = new PointGrid(_unityToObjCoordMap.Keys);
             _loadedObjPath = objPath;
             _loadedTxtPath = txtPath;
         }
@@ -30,22 +76,12 @@ public static class SaliencyDataLoader
 
         if (_unityToObjCoordMap == null || _unityToObjCoordMap.Count == 0) return filteredSaliencyMap;
 
-        List<Vector3> unityMapKeys = _unityToObjCoordMap.Keys.ToList();
-
         foreach (Vector3 worldPos in filteredWorldVertices)
         {
             Vector3 localPos = transform.InverseTransformPoint(worldPos);
-            Vector3 closestKey = unityMapKeys[0];
-            float minDistance = Vector3.Distance(localPos, closestKey);
 
             // 가장 가까운 점 찾기
-            for (int i = 1; i < unityMapKeys.Count; i++)
-            {
-                float d = Vector3.Distance(localPos, unityMapKeys[i]);
-                if (d < minDistance) { minDistance = d; closestKey = unityMapKeys[i]; }
-            }
-
-            if (minDistance < MATCH_THRESHOLD)
+            if (_unityKeyGrid.TryFindNearest(localPos, out Vector3 closestKey))
             {
                 Vector3 objCoordKey = _unityToObjCoordMap[closestKey];
                 if (_fullLocalSaliencyMap.ContainsKey(objCoordKey))
@@ -140,23 +176,14 @@ public static class SaliencyDataLoader
     {
         _unityToObjCoordMap = new Dictionary<Vector3, Vector3>();
         Vector3[] unityVertices = meshFilter.mesh.vertices;
-        List<Vector3> objVertices = _fullLocalSaliencyMap.Keys.ToList();
 
-        if (objVertices.Count == 0) return;
+        if (_fullLocalSaliencyMap.Count == 0) return;
+        var objGrid = new PointGrid(_fullLocalSaliencyMap.Keys);
 
-        // 매칭 로직
+        // 매칭 로직: 유니티 버텍스마다 MATCH_THRESHOLD 이내의 가장 가까운 OBJ 버텍스
         foreach (var unityVert in unityVertices)
         {
-            Vector3 closest = objVertices[0];
-            float minDst = Vector3.Distance(unityVert, closest);
-
-            for (int i = 1; i < objVertices.Count; i++)
-            {
-                float d = Vector3.Distance(unityVert, objVertices[i]);
-                if (d < minDst) { minDst = d; closest = objVertices[i]; }
-            }
-
-            if (minDst < MATCH_THRESHOLD)
+            if (objGrid.TryFindNearest(unityVert, out Vector3 closest))
             {
                 if (!_unityToObjCoordMap.ContainsKey(unityVert))
                     _unityToObjCoordMap.Add(unityVert, closest);
