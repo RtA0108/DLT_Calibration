@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.Diagnostics;
 using System.IO;
 using System;
@@ -11,13 +11,13 @@ public class PythonProcessManager : MonoBehaviour
     public string localPythonPath = "python";
     public string localScriptName = "bridge_cfs.py";
 
-    // WSL Conda Python °æ·Î
+    // WSL Conda Python ê²½ë¡œ
     private const string WSL_PYTHON_PATH = "/home/minsu/miniconda3/envs/textured_saliency/bin/python";
-    // WSL ½ÇÇà ½ºÅ©¸³Æ® °æ·Î
+    // WSL ì‹¤í–‰ ìŠ¤í¬ë¦½íŠ¸ ê²½ë¡œ
     private const string WSL_SCRIPT_PATH = "/home/minsu/TexMeshSaliency/bridge_tex.py";
 
     [Header("Common")]
-    // ÇÁ·ÎÁ§Æ® ·çÆ® ±âÁØ Æú´õ¸í (Assets Æú´õ¿Í °°Àº ·¹º§¿¡ ÀÖ´Â Æú´õ)
+    // í”„ë¡œì íŠ¸ ë£¨íŠ¸ ê¸°ì¤€ í´ë”ëª… (Assets í´ë”ì™€ ê°™ì€ ë ˆë²¨ì— ìˆëŠ” í´ë”)
     public string scriptDirectory = "PythonScripts";
 
     void Awake()
@@ -27,20 +27,20 @@ public class PythonProcessManager : MonoBehaviour
     }
 
     // =========================================================
-    // ¡Ú [¼öÁ¤ ¿Ï·á] ÀÎÀÚ 4°³¸¦ ¹Ş¾Æ¼­ °¢ÀÚÀÇ µµ¿ì¹Ì ÇÔ¼ö·Î Á¤È®È÷ ºĞ¹èÇÕ´Ï´Ù.
+    // â˜… [ìˆ˜ì • ì™„ë£Œ] ì¸ì 4ê°œë¥¼ ë°›ì•„ì„œ ê°ìì˜ ë„ìš°ë¯¸ í•¨ìˆ˜ë¡œ ì •í™•íˆ ë¶„ë°°í•©ë‹ˆë‹¤.
     // =========================================================
 
     public bool RunSaliencyCalculation(string objPath, string texPath, string cfsOutDir, string texOutDir)
     {
-        UnityEngine.Debug.Log("[PythonProcessManager] Saliency °è»ê ÇÁ·Î¼¼½º ½ÃÀÛ (°æ·Î ºĞ¸® Àû¿ë)");
+        UnityEngine.Debug.Log("[PythonProcessManager] Saliency ê³„ì‚° í”„ë¡œì„¸ìŠ¤ ì‹œì‘ (ê²½ë¡œ ë¶„ë¦¬ ì ìš©)");
 
         // 1. CfS-CNN (Local Windows)
         bool resultLocal = RunLocalProcess(objPath, cfsOutDir);
 
         // =========================================================
-        // ¡Ú [¼öÁ¤µÊ] ÅØ½ºÃ³ °æ·Î°¡ ¾ø¾îµµ ÆÄÀÌ½ãÀÌ ¾Ë¾Æ¼­ Ã£°Ô²û ¹«Á¶°Ç ½ÇÇà!
+        // â˜… [ìˆ˜ì •ë¨] í…ìŠ¤ì²˜ ê²½ë¡œê°€ ì—†ì–´ë„ íŒŒì´ì¬ì´ ì•Œì•„ì„œ ì°¾ê²Œë” ë¬´ì¡°ê±´ ì‹¤í–‰!
         // =========================================================
-        // ¸¸¾à ºóÄ­À¸·Î ¿À¸é ÆÄÀÌ½ã¿¡°Ô "³×°¡ ¾Ë¾Æ¼­ Ã£¾Æ(AUTO_FIND)"¶ó°í ´øÁ®Áİ´Ï´Ù.
+        // ë§Œì•½ ë¹ˆì¹¸ìœ¼ë¡œ ì˜¤ë©´ íŒŒì´ì¬ì—ê²Œ "ë„¤ê°€ ì•Œì•„ì„œ ì°¾ì•„(AUTO_FIND)"ë¼ê³  ë˜ì ¸ì¤ë‹ˆë‹¤.
         string safeTexPath = string.IsNullOrEmpty(texPath) ? "AUTO_FIND" : texPath;
 
         bool resultWsl = RunWslProcess(objPath, safeTexPath, texOutDir);
@@ -48,7 +48,7 @@ public class PythonProcessManager : MonoBehaviour
         return resultLocal && resultWsl;
     }
     // ---------------------------------------------------------
-    // 1. À©µµ¿ì ·ÎÄÃ ÇÁ·Î¼¼½º ½ÇÇà (CfS-CNN)
+    // 1. ìœˆë„ìš° ë¡œì»¬ í”„ë¡œì„¸ìŠ¤ ì‹¤í–‰ (CfS-CNN)
     // ---------------------------------------------------------
     private bool RunLocalProcess(string meshPath, string outputDir)
     {
@@ -57,13 +57,13 @@ public class PythonProcessManager : MonoBehaviour
 
         if (!File.Exists(scriptPath))
         {
-            UnityEngine.Debug.LogError($"[Local Error] ½ºÅ©¸³Æ® ÆÄÀÏÀÌ ¾ø½À´Ï´Ù! °æ·Î¸¦ È®ÀÎÇÏ¼¼¿ä: {scriptPath}");
+            UnityEngine.Debug.LogError($"[Local Error] ìŠ¤í¬ë¦½íŠ¸ íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤! ê²½ë¡œë¥¼ í™•ì¸í•˜ì„¸ìš”: {scriptPath}");
             return false;
         }
 
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = localPythonPath;
-        // ÀÎÀÚ: "½ºÅ©¸³Æ®°æ·Î" "¸Ş½¬°æ·Î" "Ãâ·ÂÆú´õ"
+        // ì¸ì: "ìŠ¤í¬ë¦½íŠ¸ê²½ë¡œ" "ë©”ì‰¬ê²½ë¡œ" "ì¶œë ¥í´ë”"
         start.Arguments = $"\"{scriptPath}\" \"{meshPath}\" \"{outputDir}\"";
 
         start.UseShellExecute = false;
@@ -75,11 +75,11 @@ public class PythonProcessManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------
-    // 2. WSL ÇÁ·Î¼¼½º ½ÇÇà (TexSaliency)
+    // 2. WSL í”„ë¡œì„¸ìŠ¤ ì‹¤í–‰ (TexSaliency)
     // ---------------------------------------------------------
     private bool RunWslProcess(string meshPath, string texturePath, string outputDir)
     {
-        // ¡Ú [ÇÙ½É] À©µµ¿ì °æ·Î¸¦ WSL °æ·Î(/mnt/c/...)·Î ¿Ïº®ÇÏ°Ô º¯È¯!
+        // â˜… [í•µì‹¬] ìœˆë„ìš° ê²½ë¡œë¥¼ WSL ê²½ë¡œ(/mnt/c/...)ë¡œ ì™„ë²½í•˜ê²Œ ë³€í™˜!
         string wslMesh = ConvertToWslPath(meshPath);
         string wslTex = ConvertToWslPath(texturePath);
         string wslOut = ConvertToWslPath(outputDir);
@@ -87,7 +87,7 @@ public class PythonProcessManager : MonoBehaviour
         ProcessStartInfo start = new ProcessStartInfo();
         start.FileName = "wsl";
 
-        // ¸í·É¾î ±¸Á¶: wsl [ÆÄÀÌ½ã°æ·Î] [½ºÅ©¸³Æ®°æ·Î] --mesh [¸Ş½¬] --tex [ÅØ½ºÃ³] --out [Ãâ·Â]
+        // ëª…ë ¹ì–´ êµ¬ì¡°: wsl [íŒŒì´ì¬ê²½ë¡œ] [ìŠ¤í¬ë¦½íŠ¸ê²½ë¡œ] --mesh [ë©”ì‰¬] --tex [í…ìŠ¤ì²˜] --out [ì¶œë ¥]
         start.Arguments = $"{WSL_PYTHON_PATH} \"{WSL_SCRIPT_PATH}\" --mesh \"{wslMesh}\" --tex \"{wslTex}\" --out \"{wslOut}\"";
 
         start.UseShellExecute = false;
@@ -99,11 +99,11 @@ public class PythonProcessManager : MonoBehaviour
     }
 
     // ---------------------------------------------------------
-    // °øÅë ½ÇÇà±â ¹× °æ·Î º¯È¯±â (±âÁ¸ ÄÚµå ¿Ïº® À¯Áö)
+    // ê³µí†µ ì‹¤í–‰ê¸° ë° ê²½ë¡œ ë³€í™˜ê¸° (ê¸°ì¡´ ì½”ë“œ ì™„ë²½ ìœ ì§€)
     // ---------------------------------------------------------
     private bool ExecuteProcess(ProcessStartInfo startInfo, string label)
     {
-        UnityEngine.Debug.Log($"[{label}] ¸í·É¾î ½ÇÇà:\n{startInfo.FileName} {startInfo.Arguments}");
+        UnityEngine.Debug.Log($"[{label}] ëª…ë ¹ì–´ ì‹¤í–‰:\n{startInfo.FileName} {startInfo.Arguments}");
 
         try
         {
@@ -121,7 +121,7 @@ public class PythonProcessManager : MonoBehaviour
 
                 if (process.ExitCode != 0)
                 {
-                    UnityEngine.Debug.LogError($"[{label}] ÇÁ·Î¼¼½º ºñÁ¤»ó Á¾·á (ExitCode: {process.ExitCode})");
+                    UnityEngine.Debug.LogError($"[{label}] í”„ë¡œì„¸ìŠ¤ ë¹„ì •ìƒ ì¢…ë£Œ (ExitCode: {process.ExitCode})");
                     return false;
                 }
 
@@ -130,7 +130,7 @@ public class PythonProcessManager : MonoBehaviour
         }
         catch (Exception e)
         {
-            UnityEngine.Debug.LogError($"[{label}] ½ÇÇà ½ÇÆĞ (Exception): {e.Message}");
+            UnityEngine.Debug.LogError($"[{label}] ì‹¤í–‰ ì‹¤íŒ¨ (Exception): {e.Message}");
             return false;
         }
     }
