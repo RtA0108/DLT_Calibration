@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 // 대응점 선택을 슬롯 단위로 관리한다. 슬롯 i 하나에 아래 네 가지가 항상 함께 묶인다.
 //   clickedObjects[i]  : 선택된 버텍스 구
@@ -10,6 +11,7 @@ using System;
 public class VertexClickTest : MonoBehaviour
 {
     private const int MaxPoints = 10;
+    private const float MinMarkerSpreadPixels = 20f; // 추천점이 이보다 좁게 몰려 있으면 경고
 
     [Header("Data")]
     public GameObject[] clickedObjects; // 선택된 Vertex 오브젝트들
@@ -55,6 +57,87 @@ public class VertexClickTest : MonoBehaviour
         if (Input.GetMouseButtonDown(0) && Display.activeEditorGameViewTarget == 0)
         {
             HandleClick();
+        }
+
+        // 'R' 키: 추천점(빨간 구)을 대응점으로 바로 선택
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            SelectRecommendedVertices();
+        }
+    }
+
+    // 표시 중인 추천점들을 대응점으로 선택한다. 기존 선택(마커 포함)은 비우고,
+    // 추천 순서(가장 salient한 점이 먼저)대로 슬롯 0번부터 채운다.
+    public void SelectRecommendedVertices()
+    {
+        MainController main = MainController.Instance;
+        if (main == null) return;
+
+        if (!main.IsCalibrationActive)
+        {
+            Debug.LogWarning("[Recommend] Calibration 모드(키 1)를 먼저 켜세요.");
+            return;
+        }
+
+        ProjectionMappingCalibrator calibrator = main.currentCalibrator;
+        List<Vector3> recommended = calibrator != null ? calibrator.GetRecommendedPositions() : new List<Vector3>();
+        if (recommended.Count == 0)
+        {
+            Debug.LogWarning("[Recommend] 표시된 추천점이 없습니다. 키 3으로 추천점을 먼저 표시하세요.");
+            return;
+        }
+
+        if (main.sphereGenerator == null)
+        {
+            Debug.LogError("[Recommend] CreateSphereAtVertex를 찾을 수 없습니다.");
+            return;
+        }
+
+        // 추천점과 버텍스 구는 같은 메쉬 버텍스에서 나온 좌표라 거의 일치한다. 허용 오차는 메쉬 크기의 0.1%.
+        float tolerance = 1e-3f;
+        if (calibrator.meshFilter != null && calibrator.meshFilter.TryGetComponent(out Renderer meshRenderer))
+            tolerance = Mathf.Max(tolerance, meshRenderer.bounds.size.magnitude * 1e-3f);
+
+        ClearSelection();
+
+        int selected = 0;
+        foreach (Vector3 position in recommended)
+        {
+            GameObject sphere = main.sphereGenerator.FindSphereAt(position, tolerance);
+            if (sphere == null)
+            {
+                Debug.LogWarning($"[Recommend] {position} 위치의 버텍스 구를 찾지 못했습니다.");
+                continue;
+            }
+            if (ArrayContains(clickedObjects, sphere)) continue;
+
+            AddObject(sphere);
+            selected++;
+        }
+
+        Debug.Log($"[Recommend] 추천점 {recommended.Count}개 중 {selected}개를 대응점으로 선택했습니다.");
+
+        // 모델이 프로젝터 화면에서 너무 작으면 마커가 겹쳐서 맞출 수 없다.
+        Rect spread = Rect.MinMaxRect(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
+        for (int i = 0; i < clickedObjects.Length; i++)
+        {
+            if (clickedObjects[i] == null) continue;
+            Vector2 p = verticesStruct[i].screenCoordinateGT;
+            spread.xMin = Mathf.Min(spread.xMin, p.x); spread.yMin = Mathf.Min(spread.yMin, p.y);
+            spread.xMax = Mathf.Max(spread.xMax, p.x); spread.yMax = Mathf.Max(spread.yMax, p.y);
+        }
+        if (selected > 0 && Mathf.Max(spread.width, spread.height) < MinMarkerSpreadPixels)
+            Debug.LogWarning($"[Recommend] 추천점들이 프로젝터 화면에서 {spread.width:F1}x{spread.height:F1}px 안에 몰려 있습니다. 스케일 슬라이더로 모델을 키우세요.");
+    }
+
+    // 모든 선택을 해제하고 마커도 지운다.
+    public void ClearSelection()
+    {
+        for (int i = 0; i < clickedObjects.Length; i++)
+        {
+            if (ReferenceEquals(clickedObjects[i], null)) continue;
+            if (clickedObjects[i] != null) SetSphereSelected(clickedObjects[i], false);
+            ReleaseSlot(i);
         }
     }
 

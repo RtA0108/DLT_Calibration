@@ -159,6 +159,24 @@ public class CreateSphereAtVertex : MonoBehaviour
             sphereHolder = holder.transform;
         }
     }
+
+    // worldPos에 가장 가까운 버텍스 구를 찾는다. tolerance보다 멀리 있으면 null.
+    public GameObject FindSphereAt(Vector3 worldPos, float tolerance)
+    {
+        Transform best = null;
+        float bestSqr = tolerance * tolerance;
+        foreach (Transform sphere in _activeSpheres)
+        {
+            if (sphere == null) continue;
+            float sqr = (sphere.position - worldPos).sqrMagnitude;
+            if (sqr <= bestSqr)
+            {
+                bestSqr = sqr;
+                best = sphere;
+            }
+        }
+        return best != null ? best.gameObject : null;
+    }
 }
 
 //using System.Collections;

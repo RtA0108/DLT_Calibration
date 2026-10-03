@@ -288,6 +288,15 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         activeMarkers.Add(marker);
     }
     public void ClearMarkers() { foreach (var m in activeMarkers) if (m) Destroy(m); activeMarkers.Clear(); }
+
+    // 현재 표시 중인 추천 버텍스의 월드 좌표. 순서는 선택 우선순위(가장 salient한 점이 먼저).
+    // 마커가 메쉬의 자식이라 모델을 움직여도 현재 위치를 돌려준다. 추천점이 꺼져 있으면 빈 리스트.
+    public List<Vector3> GetRecommendedPositions()
+    {
+        var positions = new List<Vector3>();
+        foreach (var m in activeMarkers) if (m) positions.Add(m.transform.position);
+        return positions;
+    }
 }
 //using System.Collections.Generic;
 //using System.Linq;
