@@ -34,13 +34,14 @@ public class CalibrationHUD : MonoBehaviour
     private const string HelpText =
         "<b>사용 순서</b>\n" +
         "1. 오른쪽 목록에서 모델 선택 (프로젝터 화면에 맞게 크기가 자동 조정됨)\n" +
-        "2. <b>- / =</b> 추천점 개수 조절 (6~20, 10개 이상 권장) → <b>R</b> 추천점을 대응점으로 선택\n" +
+        "2. <b>- / =</b> 추천점 개수 조절 (6~20, 기본 12) → <b>R</b> 추천점을 대응점으로 선택\n" +
         "     (조작 화면에서 버텍스를 직접 클릭해 고르거나 해제할 수도 있음. 노란 점이 고를 점)\n" +
         "3. 프로젝터 화면에서 각 십자선을 실물의 같은 위치로 드래그\n" +
         "     조작 화면의 번호가 그 마커의 버텍스. 지금 움직이는 마커는 노란색\n" +
         "     <b>방향키</b> 마지막으로 끈 마커를 1px씩 (Shift: 10px)\n" +
         "     <b>V</b> 정렬 보기: 모델 없이 마커만 투사\n" +
         "4. 마커를 6개 이상 맞추면, 놓을 때마다 맞춘 마커들로 자동 보정됨 (초록 = 맞춘 마커)\n" +
+        "     빨강 = 다른 마커들과 유독 안 맞는 마커 (8개 이상 맞췄을 때) → 그 마커를 다시 확인\n" +
         "     실제 프로젝터로 볼 수 없는 결과는 적용하지 않고 '보정 보류'로 알림 → 마커 확인/점 추가\n" +
         "     <b>L</b> 자동 보정 켜기/끄기, <b>F</b> 선택된 점 전부로 계산, <b>Backspace</b> 보정 초기화\n" +
         "\n" +
@@ -113,7 +114,9 @@ public class CalibrationHUD : MonoBehaviour
             vertexLabels[i].rectTransform.anchoredPosition = local + new Vector2(4f, 4f);
             bool active = clickTest.ActiveSlot == i;
             vertexLabels[i].fontSize = active ? fontSize + 8 : fontSize + 3;
-            vertexLabels[i].color = active ? new Color(1f, 0.9f, 0f) : clickTest.IsPlaced(i) ? new Color(0.35f, 1f, 0.35f) : Color.white;
+            vertexLabels[i].color = clickTest.IsSuspect(i) ? new Color(1f, 0.25f, 0.25f)
+                                  : active ? new Color(1f, 0.9f, 0f)
+                                  : clickTest.IsPlaced(i) ? new Color(0.35f, 1f, 0.35f) : Color.white;
         }
     }
 
@@ -197,6 +200,8 @@ public class CalibrationHUD : MonoBehaviour
             // 마지막 계산이 실제 프로젝터로 보기 어려워 적용되지 않았으면 이유와 할 일
             if (dltSolver != null && dltSolver.LastRejectReason != null)
                 return $"<b>보정 보류:</b> {dltSolver.LastRejectReason}\n마커를 확인하거나 더 맞추세요 ({placed}/{selected})";
+            if (dltSolver != null && dltSolver.SuspectSlot >= 0)
+                return $"<b>확인:</b> {dltSolver.SuspectSlot + 1}번 마커(빨간색)가 다른 마커와 안 맞음\n맞춘 마커 {placed}/{selected}개";
             if (!clickTest.liveSolve) return $"맞춘 마커 {placed}/{selected}개 · <b>F</b>로 보정";
             return $"자동 보정 중 · 맞춘 마커 {placed}/{selected}개";
         }));
@@ -207,7 +212,7 @@ public class CalibrationHUD : MonoBehaviour
     // ---------------------------------------------------------------- 도움말 창
     private void BuildHelpPanel()
     {
-        RectTransform panel = NewRect("HelpPanel", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(580f, 400f));
+        RectTransform panel = NewRect("HelpPanel", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(580f, 430f));
         panel.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.96f);
         panel.gameObject.AddComponent<Button>().onClick.AddListener(ToggleHelp); // 아무 곳이나 클릭하면 닫힘
 

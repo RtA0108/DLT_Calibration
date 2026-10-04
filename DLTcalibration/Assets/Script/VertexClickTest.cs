@@ -193,6 +193,9 @@ public class VertexClickTest : MonoBehaviour
 
     public bool IsPlaced(int slot) => placed != null && placed[slot] && clickedObjects[slot] != null;
 
+    // 다른 마커들과 유독 안 맞는 마커 (DLT_solve가 보정할 때마다 정함). 빨간색으로 표시된다.
+    public bool IsSuspect(int slot) => dltSolver != null && dltSolver.SuspectSlot == slot && clickedObjects[slot] != null;
+
     public int PlacedCount()
     {
         int count = 0;
@@ -610,6 +613,7 @@ public class VertexClickTest : MonoBehaviour
         clickedObjects[slot] = null;
         placed[slot] = false;
         if (ActiveSlot == slot) ActiveSlot = -1;
+        if (dltSolver != null && dltSolver.SuspectSlot == slot) dltSolver.ClearSuspect();
         verticesStruct[slot] = new VertexStruct();
         arrayIndex--;
     }

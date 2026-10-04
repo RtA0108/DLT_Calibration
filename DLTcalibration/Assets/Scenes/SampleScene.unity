@@ -1970,7 +1970,7 @@ MonoBehaviour:
   _generatedTexSaliencyPath: 
   currentCalibrator: {fileID: 0}
   currentVisualizer: {fileID: 0}
-  recommendedVertexCount: 10
+  recommendedVertexCount: 12
   autoFitOnLoad: 1
   autoFitFraction: 0.5
   IsCalibrationActive: 0

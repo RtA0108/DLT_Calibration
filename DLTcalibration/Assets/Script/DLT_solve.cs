@@ -20,7 +20,16 @@ public class DLT_solve : MonoBehaviour
     [DllImport("DLT_Rezero.dll", EntryPoint = "projectPoints")]
     private static extern void projectPoints(double[] worldPoints, double[] projectionMatrix, double[] rtMatrix, double[] resultPoints, float camPos);
     #endregion
-    private const double InconsistencyWarnPixels = 3.0; // 실시간 재계산에서 이보다 크게 어긋나면 경고
+    // 다른 마커들과 유독 안 맞는 마커 찾기: 가장 크게 어긋난 마커 하나만, 나머지 마커들의 중앙값보다
+    // 3배 이상이고 6px 이상일 때. 점 8개 미만이면 판별이 안 돼서 찾지 않는다.
+    // (예전에는 마커끼리 3px만 어긋나도 경고했는데, 손 오차 때문에 실제로는 거의 항상 떴을 것.
+    //  시뮬레이션: 12점, 한 마커 15~25px 틀림, 나머지 ±3px -> 그 마커를 74% 찾고 엉뚱한 마커 1%, 다 맞췄는데 경보 0%)
+    private const double SuspectRatio = 3.0, SuspectMinPixels = 6.0;
+    private const int SuspectMinPoints = 8;
+
+    // 다른 마커와 유독 안 맞는 마커의 슬롯 (없으면 -1). 프로젝터와 조작 화면에 빨간색으로 표시된다.
+    public int SuspectSlot { get; private set; } = -1;
+    public void ClearSuspect() { SuspectSlot = -1; }
 
     [Header("References")]
     public VertexClickTest vertexClickTest;      // 클릭 데이터
@@ -91,6 +100,7 @@ public class DLT_solve : MonoBehaviour
         projCam.transform.SetPositionAndRotation(initialPosition, initialRotation);
         projCam.farClipPlane = initialFarClip;
         LastRejectReason = null;
+        SuspectSlot = -1;
         Debug.Log("[Camera Update] 보정을 초기화했습니다 (처음 가상 프로젝터).");
         vertexClickTest.OnCameraSolved();
     }
@@ -107,10 +117,12 @@ public class DLT_solve : MonoBehaviour
         var world = new List<Vector3>();
         var image = new List<Vector2>();
         var imageGT = new List<Vector2>();
+        var slots = new List<int>();
         for (int i = 0; i < vertexClickTest.clickedObjects.Length; i++)
         {
             if (vertexClickTest.clickedObjects[i] == null) continue;
             if (placedOnly && !vertexClickTest.IsPlaced(i)) continue;
+            slots.Add(i);
             world.Add(vertexClickTest.clickedObjects[i].transform.position);
             image.Add(vertexClickTest.verticesStruct[i].screenCoordinate);
             imageGT.Add(vertexClickTest.verticesStruct[i].screenCoordinateGT);
@@ -144,6 +156,7 @@ public class DLT_solve : MonoBehaviour
         if (!IsPlausible(cam, projCam.pixelWidth, projCam.pixelHeight, out string reason))
         {
             LastRejectReason = reason;
+            SuspectSlot = -1;
             string hint = pointCount < 10 ? "점을 더 맞추거나(10개 이상 권장) " : "";
             Debug.LogWarning($"[DLT] 점 {pointCount}개로 푼 결과가 실제 프로젝터로 보기 어려워 적용하지 않았습니다 ({reason}). " +
                              $"{hint}어긋난 마커가 있는지 확인하세요. 되돌리려면 Backspace.");
@@ -165,17 +178,42 @@ public class DLT_solve : MonoBehaviour
         {
             ReprojectionError(world, image, out double rmse, out double max);
             Debug.Log($"[Live] 맞춘 점 {pointCount}개로 다시 계산: 재투영 RMSE {rmse:F2}px, 최대 {max:F2}px{(nearlyPlanar ? " (점들이 거의 한 평면!)" : "")}");
-
-            // 점이 7개 이상이면 서로 맞지 않는 마커가 있는지 전체 일관성으로만 알린다.
-            // 어느 마커인지는 지목하지 않는다: 미지수가 11개라 점 10개 이하에서는 최소제곱이 오차를
-            // 다른 점들에 나눠 떠넘겨서, 잘못 놓인 마커가 아닌 다른 마커가 가장 크게 나오는 경우가 많다.
-            if (pointCount > 6 && max > InconsistencyWarnPixels)
-                Debug.LogWarning($"[Live] 마커들이 서로 {max:F1}px까지 맞지 않습니다. 투영된 모양을 보고 어긋난 부분의 마커를 다시 맞추세요.");
         }
+
+        // 5. 다른 마커들과 유독 안 맞는 마커 찾기 (적용된 카메라로 각 점을 다시 투영해서 비교)
+        FindSuspect(world, image, slots);
 
         // 마커 패치와 어긋남 표시를 새 카메라 기준으로 갱신
         vertexClickTest.OnCameraSolved();
         return true;
+    }
+
+    private void FindSuspect(List<Vector3> world, List<Vector2> image, List<int> slots)
+    {
+        SuspectSlot = -1;
+        int n = world.Count;
+        if (n < SuspectMinPoints) return;
+
+        var errors = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 p = projCam.WorldToScreenPoint(world[i]);
+            errors[i] = Vector2.Distance(new Vector2(p.x, p.y), image[i]);
+        }
+        int worst = 0;
+        for (int i = 1; i < n; i++) if (errors[i] > errors[worst]) worst = i;
+
+        var rest = new List<double>();
+        for (int i = 0; i < n; i++) if (i != worst) rest.Add(errors[i]);
+        rest.Sort();
+        double median = rest.Count % 2 == 1 ? rest[rest.Count / 2] : (rest[rest.Count / 2 - 1] + rest[rest.Count / 2]) / 2.0;
+
+        if (errors[worst] > SuspectRatio * median && errors[worst] > SuspectMinPixels)
+        {
+            SuspectSlot = slots[worst];
+            Debug.LogWarning($"[Live] {SuspectSlot + 1}번 마커가 다른 마커들과 맞지 않습니다 ({errors[worst]:F1}px, 나머지 중앙값 {median:F1}px). " +
+                             "번호가 실물의 다른 곳에 맞춰지지 않았는지 확인하고 다시 맞춰 보세요.");
+        }
     }
 
     // 실제 프로젝터로 있을 수 있는 카메라인지. 기준은 Inspector의 Result Check 값.

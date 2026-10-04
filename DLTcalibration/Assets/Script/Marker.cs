@@ -6,7 +6,7 @@ using TMPro;
 // 프로젝터 화면(CanvasUI)에 뜨는 대응점 마커.
 // 드래그한 위치를 프로젝터 카메라의 스크린 픽셀 좌표로 VertexClickTest에 기록한다.
 // 모양은 가운데가 빈 십자선이라, 맞출 실물 지점을 가리지 않는다. 색: 흰색 = 아직 안 맞춤, 초록 = 맞춤,
-// 노랑 = 방향키로 움직일 마커(마지막으로 끈 것).
+// 노랑 = 방향키로 움직일 마커(마지막으로 끈 것), 빨강 = 다른 마커들과 유독 안 맞는 마커.
 public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public TextMeshProUGUI markerText;
@@ -20,6 +20,7 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
     private static readonly Color UnplacedColor = Color.white;
     private static readonly Color PlacedColor = new Color(0.35f, 1f, 0.35f);
     private static readonly Color ActiveColor = new Color(1f, 0.9f, 0f);
+    private static readonly Color SuspectColor = new Color(1f, 0.25f, 0.25f);
 
     private RectTransform rectTransform;
     private RectTransform canvasRect;
@@ -55,7 +56,10 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
             SyncPatchPosition();
         }
 
-        Color color = owner.ActiveSlot == IDX ? ActiveColor : owner.IsPlaced(IDX) ? PlacedColor : UnplacedColor;
+        Color color = dragging ? ActiveColor
+                    : owner.IsSuspect(IDX) ? SuspectColor
+                    : owner.ActiveSlot == IDX ? ActiveColor
+                    : owner.IsPlaced(IDX) ? PlacedColor : UnplacedColor;
         if (color != currentColor) SetColor(color);
     }
 

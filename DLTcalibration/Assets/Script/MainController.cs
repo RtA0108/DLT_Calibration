@@ -27,7 +27,7 @@ public class MainController : MonoBehaviour
 
     [Header("Recommendation")]
     [Range(6, VertexClickTest.MaxPoints)]
-    public int recommendedVertexCount = 10; // 추천점 개수. 실행 중에는 -/= 키로 조절. 6개는 수학적 최소라 손 오차에 매우 약해서 10개가 기본
+    public int recommendedVertexCount = 12; // 추천점 개수. 실행 중에는 -/= 키로 조절 (6~20). 기본 12는 기반 논문(ICPC)의 실험 조건
 
     [Header("Load")]
     public bool autoFitOnLoad = true;                      // 모델을 불러올 때 프로젝터 화면에 맞게 크기 조절
