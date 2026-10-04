@@ -151,8 +151,12 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         if (this.enabled && _visualized) Run();
     }
 
+    // Run이 불린 횟수. MainController가 enabled/visualized를 바꾸면서 이미 다시 계산됐는지 알 때 쓴다.
+    public int RunCount { get; private set; }
+
     public void Run()
     {
+        RunCount++;
         ClearMarkers();
         if (!this.enabled || !_visualized || meshFilter == null || targetCamera == null) return;
 

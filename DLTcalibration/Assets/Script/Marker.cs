@@ -7,7 +7,7 @@ using TMPro;
 // 드래그한 위치를 프로젝터 카메라의 스크린 픽셀 좌표로 VertexClickTest에 기록한다.
 // 모양은 가운데가 빈 십자선이라, 맞출 실물 지점을 가리지 않는다. 색: 흰색 = 아직 안 맞춤, 초록 = 맞춤,
 // 노랑 = 방향키로 움직일 마커(마지막으로 끈 것), 빨강 = 다른 마커들과 유독 안 맞는 마커.
-public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class Marker : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public TextMeshProUGUI markerText;
 
@@ -194,6 +194,12 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
         // (예전에는 마커가 아니라 Canvas 자체를 옮기고 있었음)
         if (ScreenToCanvas(screenPosition, out Vector2 local))
             rectTransform.localPosition = new Vector3(local.x, local.y, 0f);
+    }
+
+    // 누르기만 해도 방향키로 움직일 마커가 된다 (끌지 않고 골라서 방향키로만 맞출 수 있게)
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (owner != null) owner.OnMarkerPressed(IDX);
     }
 
     public void OnBeginDrag(PointerEventData eventData)

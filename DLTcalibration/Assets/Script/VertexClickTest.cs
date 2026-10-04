@@ -49,9 +49,10 @@ public class VertexClickTest : MonoBehaviour
     // (R로 10개를 고르면 바로 "선택 6개 이상"이 되어, 예전에는 아직 안 옮긴 마커들까지 계산에 섞였음.
     //  다 맞출 때까지 매번 불일치 경고가 뜨고 투영과 패치가 중간에 흔들렸다)
     private bool[] placed;
-    // 마지막으로 끈 마커. 방향키로 1px(Shift 10px)씩 옮긴다. 조작 화면 번호도 이 점을 강조한다.
+    // 마지막으로 누르거나 끈 마커. 방향키로 1px(Shift 10px)씩 옮긴다. 조작 화면 번호도 이 점을 강조한다.
     public int ActiveSlot { get; private set; } = -1;
-    private float nudgeRepeatAt;
+    private float nudgeRepeatAt, nudgeSolvedAt;
+    private bool nudgeSolvePending;
     private GameObject hoverHighlight;   // 클릭하면 선택될 버텍스를 미리 보여주는 표시 (조작 화면에만 보임)
     private GameObject hoverCandidate;
     private Vector2 lastPickMouse = new Vector2(-1f, -1f);
@@ -88,15 +89,28 @@ public class VertexClickTest : MonoBehaviour
         if (dltSolver == null) dltSolver = GetComponent<DLT_solve>();
         if (projectCam == null) Debug.LogError("[VertexClickTest] projectCam이 지정되지 않았습니다.");
         if (markerManager == null) Debug.LogError("[VertexClickTest] MarkerManager를 찾을 수 없습니다.");
+
+        // 키보드로 UI를 옮겨 다니는 기능(방향키/Enter/Space)을 끈다. 방향키는 마커 미세 조정에 쓰는데,
+        // 마지막에 누른 UI가 선택돼 있으면 같은 키로 회전/크기 슬라이더가 움직이거나 R 버튼이 다시 눌렸음.
+        // 드래그 시작 거리도 10px -> 2px: 마커를 조금만 옮기려 하면 10px 넘게 움직여야 드래그가 시작됐음.
+        var es = UnityEngine.EventSystems.EventSystem.current;
+        if (es != null)
+        {
+            es.sendNavigationEvents = false;
+            es.pixelDragThreshold = 2;
+        }
     }
 
     private void Update()
     {
         ReleaseDestroyedSlots();
 
-        // 조작 화면(Display 1) 위에서: 고를 버텍스 미리 표시 + 클릭으로 선택/해제
+        // 조작 화면(Display 1) 위에서 Ctrl을 누르고 있을 때: 고를 버텍스 미리 표시 + 클릭으로 선택/해제.
+        // Ctrl 없이 클릭해도 되게 하면, 창을 선택하려고 모델 위를 한 번 누른 것만으로 버텍스가 추가되거나
+        // 이미 맞춘 마커가 지워졌음 (번호 글자도 클릭이 통과해서 그 버텍스를 해제했음).
         bool overOperatorView = Display.activeEditorGameViewTarget == 0;
-        bool canPick = overOperatorView && MainController.Instance != null && MainController.Instance.IsCalibrationActive
+        bool ctrl = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+        bool canPick = overOperatorView && ctrl && MainController.Instance != null && MainController.Instance.IsCalibrationActive
                        && !IsPointerOverUI();
         // 마우스가 움직였을 때만 다시 찾는다 (가만히 있으면 이전 결과 사용, 가끔은 다시 확인)
         Vector2 mouse = Input.mousePosition;
@@ -148,7 +162,10 @@ public class VertexClickTest : MonoBehaviour
         Debug.Log($"[Live] 실시간 재계산: {(liveSolve ? "켜짐" : "꺼짐 (F 키로 직접 계산)")}");
     }
 
-    // 마커 드래그를 시작할 때 Marker가 호출한다. 이 마커가 방향키 미세 조정 대상이 된다.
+    // 마커를 누르거나 드래그를 시작할 때 Marker가 호출한다. 이 마커가 방향키 미세 조정 대상이 된다.
+    // (누르기만 해도 대상이 되게 함. 예전에는 드래그해야만 대상이 돼서, 마커를 고르려면 일단 움직여야 했음)
+    public void OnMarkerPressed(int slot) => OnMarkerDragBegin(slot);
+
     public void OnMarkerDragBegin(int slot)
     {
         ActiveSlot = slot;
@@ -166,20 +183,30 @@ public class VertexClickTest : MonoBehaviour
     private void MarkPlaced(int slot)
     {
         placed[slot] = true;
-        if (liveSolve && dltSolver != null && PlacedCount() >= 6) dltSolver.PerformDLT(false, placedOnly: true);
+        SolveLive();
     }
 
-    // 방향키: 마지막으로 끈 마커를 1px씩, Shift를 누르면 10px씩 옮긴다. 누르고 있으면 반복.
+    private void SolveLive()
+    {
+        if (liveSolve && dltSolver != null && PlacedCount() >= 6) dltSolver.PerformDLT(false);
+    }
+
+    // 방향키: 마지막으로 누른/끈 마커를 1px씩, Shift를 누르면 10px씩 옮긴다. 누르고 있으면 반복.
+    // 누르고 있는 동안 다시 계산은 0.2초에 한 번, 손을 떼면 마지막으로 한 번 (매 반복마다 풀면 끊겼음)
     private void NudgeActiveMarker()
     {
-        if (ActiveSlot < 0 || clickedObjects[ActiveSlot] == null) return;
+        if (ActiveSlot < 0 || clickedObjects[ActiveSlot] == null) { nudgeSolvePending = false; return; }
 
         Vector2 dir = Vector2.zero;
         if (Input.GetKey(KeyCode.LeftArrow)) dir.x -= 1f;
         if (Input.GetKey(KeyCode.RightArrow)) dir.x += 1f;
         if (Input.GetKey(KeyCode.UpArrow)) dir.y += 1f;
         if (Input.GetKey(KeyCode.DownArrow)) dir.y -= 1f;
-        if (dir == Vector2.zero) return;
+        if (dir == Vector2.zero)
+        {
+            if (nudgeSolvePending) { nudgeSolvePending = false; nudgeSolvedAt = Time.unscaledTime; SolveLive(); }
+            return;
+        }
 
         bool firstPress = Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow)
                           || Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.DownArrow);
@@ -188,7 +215,14 @@ public class VertexClickTest : MonoBehaviour
 
         float step = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) ? 10f : 1f;
         verticesStruct[ActiveSlot].screenCoordinate += dir * step; // 마커는 LateUpdate에서 이 좌표로 옮겨짐
-        MarkPlaced(ActiveSlot);
+        placed[ActiveSlot] = true;
+        nudgeSolvePending = true;
+        if (Time.unscaledTime - nudgeSolvedAt > 0.2f)
+        {
+            nudgeSolvePending = false;
+            nudgeSolvedAt = Time.unscaledTime;
+            SolveLive();
+        }
     }
 
     public bool IsPlaced(int slot) => placed != null && placed[slot] && clickedObjects[slot] != null;
@@ -394,6 +428,7 @@ public class VertexClickTest : MonoBehaviour
     // 모든 선택을 해제하고 마커도 지운다.
     public void ClearSelection()
     {
+        if (dltSolver != null) dltSolver.ClearStatus(); // 이전 마커들의 '보정 보류' 이유, 빨간 마커 표시 지우기
         for (int i = 0; i < clickedObjects.Length; i++)
         {
             if (ReferenceEquals(clickedObjects[i], null)) continue;
@@ -439,15 +474,16 @@ public class VertexClickTest : MonoBehaviour
         }
 
         float best = pickRadiusPixels;
-        Vector3 bestWorld = default;
+        Vector3 bestWorld = default, bestLocal = default;
         bool found = false;
         for (int k = 0; k < 3; k++)
         {
-            Vector3 world = meshCollider.transform.TransformPoint(pickVertices[pickTriangles[hit.triangleIndex * 3 + k]]);
+            Vector3 local = pickVertices[pickTriangles[hit.triangleIndex * 3 + k]];
+            Vector3 world = meshCollider.transform.TransformPoint(local);
             float d = Vector2.Distance(cam.WorldToScreenPoint(world), mouse);
-            if (d < best) { best = d; bestWorld = world; found = true; }
+            if (d < best) { best = d; bestWorld = world; bestLocal = local; found = true; }
         }
-        return found ? main.sphereGenerator.FindSphereAt(bestWorld, 0.1f) : null;
+        return found ? main.sphereGenerator.FindSphereForVertex(bestLocal, bestWorld) : null;
     }
 
     // 화면에서 커서에 가장 가까운 보이는 구 (pickRadiusPixels 이내).

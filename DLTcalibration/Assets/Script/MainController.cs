@@ -445,10 +445,16 @@ public class MainController : MonoBehaviour
 
         if (currentCalibrator != null)
         {
+            // enabled를 켜거나 visualized를 바꾸면 OnEnable/setter에서 이미 Run이 돌 수 있다.
+            // 고밀도 메쉬에서는 무거운 계산이라 그 경우 다시 돌리지 않는다 (예전에는 최대 세 번 돌았음).
+            int runsBefore = currentCalibrator.RunCount;
             currentCalibrator.enabled = IsCalibrationActive && !waiting;
             currentCalibrator.visualized = IsRecommendationActive;
 
-            if (IsCalibrationActive && !waiting) currentCalibrator.Run();
+            if (IsCalibrationActive && !waiting)
+            {
+                if (currentCalibrator.RunCount == runsBefore) currentCalibrator.Run();
+            }
             else currentCalibrator.ClearMarkers();
         }
 

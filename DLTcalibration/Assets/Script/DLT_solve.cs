@@ -31,18 +31,23 @@ public class DLT_solve : MonoBehaviour
     public int SuspectSlot { get; private set; } = -1;
     public void ClearSuspect() { SuspectSlot = -1; }
 
+    // 마커를 전부 지웠을 때: 이전 마커들 기준의 '보정 보류' 이유와 빨간 마커 표시를 지운다 (카메라는 그대로)
+    public void ClearStatus() { LastRejectReason = null; SuspectSlot = -1; }
+
     [Header("References")]
     public VertexClickTest vertexClickTest;      // 클릭 데이터
     public CreateSphereAtVertex createSphereAtVertex; // 전체 버텍스 정보 (focal length 보정에 필요하다면 사용)
     public Camera projCam;                       // 프로젝션 맵핑에 사용할 카메라
 
-    // 실제 프로젝터로는 있을 수 없는 결과는 적용하지 않는다.
-    // DLT는 미지수가 11개라 점이 적으면(특히 6~7개) 손 오차 1~2px도 정확히 맞추려고 카메라를 크게 일그러뜨린다.
-    // (TheRock 6점, ±2px 시뮬레이션: 기울어짐 최대 2228, 모델 다른 곳 최대 574px 어긋남)
-    // 실제 프로젝터는 화면 기울어짐 0, 가로세로 픽셀 비 1이므로 이 둘이 크게 벗어나면 마커가 어긋난 것으로 본다.
+    // 계산이 깨진 결과만 적용하지 않는다 (나머지는 기반 논문처럼 그대로 적용하고 사용자가 투영을 보고 판단).
+    //  - 좌우가 뒤집힌 해: 마커와 버텍스의 짝이 틀렸다는 신호
+    //  - 모델 일부가 프로젝터 바로 앞이나 뒤에 놓이는 해: 투영이 극단적으로 늘어남
+    // 기울어짐/가로세로 비율/화면 중심으로 거르던 것은 뺐다. 실제 프로젝터처럼 화각이 좁으면(30도) DLT가 내부값을
+    // 잘 구분하지 못해 정상 결과도 기울어짐 13~22%가 나와 대부분 보류됐고(TheRock 7~11점 모두 보류),
+    // 반대로 투영이 엉터리인 결과는 통과시키기도 했음. 시뮬레이션(화각 25~50도, 6~12점, 손 오차 1~5px 3600회)에서
+    // 엉터리(모델 어딘가 100px 이상 어긋남)는 0.1%(모두 6점)였고, 깊이 기준은 그중 2/3을 잡고 정상 결과는 막지 않았음.
     [Header("Result Check")]
-    [Range(0f, 0.5f)] public float maxSkewRatio = 0.05f;   // |기울어짐| / 초점거리
-    [Range(0f, 0.5f)] public float maxAspectError = 0.10f; // |fy/fx - 1|
+    [Range(0f, 0.9f)] public float minDepthRatio = 0.2f; // 모델에서 가장 가까운 곳의 깊이 / 중앙 깊이가 이보다 작으면 보류
 
     // 마지막 계산을 적용하지 않은 이유 (적용했으면 null). 조작 화면 안내에 쓴다.
     public string LastRejectReason { get; private set; }
@@ -108,11 +113,12 @@ public class DLT_solve : MonoBehaviour
     /// <summary>
     /// 유효한 점들을 수집하여 DLT 계산을 수행하는 메인 함수.
     /// verbose = false는 마커를 옮길 때마다 자동으로 다시 푸는 경우로, 로그를 한 줄만 남긴다.
-    /// placedOnly = true면 사용자가 실제로 옮긴 마커만 쓴다 (실시간 재계산). F 키는 선택된 점 전부.
+    /// 사용자가 실물에 맞춘(옮긴) 마커만 쓴다 (기반 논문과 같음). 아직 안 옮긴 마커는 가상 프로젝터 기준의
+    /// 처음 위치라 실물과의 짝이 아니어서, 섞으면 결과를 처음 카메라 쪽으로 끌어당긴다. F 키도 마찬가지.
     /// </summary>
-    public bool PerformDLT(bool verbose = true, bool placedOnly = false)
+    public bool PerformDLT(bool verbose = true)
     {
-        // 1. 선택된 점 수집.
+        // 1. 맞춘 점 수집.
         //    3D 좌표는 클릭 시점 값이 아니라 구의 현재 위치를 쓴다 (클릭 후 슬라이더로 메쉬를 움직였을 수 있음).
         var world = new List<Vector3>();
         var image = new List<Vector2>();
@@ -120,8 +126,7 @@ public class DLT_solve : MonoBehaviour
         var slots = new List<int>();
         for (int i = 0; i < vertexClickTest.clickedObjects.Length; i++)
         {
-            if (vertexClickTest.clickedObjects[i] == null) continue;
-            if (placedOnly && !vertexClickTest.IsPlaced(i)) continue;
+            if (!vertexClickTest.IsPlaced(i)) continue;
             slots.Add(i);
             world.Add(vertexClickTest.clickedObjects[i].transform.position);
             image.Add(vertexClickTest.verticesStruct[i].screenCoordinate);
@@ -133,7 +138,7 @@ public class DLT_solve : MonoBehaviour
         // DLT는 최소 6개의 점이 필요함 (6개를 넘으면 전부 써서 최소제곱으로 푼다)
         if (pointCount < 6)
         {
-            if (verbose) Debug.LogError($"[DLT Error] 점이 부족합니다. (현재: {pointCount}개 / 최소: 6개)");
+            if (verbose) Debug.LogWarning($"[DLT] 실물에 맞춘 마커가 부족합니다. (현재: {pointCount}개 / 최소: 6개) 마커를 실물 위치로 옮긴 뒤 다시 누르세요.");
             return false;
         }
 
@@ -148,18 +153,18 @@ public class DLT_solve : MonoBehaviour
         if (!TryDecompose(SolveDLT(world, image), world, out CameraParams cam))
         {
             LastRejectReason = "계산 실패";
+            SuspectSlot = -1;
             Debug.LogError("[DLT Error] 투영 행렬을 카메라 파라미터로 분해하지 못했습니다.");
             return false;
         }
 
-        // 실제 프로젝터로 있을 수 없는 결과면 적용하지 않고 지금 카메라를 유지한다.
-        if (!IsPlausible(cam, projCam.pixelWidth, projCam.pixelHeight, out string reason))
+        // 계산이 깨진 결과면 적용하지 않고 지금 카메라를 유지한다.
+        if (IsBroken(cam, out string reason))
         {
             LastRejectReason = reason;
             SuspectSlot = -1;
-            string hint = pointCount < 10 ? "점을 더 맞추거나(10개 이상 권장) " : "";
-            Debug.LogWarning($"[DLT] 점 {pointCount}개로 푼 결과가 실제 프로젝터로 보기 어려워 적용하지 않았습니다 ({reason}). " +
-                             $"{hint}어긋난 마커가 있는지 확인하세요. 되돌리려면 Backspace.");
+            Debug.LogWarning($"[DLT] 점 {pointCount}개로 푼 결과가 깨져서 적용하지 않았습니다 ({reason}). " +
+                             "번호가 실물의 다른 곳에 맞춰진 마커가 있는지 확인하세요. 되돌리려면 Backspace.");
             return false;
         }
         LastRejectReason = null;
@@ -216,18 +221,61 @@ public class DLT_solve : MonoBehaviour
         }
     }
 
-    // 실제 프로젝터로 있을 수 있는 카메라인지. 기준은 Inspector의 Result Check 값.
-    // 화면 중심(렌즈 시프트)은 프로젝터마다 위아래로 크게 치우칠 수 있어서 넉넉하게 본다.
-    public bool IsPlausible(CameraParams p, float width, float height, out string reason)
+    // 계산이 깨진 결과인지 (Result Check 설명 참고)
+    public bool IsBroken(CameraParams p, out string reason)
     {
-        double f = (Math.Abs(p.fx) + Math.Abs(p.fy)) / 2.0;
-        if (p.fx <= 0 || p.fy <= 0) { reason = "좌우 또는 위아래가 뒤집힌 해"; return false; }
-        if (Math.Abs(p.skew) > maxSkewRatio * f) { reason = $"화면 기울어짐 {Math.Abs(p.skew) / f:P0}"; return false; }
-        if (Math.Abs(p.fy / p.fx - 1.0) > maxAspectError) { reason = $"가로세로 초점 차이 {Math.Abs(p.fy / p.fx - 1.0):P0}"; return false; }
-        if (p.cx < -0.5 * width || p.cx > 1.5 * width || p.cy < -1.0 * height || p.cy > 2.0 * height)
-        { reason = $"화면 중심이 화면 밖 ({p.cx:F0}, {p.cy:F0})"; return false; }
+        if (p.fx <= 0 || p.fy <= 0) { reason = "좌우가 뒤집힌 해"; return true; }
+
+        // 모델 바운딩 박스 꼭짓점들의 깊이: 가장 가까운 곳이 중앙보다 너무 가깝거나 뒤에 있으면 깨진 해
+        List<Renderer> renderers = ModelRenderers();
+        if (renderers.Count > 0)
+        {
+            var depths = new List<float>();
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                Bounds b = r.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 corner = new Vector3(
+                        (i & 1) == 0 ? b.min.x : b.max.x,
+                        (i & 2) == 0 ? b.min.y : b.max.y,
+                        (i & 4) == 0 ? b.min.z : b.max.z);
+                    depths.Add(Vector3.Dot(corner - p.position, p.forward));
+                }
+            }
+            if (depths.Count > 0)
+            {
+                depths.Sort();
+                float median = depths[depths.Count / 2];
+                if (median <= 0f || depths[0] < minDepthRatio * median)
+                {
+                    reason = "모델 일부가 프로젝터 바로 앞이나 뒤에 놓임";
+                    return true;
+                }
+            }
+        }
         reason = null;
-        return true;
+        return false;
+    }
+
+    // 모델 자체의 렌더러 (버텍스 구, 추천 마커 제외). 고밀도 메쉬는 버텍스 구가 수만 개라
+    // 마커를 옮길 때마다 GetComponentsInChildren으로 다 훑지 않도록 모델이 바뀔 때만 다시 모은다.
+    private GameObject cachedModel;
+    private readonly List<Renderer> cachedRenderers = new List<Renderer>();
+
+    private List<Renderer> ModelRenderers()
+    {
+        GameObject model = MainController.Instance != null ? MainController.Instance.targetMesh : null;
+        if (model == null) { cachedModel = null; cachedRenderers.Clear(); return cachedRenderers; }
+        if (!ReferenceEquals(model, cachedModel))
+        {
+            cachedModel = model;
+            cachedRenderers.Clear();
+            foreach (Renderer r in model.GetComponentsInChildren<Renderer>())
+                if (r.gameObject.layer == model.layer) cachedRenderers.Add(r);
+        }
+        return cachedRenderers;
     }
 
     #region --- Math & Calibration Logic ---
@@ -354,7 +402,7 @@ public class DLT_solve : MonoBehaviour
         return true;
     }
 
-    private static void ApplyToCamera(CameraParams p, Camera cam, bool verbose)
+    private void ApplyToCamera(CameraParams p, Camera cam, bool verbose)
     {
         cam.transform.SetPositionAndRotation(p.position, p.Rotation);
         FitFarPlane(cam);
@@ -372,15 +420,15 @@ public class DLT_solve : MonoBehaviour
     // (화각 20도 프로젝터로 시뮬레이션: 모델 깊이 1065~1210, far 1000 -> 패치 전부 빈 칸)
     // 그래서 모델 가장 먼 곳의 2배까지 far를 늘린다. 2배는 보정 후 슬라이더로 모델을 키울 여유.
     // near는 그대로 둔다 (가까운 쪽은 잘릴 일이 없음).
-    private static void FitFarPlane(Camera cam)
+    private void FitFarPlane(Camera cam)
     {
-        GameObject model = MainController.Instance != null ? MainController.Instance.targetMesh : null;
-        if (model == null) return;
+        List<Renderer> renderers = ModelRenderers();
+        if (renderers.Count == 0) return;
 
         float farthest = 0f;
-        foreach (Renderer r in model.GetComponentsInChildren<Renderer>())
+        foreach (Renderer r in renderers)
         {
-            if (r.gameObject.layer != model.layer) continue; // 버텍스 구, 추천 마커 제외
+            if (r == null) continue;
             Bounds b = r.bounds;
             for (int i = 0; i < 8; i++)
             {

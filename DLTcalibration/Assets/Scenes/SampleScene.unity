@@ -13188,8 +13188,7 @@ MonoBehaviour:
   vertexClickTest: {fileID: 2099357156}
   createSphereAtVertex: {fileID: 561774215}
   projCam: {fileID: 808022739}
-  maxSkewRatio: 0.05
-  maxAspectError: 0.1
+  minDepthRatio: 0.2
 --- !u!114 &2099357156
 MonoBehaviour:
   m_ObjectHideFlags: 0
