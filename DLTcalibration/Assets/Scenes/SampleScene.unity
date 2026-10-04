@@ -1970,7 +1970,7 @@ MonoBehaviour:
   _generatedTexSaliencyPath: 
   currentCalibrator: {fileID: 0}
   currentVisualizer: {fileID: 0}
-  recommendedVertexCount: 6
+  recommendedVertexCount: 10
   autoFitOnLoad: 1
   autoFitFraction: 0.5
   IsCalibrationActive: 0
@@ -9385,7 +9385,7 @@ Canvas:
   m_GameObject: {fileID: 1487993642}
   m_Enabled: 1
   serializedVersion: 3
-  m_RenderMode: 1
+  m_RenderMode: 0
   m_Camera: {fileID: 808022739}
   m_PlaneDistance: 10
   m_PixelPerfect: 0
@@ -13188,6 +13188,8 @@ MonoBehaviour:
   vertexClickTest: {fileID: 2099357156}
   createSphereAtVertex: {fileID: 561774215}
   projCam: {fileID: 808022739}
+  maxSkewRatio: 0.05
+  maxAspectError: 0.1
 --- !u!114 &2099357156
 MonoBehaviour:
   m_ObjectHideFlags: 0

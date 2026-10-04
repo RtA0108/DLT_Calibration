@@ -34,14 +34,15 @@ public class CalibrationHUD : MonoBehaviour
     private const string HelpText =
         "<b>사용 순서</b>\n" +
         "1. 오른쪽 목록에서 모델 선택 (프로젝터 화면에 맞게 크기가 자동 조정됨)\n" +
-        "2. <b>- / =</b> 추천점 개수 조절 (6~20) → <b>R</b> 추천점을 대응점으로 선택\n" +
+        "2. <b>- / =</b> 추천점 개수 조절 (6~20, 10개 이상 권장) → <b>R</b> 추천점을 대응점으로 선택\n" +
         "     (조작 화면에서 버텍스를 직접 클릭해 고르거나 해제할 수도 있음. 노란 점이 고를 점)\n" +
         "3. 프로젝터 화면에서 각 십자선을 실물의 같은 위치로 드래그\n" +
         "     조작 화면의 번호가 그 마커의 버텍스. 지금 움직이는 마커는 노란색\n" +
         "     <b>방향키</b> 마지막으로 끈 마커를 1px씩 (Shift: 10px)\n" +
         "     <b>V</b> 정렬 보기: 모델 없이 마커만 투사\n" +
         "4. 마커를 6개 이상 맞추면, 놓을 때마다 맞춘 마커들로 자동 보정됨 (초록 = 맞춘 마커)\n" +
-        "     <b>L</b> 자동 보정 켜기/끄기, <b>F</b> 선택된 점 전부로 보정 계산\n" +
+        "     실제 프로젝터로 볼 수 없는 결과는 적용하지 않고 '보정 보류'로 알림 → 마커 확인/점 추가\n" +
+        "     <b>L</b> 자동 보정 켜기/끄기, <b>F</b> 선택된 점 전부로 계산, <b>Backspace</b> 보정 초기화\n" +
         "\n" +
         "<b>기타</b>\n" +
         "<b>1</b> 캘리브레이션 모드   <b>2</b> 히트맵   <b>3</b> 추천점 표시   (R을 누르면 1, 3은 자동으로 켜짐)\n" +
@@ -153,13 +154,15 @@ public class CalibrationHUD : MonoBehaviour
             (() => $"패치 (T): {clickTest.PatchLabel}", () => clickTest.TogglePatchMode()),
             (() => $"자동 보정 (L): {(clickTest.liveSolve ? "켜짐" : "꺼짐")}", () => clickTest.ToggleLiveSolve()),
             (() => "보정 계산 (F)", () => dltSolver.PerformDLT()),
+            (() => "보정 초기화 (Backspace)", () => dltSolver.ResetCalibration()),
             (() => Animator4D == null || !Animator4D.HasSequence ? "4D 텍스처: 없음"
                                                                 : $"4D 텍스처 (P): {(Animator4D.playing ? "재생 중" : "정지")}",
              () => { if (Animator4D != null) Animator4D.TogglePlaying(); }),
             (() => "도움말 (H)", ToggleHelp),
         };
 
-        float height = 8f + RowHeight + (rows.Count + 1) * (RowHeight + RowGap) + 6f;
+        // 마지막 상태 줄은 두 줄까지 (보정 보류 이유 + 할 일)
+        float height = 8f + RowHeight + (rows.Count + 2) * (RowHeight + RowGap) + 6f;
         RectTransform panel = NewRect("CalibrationStatusPanel", transform, Vector2.zero, Vector2.zero, new Vector2(8f, 8f), new Vector2(statusPanelWidth, height));
         panel.gameObject.AddComponent<Image>().color = PanelColor;
         statusPanel = panel.gameObject;
@@ -178,8 +181,8 @@ public class CalibrationHUD : MonoBehaviour
             liveLabels.Add((label, text));
         }
 
-        y -= RowHeight + RowGap;
-        Text status = NewText(panel, "", TextAnchor.MiddleLeft, Vector2.zero, new Vector2(statusPanelWidth - 18f, RowHeight), topAnchored: true, y: y);
+        y -= RowHeight + RowGap + (RowHeight + RowGap) / 2f;
+        Text status = NewText(panel, "", TextAnchor.MiddleLeft, Vector2.zero, new Vector2(statusPanelWidth - 18f, RowHeight * 2f + RowGap), topAnchored: true, y: y);
         // 지금 할 일 안내 (리허설에서 모델을 바꾼 뒤 무엇을 다시 켜야 하는지 몰라 막혔음)
         liveLabels.Add((status, () =>
         {
@@ -191,6 +194,9 @@ public class CalibrationHUD : MonoBehaviour
             if (selected == 0) return "<b>다음:</b> R (추천점으로 마커 만들기)";
             if (selected < 6) return $"<b>다음:</b> 버텍스를 6개 이상 선택 (지금 {selected}개)";
             if (placed < 6) return $"<b>다음:</b> 프로젝터에서 마커 맞추기 ({placed}/6)";
+            // 마지막 계산이 실제 프로젝터로 보기 어려워 적용되지 않았으면 이유와 할 일
+            if (dltSolver != null && dltSolver.LastRejectReason != null)
+                return $"<b>보정 보류:</b> {dltSolver.LastRejectReason}\n마커를 확인하거나 더 맞추세요 ({placed}/{selected})";
             if (!clickTest.liveSolve) return $"맞춘 마커 {placed}/{selected}개 · <b>F</b>로 보정";
             return $"자동 보정 중 · 맞춘 마커 {placed}/{selected}개";
         }));

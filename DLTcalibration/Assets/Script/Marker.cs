@@ -23,6 +23,10 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
 
     private RectTransform rectTransform;
     private RectTransform canvasRect;
+    // 마커 캔버스는 프로젝터 화면에 바로 그리는 Overlay라 카메라가 필요 없다(null).
+    // 예전처럼 카메라 캔버스(Screen Space - Camera)면 보정된 투영 행렬에 기울어짐이 있을 때
+    // 십자선이 같이 기울고 늘어났음 (리허설: 기울어짐 -2693인 결과에서 세로 팔이 3배로 비스듬해짐)
+    private Camera uiCamera;
     private VertexClickTest owner;
     private Vector2 dragOffset;
     private bool dragging;
@@ -39,9 +43,9 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
         rectTransform = GetComponent<RectTransform>();
     }
 
-    // 캔버스가 카메라에 붙어 있어서(Screen Space - Camera), 캘리브레이션으로 카메라가 바뀌면
-    // 그대로 둔 마커도 화면에서 위치가 바뀐다. 드래그 중이 아니면 항상 저장된 프로젝터 좌표에 다시 놓는다.
-    // (방향키 미세 조정도 저장된 좌표를 바꾸는 것이라 여기서 반영됨)
+    // 드래그 중이 아니면 항상 저장된 프로젝터 좌표에 다시 놓는다.
+    // (방향키 미세 조정도 저장된 좌표를 바꾸는 것이라 여기서 반영됨. 카메라 캔버스였을 때는
+    //  캘리브레이션으로 카메라가 바뀌면 그대로 둔 마커가 움직여서 이렇게 했음)
     void LateUpdate()
     {
         if (owner == null || canvasRect == null) return;
@@ -176,12 +180,14 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
         canvasRect = canvasRectTransform;
         projectCam = cam;
         owner = clickTest;
+        Canvas canvas = canvasRect.GetComponentInParent<Canvas>().rootCanvas;
+        uiCamera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : projectCam;
 
         markerText.text = (slot + 1).ToString();
         BuildCrosshair();
 
-        // 스크린 좌표 -> Canvas 로컬 좌표. Screen Space - Camera 캔버스라서 카메라를 넘겨야 한다.
-        // (예전에는 null 카메라로 변환한 뒤 마커가 아니라 Canvas 자체를 옮기고 있었음)
+        // 스크린 좌표 -> Canvas 로컬 좌표 (Overlay면 카메라 없이, 카메라 캔버스면 카메라를 넘겨서).
+        // (예전에는 마커가 아니라 Canvas 자체를 옮기고 있었음)
         if (ScreenToCanvas(screenPosition, out Vector2 local))
             rectTransform.localPosition = new Vector3(local.x, local.y, 0f);
     }
@@ -197,8 +203,7 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
 
     public void OnDrag(PointerEventData eventData)
     {
-        // delta를 더하는 대신 포인터 위치를 직접 변환한다. 캘리브레이션 후 카메라에
-        // 커스텀 투영 행렬이 들어가면 캔버스 1단위가 1픽셀이 아닐 수 있기 때문.
+        // delta를 더하는 대신 포인터 위치를 직접 변환한다 (캔버스 1단위가 1픽셀이 아닐 수 있어서).
         if (!ScreenToCanvas(eventData.position, out Vector2 local)) return;
 
         Vector2 p = local + dragOffset;
@@ -206,7 +211,7 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
         SyncPatchPosition();
 
         // 마커가 실제로 그려지는 프로젝터 픽셀 좌표 (좌하단 원점)
-        Vector2 screenPosition = RectTransformUtility.WorldToScreenPoint(projectCam, rectTransform.position);
+        Vector2 screenPosition = RectTransformUtility.WorldToScreenPoint(uiCamera, rectTransform.position);
         owner.verticesStruct[IDX].screenCoordinate = screenPosition;
     }
 
@@ -221,6 +226,6 @@ public class Marker : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHa
 
     private bool ScreenToCanvas(Vector2 screenPosition, out Vector2 local)
     {
-        return RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, projectCam, out local);
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, uiCamera, out local);
     }
 }

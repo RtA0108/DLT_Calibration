@@ -27,6 +27,23 @@ public class DLT_solve : MonoBehaviour
     public CreateSphereAtVertex createSphereAtVertex; // 전체 버텍스 정보 (focal length 보정에 필요하다면 사용)
     public Camera projCam;                       // 프로젝션 맵핑에 사용할 카메라
 
+    // 실제 프로젝터로는 있을 수 없는 결과는 적용하지 않는다.
+    // DLT는 미지수가 11개라 점이 적으면(특히 6~7개) 손 오차 1~2px도 정확히 맞추려고 카메라를 크게 일그러뜨린다.
+    // (TheRock 6점, ±2px 시뮬레이션: 기울어짐 최대 2228, 모델 다른 곳 최대 574px 어긋남)
+    // 실제 프로젝터는 화면 기울어짐 0, 가로세로 픽셀 비 1이므로 이 둘이 크게 벗어나면 마커가 어긋난 것으로 본다.
+    [Header("Result Check")]
+    [Range(0f, 0.5f)] public float maxSkewRatio = 0.05f;   // |기울어짐| / 초점거리
+    [Range(0f, 0.5f)] public float maxAspectError = 0.10f; // |fy/fx - 1|
+
+    // 마지막 계산을 적용하지 않은 이유 (적용했으면 null). 조작 화면 안내에 쓴다.
+    public string LastRejectReason { get; private set; }
+
+    // 보정 초기화용: 플레이 시작 때의 가상 프로젝터
+    private Vector3 initialPosition;
+    private Quaternion initialRotation;
+    private float initialFarClip;
+    private bool initialSaved;
+
     // DLT 결과를 분해한 카메라 파라미터 (픽셀 단위 내부 파라미터 + 월드 기준 포즈)
     public struct CameraParams
     {
@@ -45,15 +62,37 @@ public class DLT_solve : MonoBehaviour
             GameObject camObj = GameObject.FindGameObjectWithTag("Project Camera");
             if (camObj != null) projCam = camObj.GetComponent<Camera>();
         }
+        if (projCam != null)
+        {
+            initialPosition = projCam.transform.position;
+            initialRotation = projCam.transform.rotation;
+            initialFarClip = projCam.farClipPlane;
+            initialSaved = true;
+        }
     }
 
     void Update()
     {
+        if (HotkeyGuard.Blocked) return;
+
         // 'F' 키를 누르면 DLT 계산 시작
-        if (Input.GetKeyDown(KeyCode.F) && !HotkeyGuard.Blocked)
-        {
-            PerformDLT();
-        }
+        if (Input.GetKeyDown(KeyCode.F)) PerformDLT();
+
+        // Backspace: 보정 초기화 (처음 가상 프로젝터로)
+        if (Input.GetKeyDown(KeyCode.Backspace)) ResetCalibration();
+    }
+
+    // 프로젝터 카메라를 플레이 시작 때 상태로 되돌린다. 마커 위치는 그대로 둔다.
+    // (예전에는 이상한 결과가 한 번 적용되면 플레이를 다시 시작해야 했음)
+    public void ResetCalibration()
+    {
+        if (!initialSaved || projCam == null) return;
+        projCam.ResetProjectionMatrix();
+        projCam.transform.SetPositionAndRotation(initialPosition, initialRotation);
+        projCam.farClipPlane = initialFarClip;
+        LastRejectReason = null;
+        Debug.Log("[Camera Update] 보정을 초기화했습니다 (처음 가상 프로젝터).");
+        vertexClickTest.OnCameraSolved();
     }
 
     /// <summary>
@@ -96,9 +135,21 @@ public class DLT_solve : MonoBehaviour
         // 2. DLT 계산 및 분해
         if (!TryDecompose(SolveDLT(world, image), world, out CameraParams cam))
         {
+            LastRejectReason = "계산 실패";
             Debug.LogError("[DLT Error] 투영 행렬을 카메라 파라미터로 분해하지 못했습니다.");
             return false;
         }
+
+        // 실제 프로젝터로 있을 수 없는 결과면 적용하지 않고 지금 카메라를 유지한다.
+        if (!IsPlausible(cam, projCam.pixelWidth, projCam.pixelHeight, out string reason))
+        {
+            LastRejectReason = reason;
+            string hint = pointCount < 10 ? "점을 더 맞추거나(10개 이상 권장) " : "";
+            Debug.LogWarning($"[DLT] 점 {pointCount}개로 푼 결과가 실제 프로젝터로 보기 어려워 적용하지 않았습니다 ({reason}). " +
+                             $"{hint}어긋난 마커가 있는지 확인하세요. 되돌리려면 Backspace.");
+            return false;
+        }
+        LastRejectReason = null;
 
         // 3. projCam에 적용
         ApplyToCamera(cam, projCam, verbose);
@@ -124,6 +175,20 @@ public class DLT_solve : MonoBehaviour
 
         // 마커 패치와 어긋남 표시를 새 카메라 기준으로 갱신
         vertexClickTest.OnCameraSolved();
+        return true;
+    }
+
+    // 실제 프로젝터로 있을 수 있는 카메라인지. 기준은 Inspector의 Result Check 값.
+    // 화면 중심(렌즈 시프트)은 프로젝터마다 위아래로 크게 치우칠 수 있어서 넉넉하게 본다.
+    public bool IsPlausible(CameraParams p, float width, float height, out string reason)
+    {
+        double f = (Math.Abs(p.fx) + Math.Abs(p.fy)) / 2.0;
+        if (p.fx <= 0 || p.fy <= 0) { reason = "좌우 또는 위아래가 뒤집힌 해"; return false; }
+        if (Math.Abs(p.skew) > maxSkewRatio * f) { reason = $"화면 기울어짐 {Math.Abs(p.skew) / f:P0}"; return false; }
+        if (Math.Abs(p.fy / p.fx - 1.0) > maxAspectError) { reason = $"가로세로 초점 차이 {Math.Abs(p.fy / p.fx - 1.0):P0}"; return false; }
+        if (p.cx < -0.5 * width || p.cx > 1.5 * width || p.cy < -1.0 * height || p.cy > 2.0 * height)
+        { reason = $"화면 중심이 화면 밖 ({p.cx:F0}, {p.cy:F0})"; return false; }
+        reason = null;
         return true;
     }
 
@@ -268,7 +333,7 @@ public class DLT_solve : MonoBehaviour
     // 보정된 위치에서 모델이 원거리 클리핑(far) 밖이면 모델이 통째로 잘려 투영도 패치도 비어 버린다.
     // (화각 20도 프로젝터로 시뮬레이션: 모델 깊이 1065~1210, far 1000 -> 패치 전부 빈 칸)
     // 그래서 모델 가장 먼 곳의 2배까지 far를 늘린다. 2배는 보정 후 슬라이더로 모델을 키울 여유.
-    // near는 그대로 둔다. 마커 캔버스가 카메라 앞 planeDistance에 있어서 near를 키우면 마커가 잘린다.
+    // near는 그대로 둔다 (가까운 쪽은 잘릴 일이 없음).
     private static void FitFarPlane(Camera cam)
     {
         GameObject model = MainController.Instance != null ? MainController.Instance.targetMesh : null;
