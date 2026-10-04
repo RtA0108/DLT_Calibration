@@ -147,6 +147,12 @@ public class RuntimeMeshLoader : MonoBehaviour
                 texPath = File.Exists(texFile) ? texFile : "";
             }
 
+            // 모델별 4D 텍스처 (있으면 재생, 없으면 원래 텍스처).
+            // 히트맵(SaliencyMapVisualizer.Init)이 원래 재질을 저장하기 전에 적용해야, 히트맵을 껐을 때
+            // 재생 중인 재질로 돌아온다. (예전에는 원본 재질로 돌아가서 히트맵을 한 번 켜고 끄면 4D 재생이 멈췄음)
+            if (TextureSequenceAnimator.Instance != null)
+                TextureSequenceAnimator.Instance.Apply(loadedObj, entry);
+
             // 5. 컴포넌트 부착
             var calib = loadedObj.AddComponent<ProjectionMappingCalibrator>();
             calib.enabled = false;
@@ -165,10 +171,6 @@ public class RuntimeMeshLoader : MonoBehaviour
                 MainController.Instance.currentEntry = entry;
                 MainController.Instance.RegisterNewMesh(loadedObj, objPath, cfsPath, texPath);
             }
-
-            // 모델별 4D 텍스처 (있으면 재생, 없으면 원래 텍스처)
-            if (TextureSequenceAnimator.Instance != null)
-                TextureSequenceAnimator.Instance.Apply(loadedObj, entry);
         }
         catch (System.Exception e)
         {

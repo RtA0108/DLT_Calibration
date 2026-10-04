@@ -69,7 +69,11 @@ public class ProjectionMappingCalibrator : MonoBehaviour
     private void OnEnable() { if (isInitialized && _visualized) Run(); }
     private void OnDisable() { ClearMarkers(); }
 
-    public void SetPaths(string obj, string cfs, string tex) { this.objPath = obj; this.cfsSaliencyPath = cfs; this.texSaliencyPath = tex; }
+    public void SetPaths(string obj, string cfs, string tex)
+    {
+        this.objPath = obj; this.cfsSaliencyPath = cfs; this.texSaliencyPath = tex;
+        cachedCandidates = null; // saliency 파일이 바뀌었으면 Reselect가 예전 값을 다시 쓰지 않게
+    }
 
     // ★ [수정됨] .transform을 통해 lossyScale 접근
     private void Update()
@@ -147,8 +151,12 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         if (this.enabled && _visualized) Run();
     }
 
+    // Run이 불린 횟수. MainController가 enabled/visualized를 바꾸면서 이미 다시 계산됐는지 알 때 쓴다.
+    public int RunCount { get; private set; }
+
     public void Run()
     {
+        RunCount++;
         ClearMarkers();
         if (!this.enabled || !_visualized || meshFilter == null || targetCamera == null) return;
 
@@ -328,6 +336,12 @@ public class ProjectionMappingCalibrator : MonoBehaviour
         else { marker = GameObject.CreatePrimitive(PrimitiveType.Sphere); Destroy(marker.GetComponent<Collider>()); var r = marker.GetComponent<Renderer>(); if (r) { Shader s = Shader.Find("Universal Render Pipeline/Lit"); if (s == null) s = Shader.Find("Standard"); if (s != null) { r.material = new Material(s); r.material.color = Color.red; } else { r.material.color = Color.red; } } }
         marker.transform.position = position;
         marker.transform.SetParent(markerRoot.transform, true); // transform 명시
+
+        // 추천점은 조작 화면에만 보이게 (버텍스 구와 같은 레이어, 프로젝터 카메라는 이 레이어를 그리지 않음).
+        // 프로젝터에 같이 비추면 R로 만든 십자선 마커의 가운데 빈 칸을 빨간 점이 가렸음.
+        int operatorOnlyLayer = LayerMask.NameToLayer("Vertex In 3D");
+        if (operatorOnlyLayer >= 0)
+            foreach (Transform t in marker.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = operatorOnlyLayer;
 
         marker.transform.localScale = scale;
 

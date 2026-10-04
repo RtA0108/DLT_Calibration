@@ -189,11 +189,23 @@ public class ModelImportWindow : EditorWindow
 
         string meshPath = $"Meshes/{id}/{id}";
         string destDir = Path.Combine(ResourcesDir, "Meshes", id);
-        MeshEntry existing = LoadLibrary().FirstOrDefault(e => e.id == id);
+        // Windows 파일 이름은 대소문자를 구분하지 않으므로 id 비교도 대소문자 무시
+        List<MeshEntry> library = LoadLibrary();
+        MeshEntry existing = library.FirstOrDefault(e => string.Equals(e.id, id, StringComparison.OrdinalIgnoreCase));
         bool addEntry = existing == null;
         if (existing != null && existing.meshPath != meshPath)
         {
             Report(MessageType.Error, $"id '{id}'는 이미 다른 모델({existing.meshPath})에 쓰이고 있습니다. 다른 id를 쓰세요.");
+            return;
+        }
+        // saliency 결과 파일 이름은 OBJ 이름(= id)을 따른다. 다른 모델의 OBJ 이름과 같으면 그 모델 결과를 덮어쓴다.
+        // (예: Venus의 OBJ는 Statue_v1_L2_Venus라서, 같은 OBJ를 id 그대로 추가하면 Venus 결과가 바뀜)
+        MeshEntry sameResults = library.FirstOrDefault(e => e != existing && !string.IsNullOrEmpty(e.meshPath) &&
+            string.Equals(Path.GetFileNameWithoutExtension(e.meshPath), id, StringComparison.OrdinalIgnoreCase));
+        if (sameResults != null)
+        {
+            Report(MessageType.Error, $"id '{id}'로 만들면 saliency 결과 파일 이름이 '{sameResults.displayName}' 모델과 같아져 " +
+                                      "그 모델의 결과를 덮어쓰게 됩니다. 다른 id를 쓰세요.");
             return;
         }
         if ((existing != null || Directory.Exists(destDir)) &&

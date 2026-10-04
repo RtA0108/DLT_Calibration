@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 using System.IO;
 
 public class MainController : MonoBehaviour
@@ -26,7 +27,7 @@ public class MainController : MonoBehaviour
 
     [Header("Recommendation")]
     [Range(6, VertexClickTest.MaxPoints)]
-    public int recommendedVertexCount = 6; // 추천점 개수. 실행 중에는 -/= 키로 조절
+    public int recommendedVertexCount = 12; // 추천점 개수. 실행 중에는 -/= 키로 조절 (6~20). 기본 12는 기반 논문(ICPC)의 실험 조건
 
     [Header("Load")]
     public bool autoFitOnLoad = true;                      // 모델을 불러올 때 프로젝터 화면에 맞게 크기 조절
@@ -40,6 +41,9 @@ public class MainController : MonoBehaviour
     // 지금 모델의 saliency 백그라운드 계산 (결과 파일이 없는 새 모델, 또는 F5).
     // 계산 중에는 추천점과 히트맵을 내려 두고, 끝나면 켜져 있던 것을 자동으로 다시 계산한다.
     private SaliencyJob saliencyJob;
+    // OBJ별로 돌고 있는 계산. 계산 중에 다른 모델로 갔다가 돌아오면 새로 돌리지 않고 그 계산을 기다린다.
+    // (예전에는 같은 결과 파일을 쓰는 Python이 두 번 겹쳐 돌았음)
+    private readonly Dictionary<string, SaliencyJob> runningJobs = new Dictionary<string, SaliencyJob>();
     public SaliencyJob CurrentSaliencyJob => saliencyJob;
     public bool IsSaliencyPending => saliencyJob != null && !saliencyJob.IsDone;
 
@@ -98,7 +102,7 @@ public class MainController : MonoBehaviour
         }
 
         float scale = model.transform.localScale.x;
-        if (UIManager.Instance != null) UIManager.Instance.SetScaleWithoutNotify(scale);
+        if (UIManager.Instance != null) UIManager.Instance.SetBaseScale(scale);
 
         if (TryGetScreenRect(model, cam, out Rect fitted) &&
             (fitted.xMin < 0 || fitted.yMin < 0 || fitted.xMax > cam.pixelWidth || fitted.yMax > cam.pixelHeight))
@@ -386,8 +390,17 @@ public class MainController : MonoBehaviour
             Debug.LogError("[Saliency] 씬에 PythonProcessManager가 없어 saliency를 계산할 수 없습니다.");
             return;
         }
-        saliencyJob = PythonProcessManager.Instance.StartSaliencyCalculation(
-            objPath, ResultDir("Result_CfS"), ResultDir("Result_Tex"), runCfs, runTex);
+        if (runningJobs.TryGetValue(objPath, out SaliencyJob running) && !running.IsDone)
+        {
+            Debug.Log("[Saliency] 이 모델은 이미 계산 중이라 그 결과를 기다립니다.");
+            saliencyJob = running;
+        }
+        else
+        {
+            saliencyJob = PythonProcessManager.Instance.StartSaliencyCalculation(
+                objPath, ResultDir("Result_CfS"), ResultDir("Result_Tex"), runCfs, runTex);
+            runningJobs[objPath] = saliencyJob;
+        }
         StartCoroutine(WaitForSaliency(saliencyJob, mesh, objPath, inputCfsPath));
     }
 
@@ -432,10 +445,16 @@ public class MainController : MonoBehaviour
 
         if (currentCalibrator != null)
         {
+            // enabled를 켜거나 visualized를 바꾸면 OnEnable/setter에서 이미 Run이 돌 수 있다.
+            // 고밀도 메쉬에서는 무거운 계산이라 그 경우 다시 돌리지 않는다 (예전에는 최대 세 번 돌았음).
+            int runsBefore = currentCalibrator.RunCount;
             currentCalibrator.enabled = IsCalibrationActive && !waiting;
             currentCalibrator.visualized = IsRecommendationActive;
 
-            if (IsCalibrationActive && !waiting) currentCalibrator.Run();
+            if (IsCalibrationActive && !waiting)
+            {
+                if (currentCalibrator.RunCount == runsBefore) currentCalibrator.Run();
+            }
             else currentCalibrator.ClearMarkers();
         }
 

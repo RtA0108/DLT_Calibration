@@ -45,8 +45,9 @@ public class CreateSphereAtVertex : MonoBehaviour
 
         posIndex = new Dictionary<int, Vector3>();
         _activeSpheres = new List<Transform>();
+        _sphereByLocal.Clear();
         indexNumber = 0;
-        HashSet<Vector3> visitedPositions = new HashSet<Vector3>();
+        var sphereByWorld = new Dictionary<Vector3, Transform>();
 
         Vector3 currentScale = CalculateInverseScale();
 
@@ -62,9 +63,13 @@ public class CreateSphereAtVertex : MonoBehaviour
             {
                 Vector3 worldPos = meshTrans.TransformPoint(vertices[i]);
 
-                if (visitedPositions.Contains(worldPos)) continue;
+                // 같은 위치의 버텍스(UV 이음새 등)는 구 하나를 같이 쓴다
+                if (sphereByWorld.TryGetValue(worldPos, out Transform existing))
+                {
+                    _sphereByLocal[vertices[i]] = existing;
+                    continue;
+                }
 
-                visitedPositions.Add(worldPos);
                 indexNumber++;
                 posIndex.Add(indexNumber, worldPos);
 
@@ -84,6 +89,8 @@ public class CreateSphereAtVertex : MonoBehaviour
                 if (layer != -1) sphere.layer = layer;
 
                 _activeSpheres.Add(sphere.transform);
+                sphereByWorld[worldPos] = sphere.transform;
+                _sphereByLocal[vertices[i]] = sphere.transform;
             }
         }
 
@@ -145,6 +152,7 @@ public class CreateSphereAtVertex : MonoBehaviour
 
         if (posIndex != null) posIndex.Clear();
         if (_activeSpheres != null) _activeSpheres.Clear();
+        _sphereByLocal.Clear();
 
         indexNumber = 0;
         vertexCount = 0;
@@ -158,6 +166,20 @@ public class CreateSphereAtVertex : MonoBehaviour
             GameObject holder = new GameObject("Generated_Spheres_Holder");
             sphereHolder = holder.transform;
         }
+    }
+
+    public IReadOnlyList<Transform> ActiveSpheres => _activeSpheres;
+
+    // 메쉬 버텍스(로컬 좌표) -> 그 위치의 구. 조작 화면에서 버텍스를 고를 때 구 수만 개를 다 훑지 않게.
+    private readonly Dictionary<Vector3, Transform> _sphereByLocal = new Dictionary<Vector3, Transform>();
+
+    public GameObject FindSphereForVertex(Vector3 localPos, Vector3 worldPos)
+    {
+        // 메쉬가 여러 개라 로컬 좌표가 우연히 겹치는 경우를 대비해 실제 위치도 확인하고, 아니면 전체에서 찾는다
+        if (_sphereByLocal.TryGetValue(localPos, out Transform sphere) && sphere != null
+            && (sphere.position - worldPos).sqrMagnitude < 0.01f)
+            return sphere.gameObject;
+        return FindSphereAt(worldPos, 0.1f);
     }
 
     // worldPos에 가장 가까운 버텍스 구를 찾는다. tolerance보다 멀리 있으면 null.
